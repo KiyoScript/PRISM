@@ -1,0 +1,175 @@
+<!-- PRISMJobOrders.html — View & Submit Job Orders -->
+<style>
+  #tab-job-orders,#tab-job-orders *{color:#111827!important;}
+  .jo2-status{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:12px;font-weight:600;}
+  .st-FOR_PLOTTING{background:#fef9c3;color:#854d0e!important;}
+  .st-PLOTTED{background:#dbeafe;color:#1e40af!important;}
+  .st-FOR_PRINTING{background:#e0e7ff;color:#3730a3!important;}
+  .st-PRINTING{background:#dcfce7;color:#166534!important;}
+  .st-COMPLETED{background:#f1f5f9;color:#64748b!important;}
+  #jo2-newForm{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:45;background:#f3f4f6;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;}
+  #jo2-newForm.open{transform:translateX(0);}
+  .jo2-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;font-size:14px;color:#111827!important;outline:none;background:#fff;box-sizing:border-box;}
+  .jo2-input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.12);}
+  .jo2-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
+</style>
+
+<div class="p-4 space-y-4">
+  <div class="flex items-start justify-between gap-3">
+    <div><h2 class="text-xl font-bold">Job Orders</h2><p class="text-sm mt-0.5" style="color:#6b7280;">LFP Job Orders tracking</p></div>
+    <button onclick="jo2_openForm()" class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-white" style="background:#4f46e5;">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New JO
+    </button>
+  </div>
+  <div class="relative"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></div>
+    <input type="text" id="jo2-search" placeholder="Search JO number or customer…" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none" style="color:#111827;" oninput="jo2_apply()">
+  </div>
+  <!-- Status filter -->
+  <div class="flex gap-2 overflow-x-auto pb-1" id="jo2-filters">
+    <button class="fchip active" onclick="jo2_setStatus('ALL',this)">All</button>
+    <button class="fchip" onclick="jo2_setStatus('FOR_PLOTTING',this)">For Plotting</button>
+    <button class="fchip" onclick="jo2_setStatus('PLOTTED',this)">Plotted</button>
+    <button class="fchip" onclick="jo2_setStatus('FOR_PRINTING',this)">For Printing</button>
+    <button class="fchip" onclick="jo2_setStatus('PRINTING',this)">Printing</button>
+    <button class="fchip" onclick="jo2_setStatus('COMPLETED',this)">Completed</button>
+  </div>
+  <p id="jo2-count" class="text-xs" style="color:#9ca3af;"></p>
+  <!-- Table (desktop) / Cards (mobile) -->
+  <div id="jo2-tableWrap" class="bg-white rounded-xl border border-gray-200 overflow-hidden" style="display:none;">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead style="background:#f8fafc;">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">JO #</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Customer</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Description</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Category</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Roll</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Date</th>
+          </tr>
+        </thead>
+        <tbody id="jo2-tbody" class="bg-white divide-y divide-gray-100"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="jo2-cards" style="display:none;" class="space-y-3"></div>
+</div>
+
+<!-- New JO Form -->
+<div id="jo2-newForm">
+  <div class="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+    <button onclick="jo2_closeForm()" class="p-2 -ml-2 rounded-lg hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>
+    <h2 class="text-base font-bold">New Job Order</h2>
+  </div>
+  <div class="p-4 space-y-4 pb-10">
+    <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+      <p class="text-xs font-bold uppercase tracking-wide" style="color:#6b7280;">Job Order Info</p>
+      <div><label class="jo2-label">JO Number <span style="color:#ef4444;">*</span></label><input type="text" id="jo2-num" class="jo2-input" placeholder="e.g. R-AD2026-03-01"></div>
+      <div><label class="jo2-label">Customer <span style="color:#ef4444;">*</span></label><input type="text" id="jo2-cust" class="jo2-input" placeholder="Customer name…"></div>
+      <div><label class="jo2-label">Job Description</label><textarea id="jo2-desc" rows="2" class="jo2-input" style="resize:none;height:auto;padding:10px 14px;" placeholder="Specs, details…"></textarea></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="jo2-label">Category <span style="color:#ef4444;">*</span></label>
+          <select id="jo2-cat" class="jo2-input">
+            <option value="">Select…</option>
+            <option>Banner</option><option>Sticker</option><option>Signage</option><option>Canvas</option><option>Panaflex</option><option>Sublimation</option><option>DTF</option>
+          </select>
+        </div>
+        <div><label class="jo2-label">Production Type</label>
+          <select id="jo2-pt" class="jo2-input"><option value="">Select…</option><option value="LFP">LFP</option><option value="Digital">Digital</option><option value="Offset">Offset</option></select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div><label class="jo2-label">Width (ft)</label><input type="number" id="jo2-w" class="jo2-input" min="0" step="0.1" placeholder="0"></div>
+        <div><label class="jo2-label">Height (ft)</label><input type="number" id="jo2-h" class="jo2-input" min="0" step="0.1" placeholder="0"></div>
+        <div><label class="jo2-label">Qty</label><input type="number" id="jo2-qty" class="jo2-input" min="1" step="1" value="1"></div>
+      </div>
+      <div><label class="jo2-label">Initial Status</label>
+        <select id="jo2-status" class="jo2-input">
+          <option value="FOR_PLOTTING">FOR_PLOTTING</option>
+          <option value="PLOTTED">PLOTTED</option>
+          <option value="FOR_PRINTING">FOR_PRINTING</option>
+        </select>
+      </div>
+    </div>
+    <button id="jo2-submitBtn" onclick="jo2_submit()" class="w-full py-4 rounded-xl text-base font-bold text-white" style="background:#4f46e5;">Submit Job Order</button>
+  </div>
+</div>
+
+<script>
+var jo2_all=[], jo2_statusFilter='ALL';
+function prism_init_job_orders(){
+  jo2_initLayout();
+  google.script.run
+    .withSuccessHandler(function(r){if(r.success){jo2_all=r.data||[];jo2_apply();}else jo2_error(r.message);})
+    .withFailureHandler(function(e){jo2_error(e.message);})
+    .prism_getJobOrdersPublic();
+}
+function jo2_initLayout(){var m=window.innerWidth<640;document.getElementById('jo2-tableWrap').style.display=m?'none':'block';document.getElementById('jo2-cards').style.display=m?'block':'none';}
+window.addEventListener('resize',jo2_initLayout);
+function jo2_setStatus(s,el){jo2_statusFilter=s;document.querySelectorAll('#jo2-filters .fchip').forEach(function(c){c.classList.remove('active');});el.classList.add('active');jo2_apply();}
+function jo2_apply(){
+  var q=(document.getElementById('jo2-search').value||'').trim().toLowerCase();
+  var f=jo2_all.filter(function(r){
+    if(jo2_statusFilter!=='ALL'&&r.status!==jo2_statusFilter)return false;
+    if(q&&(r.joNumber+' '+r.customer).toLowerCase().indexOf(q)===-1)return false;
+    return true;
+  });
+  jo2_renderTable(f);jo2_renderCards(f);
+  document.getElementById('jo2-count').textContent=f.length+' order'+(f.length!==1?'s':'');
+}
+function jo2_renderTable(data){
+  var tb=document.getElementById('jo2-tbody');
+  if(!data.length){tb.innerHTML='<tr><td colspan="7" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">No records found.</td></tr>';return;}
+  var h='';
+  data.forEach(function(r){
+    var sc='st-'+(r.status||'FOR_PLOTTING');
+    h+='<tr><td class="px-4 py-3 text-sm font-bold" style="color:#4f46e5;white-space:nowrap;">'+jo2_esc(r.joNumber)+'</td>'
+      +'<td class="px-4 py-3 text-sm">'+jo2_esc(r.customer)+'</td>'
+      +'<td class="px-4 py-3 text-sm" style="max-width:200px;">'+jo2_esc(r.jobDescription||'—')+'</td>'
+      +'<td class="px-4 py-3 text-sm">'+jo2_esc(r.category)+'</td>'
+      +'<td class="px-4 py-3"><span class="jo2-status '+sc+'">'+jo2_esc(r.status)+'</span></td>'
+      +'<td class="px-4 py-3 text-sm font-semibold" style="color:#7c3aed;">'+(r.rollId||'—')+'</td>'
+      +'<td class="px-4 py-3 text-xs" style="color:#9ca3af;">'+jo2_esc(r.dateCreated)+'</td></tr>';
+  });
+  tb.innerHTML=h;
+}
+function jo2_renderCards(data){
+  var el=document.getElementById('jo2-cards');
+  if(!data.length){el.innerHTML='<div class="bg-white rounded-xl border border-gray-200 px-4 py-8 text-center text-sm" style="color:#9ca3af;">No records found.</div>';return;}
+  var h='';
+  data.forEach(function(r){
+    var sc='st-'+(r.status||'FOR_PLOTTING');
+    h+='<div class="bg-white rounded-xl border border-gray-200 px-4 py-4 space-y-2">'
+      +'<div class="flex items-center justify-between"><span class="text-sm font-bold" style="color:#4f46e5;">'+jo2_esc(r.joNumber)+'</span><span class="jo2-status '+sc+'">'+jo2_esc(r.status)+'</span></div>'
+      +'<p class="text-sm font-semibold">'+jo2_esc(r.customer)+'</p>'
+      +(r.jobDescription?'<p class="text-sm" style="color:#374151;">'+jo2_esc(r.jobDescription)+'</p>':'')
+      +'<div class="flex flex-wrap gap-x-3 gap-y-0.5 text-xs" style="color:#6b7280;">'
+      +(r.category?'<span>'+jo2_esc(r.category)+'</span>':'')
+      +(r.width&&r.height?'<span>'+r.width+' × '+r.height+' ft</span>':'')
+      +(r.rollId?'<span style="color:#7c3aed;font-weight:600;">Roll: '+jo2_esc(r.rollId)+'</span>':'')
+      +'</div></div>';
+  });
+  el.innerHTML=h;
+}
+function jo2_openForm(){document.getElementById('jo2-newForm').classList.add('open');document.getElementById('jo2-newForm').style.top='56px';}
+function jo2_closeForm(){document.getElementById('jo2-newForm').classList.remove('open');}
+function jo2_submit(){
+  var joNum=document.getElementById('jo2-num').value.trim();
+  var cust=document.getElementById('jo2-cust').value.trim();
+  var cat=document.getElementById('jo2-cat').value;
+  if(!joNum){prism_toast('error','JO Number required.');return;}
+  if(!cust){prism_toast('error','Customer required.');return;}
+  if(!cat){prism_toast('error','Category required.');return;}
+  var btn=document.getElementById('jo2-submitBtn');btn.disabled=true;btn.textContent='Submitting…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      btn.disabled=false;btn.textContent='Submit Job Order';
+      if(r.success){prism_toast('success',r.message);jo2_closeForm();prism_init_job_orders();}else prism_toast('error',r.message);
+    })
+    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Submit Job Order';prism_toast('error',e.message);})
+    .prism_submitJobOrder({joNumber:joNum,customer:cust,jobDescription:document.getElementById('jo2-desc').value.trim(),category:cat,productionType:document.getElementById('jo2-pt').value,width:parseFloat(document.getElementById('jo2-w').value)||0,height:parseFloat(document.getElementById('jo2-h').value)||0,quantity:parseInt(document.getElementById('jo2-qty').value)||1,status:document.getElementById('jo2-status').value});
+}
+function jo2_error(m){document.getElementById('jo2-tbody').innerHTML='<tr><td colspan="7" class="px-5 py-12 text-center text-sm" style="color:#ef4444;">'+jo2_esc(m)+'</td></tr>';}
+function jo2_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+</script>

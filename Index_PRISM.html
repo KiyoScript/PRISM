@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" style="color-scheme:light;">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRISM — Roll Inventory</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html,body{color-scheme:light;background:#f1f5f9;color:#111827;margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif;}
+    input,select,textarea,button{color-scheme:light;}
+    .tab-pane{display:none;} .tab-pane.active{display:block;}
+    body,p,span,td,th,label,h1,h2,h3,h4,li,a,div{color:#111827;}
+
+    #sidebar{position:fixed;left:0;top:0;height:100vh;width:240px;background:#fff;border-right:1px solid #e2e8f0;z-index:40;display:flex;flex-direction:column;transition:width .25s ease;overflow:hidden;}
+    #sidebar.collapsed{width:56px;}
+    .sb-label{white-space:nowrap;overflow:hidden;opacity:1;transition:opacity .15s ease,max-width .25s ease;max-width:200px;}
+    #sidebar.collapsed .sb-label{opacity:0;max-width:0;pointer-events:none;}
+    .nav-link{display:flex;align-items:center;gap:12px;padding:10px;border-radius:8px;font-size:14px;font-weight:500;color:#111827;text-decoration:none;transition:background .15s;white-space:nowrap;overflow:hidden;}
+    .nav-link:hover{background:#f1f5f9;}
+    .nav-link.active{background:#f0fdf4;color:#15803d;font-weight:700;}
+    .nav-link svg{flex-shrink:0;}
+    .nav-section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;padding:8px 8px 4px;}
+
+    #mainContent{margin-top:56px;margin-left:240px;min-height:100vh;transition:margin-left .25s ease;}
+    #mainContent.sidebar-collapsed{margin-left:56px;}
+
+    @media(max-width:767px){
+      #sidebar{width:240px!important;transform:translateX(-240px);transition:transform .25s ease;}
+      #sidebar.mobile-open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.15);}
+      #mainContent{margin-left:0!important;}
+    }
+    #sidebarOverlay{display:none;position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.4);}
+    .prism-grad{background:linear-gradient(135deg,#15803d 0%,#0d9488 100%);}
+  </style>
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav style="position:fixed;top:0;left:0;right:0;height:56px;background:#fff;border-bottom:1px solid #e2e8f0;z-index:50;display:flex;align-items:center;padding:0 12px;gap:10px;">
+    <button id="sidebarToggle" style="padding:8px;border-radius:8px;border:none;background:none;cursor:pointer;flex-shrink:0;">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="prism-grad" style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="17" height="17" fill="none" stroke="#fff" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+      </div>
+      <div>
+        <span style="font-size:15px;font-weight:800;color:#111827;">PRISM</span>
+        <span style="font-size:11px;color:#6b7280;margin-left:6px;display:none;" id="navSubtitle">Print Roll Inventory & Substrate Management</span>
+      </div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+      <span id="userEmail" style="font-size:12px;color:#6b7280;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <div id="userAvatar" style="width:30px;height:30px;border-radius:50%;background:#15803d;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0;">U</div>
+    </div>
+  </nav>
+
+  <div id="sidebarOverlay"></div>
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div style="height:56px;flex-shrink:0;"></div>
+    <div style="flex:1;padding:12px 8px;overflow-y:auto;overflow-x:hidden;">
+
+      <p class="sb-label nav-section">Inventory</p>
+
+      <a href="#" id="nav-dashboard"  data-tab="dashboard"  class="nav-link active" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#15803d" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+        <span class="sb-label">Dashboard</span>
+      </a>
+
+      <a href="#" id="nav-stock-in"   data-tab="stock-in"   class="nav-link" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#0d9488" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        <span class="sb-label">Stock In</span>
+      </a>
+
+      <a href="#" id="nav-usage"      data-tab="usage"      class="nav-link" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#7c3aed" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+        <span class="sb-label">Record Usage</span>
+      </a>
+
+      <div style="border-top:1px solid #e2e8f0;margin:8px 4px;"></div>
+      <p class="sb-label nav-section">Operations</p>
+
+      <a href="#" id="nav-job-orders" data-tab="job-orders" class="nav-link" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#4f46e5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        <span class="sb-label">Job Orders</span>
+      </a>
+
+      <a href="#" id="nav-materials"  data-tab="materials"  class="nav-link" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#f59e0b" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span class="sb-label">Materials</span>
+      </a>
+
+      <a href="#" id="nav-usage-log"  data-tab="usage-log"  class="nav-link" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#ec4899" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0120 9.414V19a2 2 0 01-2 2z"/></svg>
+        <span class="sb-label">Usage Log</span>
+      </a>
+
+      <div style="border-top:1px solid #e2e8f0;margin:8px 4px;"></div>
+      <p class="sb-label nav-section">System</p>
+
+      <a href="#" id="nav-settings"   data-tab="settings"   class="nav-link" style="margin-bottom:2px;">
+        <svg width="19" height="19" fill="none" stroke="#9ca3af" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="sb-label">Settings</span>
+      </a>
+    </div>
+
+    <div style="padding:8px;flex-shrink:0;overflow:hidden;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;overflow:hidden;">
+        <span class="sb-label" id="roleBadgeText" style="font-size:13px;font-weight:600;color:#15803d;">Loading…</span>
+        <span id="roleBadgeIcon" style="display:none;font-size:15px;">🌿</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main id="mainContent">
+    <div id="tab-dashboard"  class="tab-pane active"><?!= include('RollDashboard') ?></div>
+    <div id="tab-stock-in"   class="tab-pane"><?!= include('RollStockIn') ?></div>
+    <div id="tab-usage"      class="tab-pane"><?!= include('PRISM') ?></div>
+    <div id="tab-job-orders" class="tab-pane"><?!= include('PRISMJobOrders') ?></div>
+    <div id="tab-materials"  class="tab-pane"><?!= include('PRISMMaterials') ?></div>
+    <div id="tab-usage-log"  class="tab-pane"><?!= include('PRISMUsageLog') ?></div>
+    <div id="tab-settings"   class="tab-pane"><?!= include('PRISMSettings') ?></div>
+  </main>
+
+  <script>
+  var sidebarCollapsed=false, isMobileView=false;
+  function checkMobile(){isMobileView=window.innerWidth<768;}
+  checkMobile();
+
+  document.getElementById('sidebarToggle').addEventListener('click',function(){
+    var sb=document.getElementById('sidebar'),mc=document.getElementById('mainContent'),ov=document.getElementById('sidebarOverlay');
+    if(isMobileView){var o=sb.classList.contains('mobile-open');sb.classList.toggle('mobile-open',!o);ov.style.display=o?'none':'block';}
+    else{sidebarCollapsed=!sidebarCollapsed;sb.classList.toggle('collapsed',sidebarCollapsed);mc.classList.toggle('sidebar-collapsed',sidebarCollapsed);document.getElementById('roleBadgeIcon').style.display=sidebarCollapsed?'inline':'none';}
+  });
+  document.getElementById('sidebarOverlay').addEventListener('click',function(){document.getElementById('sidebar').classList.remove('mobile-open');this.style.display='none';});
+  window.addEventListener('resize',function(){checkMobile();if(!isMobileView){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').style.display='none';document.getElementById('sidebar').classList.toggle('collapsed',sidebarCollapsed);document.getElementById('mainContent').classList.toggle('sidebar-collapsed',sidebarCollapsed);}else{document.getElementById('sidebar').classList.remove('collapsed');document.getElementById('mainContent').classList.remove('sidebar-collapsed');}});
+
+  var initializedTabs={};
+  function switchTab(t){
+    document.querySelectorAll('.tab-pane').forEach(function(p){p.classList.remove('active');});
+    var tgt=document.getElementById('tab-'+t);if(tgt)tgt.classList.add('active');
+    document.querySelectorAll('.nav-link').forEach(function(l){l.classList.remove('active');});
+    var al=document.querySelector('[data-tab="'+t+'"]');if(al)al.classList.add('active');
+    if(isMobileView){document.getElementById('sidebar').classList.remove('mobile-open');document.getElementById('sidebarOverlay').style.display='none';}
+    var fn='prism_init_'+t.replace(/-/g,'_');
+    if(!initializedTabs[t]&&typeof window[fn]==='function'){initializedTabs[t]=true;window[fn]();}
+  }
+  document.querySelectorAll('.nav-link').forEach(function(l){l.addEventListener('click',function(e){e.preventDefault();switchTab(l.getAttribute('data-tab'));});});
+
+  /* ── User info + role-based tab visibility ── */
+  google.script.run
+    .withSuccessHandler(function(u){
+      document.getElementById('userEmail').textContent  = u.email||'';
+      document.getElementById('userAvatar').textContent = (u.email||'U').charAt(0).toUpperCase();
+      document.getElementById('roleBadgeText').textContent = '🌿 '+(u.role||'No Role');
+
+      var role=((u.role||'').toLowerCase());
+      var isAdmin  = role.includes('admin');
+      var isATL    = role.includes('admin team leader')||role.includes('admin tl');
+      var isSTL    = role.includes('senior team leader')||role.includes('stl');
+      var isOp     = role.includes('digital operator')||role.includes('operator');
+
+      // Show/hide nav items
+      if(!isAdmin&&!isATL) document.getElementById('nav-stock-in').style.display='none';
+      if(!isAdmin&&!isATL) document.getElementById('nav-materials').style.display='none';
+      if(!isAdmin)         document.getElementById('nav-settings').style.display='none';
+
+      switchTab('dashboard');
+      prism_init_dashboard();
+    })
+    .withFailureHandler(function(){
+      document.getElementById('roleBadgeText').textContent='🌿 No Role';
+      switchTab('dashboard');prism_init_dashboard();
+    })
+    .prism_getUserInfoPublic();
+
+  /* ── Global toast ── */
+  function prism_toast(type,msg){
+    var el=document.getElementById('prism_toast');if(el)el.remove();
+    var t=document.createElement('div');t.id='prism_toast';
+    var bg=type==='success'?'#15803d':type==='info'?'#4f46e5':'#dc2626';
+    var mob=window.innerWidth<640;
+    t.style.cssText='position:fixed;bottom:24px;z-index:9999;'+(mob?'left:50%;transform:translateX(-50%);white-space:nowrap;':'right:24px;');
+    t.style.background=bg;t.style.color='#fff';t.style.padding='12px 20px';t.style.borderRadius='12px';
+    t.style.boxShadow='0 4px 20px rgba(0,0,0,.2)';t.style.fontSize='14px';t.style.fontWeight='600';
+    t.style.display='flex';t.style.alignItems='center';t.style.gap='8px';
+    var icon=type==='success'?'<svg style="width:15px;height:15px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>':'<svg style="width:15px;height:15px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+    t.innerHTML=icon+String(msg||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    document.body.appendChild(t);setTimeout(function(){t.remove();},5000);
+  }
+  window.prism_toast=prism_toast;
+  </script>
+</body>
+</html>

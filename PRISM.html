@@ -1,0 +1,218 @@
+<!-- PRISM.html v2 — Digital Operator: Record Usage, linked to JobOrders -->
+<style>
+  #tab-usage,#tab-usage *{color:#111827!important;}
+  #tab-usage .text-white *{color:#fff!important;}
+  #tab-usage input,#tab-usage textarea{color-scheme:light;background:#fff;color:#111827!important;}
+  .u2-card{background:#fff;border-radius:16px;border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;}
+  .u2-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
+  .u2-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;font-size:14px;color:#111827!important;outline:none;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s;}
+  .u2-input:focus{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.12);}
+  .roll-pick{border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .15s;margin-bottom:8px;background:#fff;}
+  .roll-pick:hover{border-color:#c4b5fd;background:#faf5ff;}
+  .roll-pick.selected{border-color:#7c3aed;background:#faf5ff;}
+  .hp-green{background:#dcfce7;color:#166534!important;}
+  .hp-yellow{background:#fef9c3;color:#854d0e!important;}
+  .hp-red{background:#fee2e2;color:#991b1b!important;}
+  #u2-calcPrev{display:none;background:#faf5ff;border:1px solid #c4b5fd;border-radius:12px;padding:14px;margin-bottom:12px;}
+  #u2-widthWarn{display:none;background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+</style>
+
+<div class="p-4 space-y-0 pb-10">
+  <div class="mb-4">
+    <h2 class="text-xl font-bold">Record Roll Usage</h2>
+    <p class="text-sm mt-0.5" style="color:#6b7280;">Digital Operator — Log material consumption</p>
+  </div>
+
+  <div id="u2-access" style="display:none;background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:14px;margin-bottom:12px;">
+    <p class="text-sm font-semibold" style="color:#92400e;">⚠ Only Digital Operators can record roll usage.</p>
+  </div>
+
+  <!-- Step 1: JO Number -->
+  <div class="u2-card">
+    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 1 — Job Order Number</p>
+    <div>
+      <label class="u2-label">JO Number <span style="color:#ef4444;">*</span></label>
+      <input type="text" id="u2-joNumber" class="u2-input" placeholder="e.g. R-AD2026-03-01" oninput="u2_joChanged()">
+      <p class="text-xs mt-1" style="color:#6b7280;">Enter the JO Number from the Job Orders sheet.</p>
+    </div>
+    <div id="u2-joInfo" style="display:none;margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;" class="text-sm space-y-1" style="color:#374151;"></div>
+  </div>
+
+  <!-- Step 2: Select Roll -->
+  <div class="u2-card">
+    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 2 — Select Open Roll</p>
+    <div class="relative mb-3">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></div>
+      <input type="text" id="u2-rollSearch" placeholder="Search Roll ID or material code…" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none" style="color:#111827;" oninput="u2_filterRolls()">
+    </div>
+    <div id="u2-rollList" style="max-height:250px;overflow-y:auto;">
+      <div class="text-sm py-4 text-center" style="color:#9ca3af;">Loading open rolls…</div>
+    </div>
+  </div>
+
+  <!-- Width warning -->
+  <div id="u2-widthWarn"><p class="text-sm font-semibold" id="u2-widthWarnMsg" style="color:#92400e!important;"></p></div>
+
+  <!-- Calc preview -->
+  <div id="u2-calcPrev">
+    <p class="text-sm font-bold mb-2" style="color:#7c3aed;">📐 Usage Preview</p>
+    <div id="u2-calcBody" class="text-sm space-y-1" style="color:#374151;"></div>
+  </div>
+
+  <!-- Step 3: Usage details -->
+  <div class="u2-card">
+    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 3 — Usage Details</p>
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div>
+        <label class="u2-label">Width Used (ft)</label>
+        <input type="number" id="u2-widthUsed" class="u2-input" placeholder="e.g. 6" min="0.1" step="0.1" oninput="u2_calcPreview()">
+      </div>
+      <div>
+        <label class="u2-label">Length Used (ft) <span style="color:#ef4444;">*</span></label>
+        <input type="number" id="u2-lengthUsed" class="u2-input" placeholder="e.g. 15" min="0.1" step="0.1" oninput="u2_calcPreview()">
+      </div>
+    </div>
+    <div>
+      <label class="u2-label">Plotting Sheet Link <span style="color:#ef4444;">*</span></label>
+      <input type="url" id="u2-plottingLink" class="u2-input" placeholder="https://docs.google.com/spreadsheets/d/…">
+      <p class="text-xs mt-1" style="color:#6b7280;">Required — plotting sheet must be linked before printing.</p>
+    </div>
+  </div>
+
+  <button id="u2-btn" onclick="u2_submit()" class="w-full py-4 rounded-xl text-base font-bold text-white" style="background:#7c3aed;">Record Usage</button>
+  <p class="text-center text-xs mt-2" style="color:#9ca3af;">Roll remaining length will be updated immediately. JO status → PRINTING.</p>
+</div>
+
+<script>
+var u2_rolls=[], u2_settings={}, u2_selRollId='', u2_joData=null;
+
+function prism_init_usage(){
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r.success)return;
+      u2_rolls=(r.rolls||[]).filter(function(x){return x.status==='OPEN';});
+      u2_settings=r.settings||{};
+      u2_renderRolls(u2_rolls);
+      var role=((r.user&&r.user.role)||'').toLowerCase();
+      var ok=role.includes('admin')||role.includes('digital operator')||role.includes('operator');
+      if(!ok) document.getElementById('u2-access').style.display='block';
+    })
+    .withFailureHandler(function(){})
+    .prism_getInitData();
+}
+
+function u2_joChanged(){
+  var jo=(document.getElementById('u2-joNumber').value||'').trim().toUpperCase();
+  var info=document.getElementById('u2-joInfo');
+  if(!jo){info.style.display='none';u2_joData=null;return;}
+  // Try to find in already loaded job orders (if available), else just accept the number
+  info.style.display='none'; u2_joData=null;
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r.success||!r.data||!r.data.length)return;
+      for(var i=0;i<r.data.length;i++){
+        if(r.data[i].joNumber.toUpperCase()===jo){u2_joData=r.data[i];break;}
+      }
+      if(u2_joData){
+        info.style.display='block';
+        info.innerHTML='<div class="flex justify-between"><span>Customer:</span><strong>'+u2_esc(u2_joData.customer)+'</strong></div>'
+          +'<div class="flex justify-between"><span>Description:</span><span>'+u2_esc(u2_joData.jobDescription||'—')+'</span></div>'
+          +'<div class="flex justify-between"><span>Status:</span><strong>'+u2_esc(u2_joData.status)+'</strong></div>'
+          +'<div class="flex justify-between"><span>Size:</span><strong>'+u2_joData.width+' × '+u2_joData.height+' ft</strong></div>';
+        // auto-fill width if available
+        if(u2_joData.width&&!document.getElementById('u2-widthUsed').value)
+          document.getElementById('u2-widthUsed').value=u2_joData.width;
+        u2_calcPreview();
+      }
+    })
+    .withFailureHandler(function(){})
+    .prism_getJobOrdersPublic();
+}
+
+function u2_filterRolls(){
+  var q=(document.getElementById('u2-rollSearch').value||'').trim().toLowerCase();
+  var f=u2_rolls.filter(function(r){return !q||(r.rollId+' '+r.materialCode).toLowerCase().indexOf(q)!==-1;});
+  u2_renderRolls(f);
+}
+function u2_getHealth(r){
+  var t=parseFloat(u2_settings.near_empty_threshold_ft)||30;
+  if(r.remainingLength<=0)return 'red';if(r.remainingLength<=t)return 'yellow';return 'green';
+}
+function u2_renderRolls(rolls){
+  var el=document.getElementById('u2-rollList');
+  if(!rolls.length){el.innerHTML='<div class="text-sm py-4 text-center" style="color:#9ca3af;">No open rolls. Ask STL to open a roll.</div>';return;}
+  var h='';
+  rolls.forEach(function(r){
+    var hp='hp-'+u2_getHealth(r);var sel=u2_selRollId===r.rollId?' selected':'';
+    h+='<div class="roll-pick'+sel+'" onclick="u2_selRoll(\''+u2_esc(r.rollId).replace(/'/g,"\\'")+'\')">';
+    h+='<div class="flex items-center justify-between">';
+    h+='<span class="text-sm font-bold">'+u2_esc(r.rollId)+'</span>';
+    h+='<span class="text-xs font-bold px-2 py-0.5 rounded-full '+hp+'">'+r.remainingLength+' ft left</span>';
+    h+='</div>';
+    h+='<div class="text-xs mt-0.5" style="color:#6b7280;">'+u2_esc(r.materialCode)+' · '+r.width+' ft wide</div>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+function u2_selRoll(id){
+  u2_selRollId=id;
+  u2_filterRolls();
+  u2_calcPreview();
+}
+function u2_calcPreview(){
+  if(!u2_selRollId)return;
+  var roll=null;for(var i=0;i<u2_rolls.length;i++){if(u2_rolls[i].rollId===u2_selRollId){roll=u2_rolls[i];break;}}
+  if(!roll)return;
+  var wu=parseFloat(document.getElementById('u2-widthUsed').value)||0;
+  var lu=parseFloat(document.getElementById('u2-lengthUsed').value)||0;
+  // Width validation
+  var warnEl=document.getElementById('u2-widthWarn');
+  if(wu>0&&wu>roll.width){warnEl.style.display='block';document.getElementById('u2-widthWarnMsg').textContent='⚠ Job width ('+wu+' ft) exceeds roll width ('+roll.width+' ft). Select a wider roll.';}
+  else warnEl.style.display='none';
+  var prev=document.getElementById('u2-calcPrev');
+  if(!lu){prev.style.display='none';return;}
+  var t=parseFloat(u2_settings.near_empty_threshold_ft)||30;
+  var nr=Math.max(0,roll.remainingLength-lu);
+  var rc=nr<=0?'#dc2626':nr<=t?'#ca8a04':'#15803d';
+  var rs=nr<=0?'Will be CONSUMED':nr<=t?'Near Empty':'Still Healthy';
+  prev.style.display='block';
+  document.getElementById('u2-calcBody').innerHTML=
+    '<div class="flex justify-between"><span>Length used:</span><strong>'+lu+' ft</strong></div>'
+    +'<div class="flex justify-between"><span>Current remaining:</span><strong>'+roll.remainingLength+' ft</strong></div>'
+    +'<div class="flex justify-between"><span>After this job:</span><strong style="color:'+rc+';">'+nr+' ft</strong></div>'
+    +'<div class="flex justify-between"><span>Roll status:</span><strong style="color:'+rc+';">'+rs+'</strong></div>';
+}
+function u2_submit(){
+  var jo=(document.getElementById('u2-joNumber').value||'').trim();
+  var rollId=u2_selRollId;
+  var lu=parseFloat(document.getElementById('u2-lengthUsed').value)||0;
+  var wu=parseFloat(document.getElementById('u2-widthUsed').value)||0;
+  var link=document.getElementById('u2-plottingLink').value.trim();
+  if(!jo){prism_toast('error','JO Number is required.');return;}
+  if(!rollId){prism_toast('error','Please select a roll.');return;}
+  if(!lu){prism_toast('error','Length Used is required.');return;}
+  if(!link){prism_toast('error','Plotting Sheet link is required.');return;}
+  var roll=null;for(var i=0;i<u2_rolls.length;i++){if(u2_rolls[i].rollId===rollId){roll=u2_rolls[i];break;}}
+  if(roll&&wu>0&&wu>roll.width){prism_toast('error','Job width exceeds roll width. Cannot proceed.');return;}
+  var btn=document.getElementById('u2-btn');btn.disabled=true;btn.textContent='Recording…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      btn.disabled=false;btn.textContent='Record Usage';
+      if(r.success){
+        prism_toast('success',r.message);
+        // Update local roll list
+        u2_rolls=u2_rolls.filter(function(x){return x.rollId!==rollId||r.newRollStatus==='OPEN';});
+        for(var i=0;i<u2_rolls.length;i++){if(u2_rolls[i].rollId===rollId){u2_rolls[i].remainingLength=r.newRemaining;break;}}
+        u2_selRollId='';
+        document.getElementById('u2-joNumber').value='';document.getElementById('u2-joInfo').style.display='none';
+        document.getElementById('u2-rollSearch').value='';document.getElementById('u2-widthUsed').value='';
+        document.getElementById('u2-lengthUsed').value='';document.getElementById('u2-plottingLink').value='';
+        document.getElementById('u2-calcPrev').style.display='none';document.getElementById('u2-widthWarn').style.display='none';
+        u2_joData=null;u2_renderRolls(u2_rolls);
+      }else prism_toast('error',r.message);
+    })
+    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Record Usage';prism_toast('error',e.message);})
+    .prism_recordUsage({joNumber:jo,rollId:rollId,widthUsed:wu,lengthUsed:lu,plottingLink:link});
+}
+function u2_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+</script>

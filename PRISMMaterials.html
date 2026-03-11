@@ -1,0 +1,110 @@
+<!-- PRISMMaterials.html — Add & View LFP_Materials -->
+<style>
+  #tab-materials,#tab-materials *{color:#111827!important;}
+  #tab-materials .text-white *{color:#fff!important;}
+  #tab-materials input,#tab-materials select{color-scheme:light;background:#fff;color:#111827!important;}
+  .m3-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;font-size:14px;color:#111827!important;outline:none;background:#fff;box-sizing:border-box;}
+  .m3-input:focus{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.12);}
+  .m3-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
+  #m3-addForm{display:none;background:#fff;border-radius:16px;border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;}
+</style>
+
+<div class="p-4 space-y-4 pb-10">
+  <div class="flex items-start justify-between gap-3">
+    <div><h2 class="text-xl font-bold">Materials</h2><p class="text-sm mt-0.5" style="color:#6b7280;">LFP_Materials — substrate catalog</p></div>
+    <button onclick="m3_toggleForm()" id="m3-addBtn" class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Material
+    </button>
+  </div>
+
+  <!-- Add form -->
+  <div id="m3-addForm">
+    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">New Material</p>
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div><label class="m3-label">Material Code <span style="color:#ef4444;">*</span></label><input type="text" id="m3-code" class="m3-input" placeholder="e.g. PMT-003"></div>
+      <div><label class="m3-label">Material Name <span style="color:#ef4444;">*</span></label><input type="text" id="m3-name" class="m3-input" placeholder="Budget Tarp White 10oz…"></div>
+    </div>
+    <div class="grid grid-cols-3 gap-3 mb-3">
+      <div><label class="m3-label">Width (ft) <span style="color:#ef4444;">*</span></label><input type="number" id="m3-width" class="m3-input" min="0.1" step="0.1" placeholder="10.5"></div>
+      <div><label class="m3-label">Std Length (ft) <span style="color:#ef4444;">*</span></label><input type="number" id="m3-len" class="m3-input" min="1" step="1" placeholder="164"></div>
+      <div><label class="m3-label">Cost/Roll (₱)</label><input type="number" id="m3-cost" class="m3-input" min="0" step="1" placeholder="0"></div>
+    </div>
+    <div class="mb-3"><label class="m3-label">Supplier</label><input type="text" id="m3-supplier" class="m3-input" placeholder="Supplier name…"></div>
+    <div class="flex gap-2">
+      <button id="m3-saveBtn" onclick="m3_save()" class="flex-1 py-3 rounded-xl text-sm font-semibold text-white" style="background:#f59e0b;">Save Material</button>
+      <button onclick="m3_toggleForm()" class="px-5 py-3 rounded-xl text-sm font-semibold" style="background:#f3f4f6;color:#374151;">Cancel</button>
+    </div>
+  </div>
+
+  <p id="m3-count" class="text-xs" style="color:#9ca3af;"></p>
+
+  <!-- Table -->
+  <div id="m3-tableWrap" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-100">
+        <thead style="background:#fefce8;">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Code</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Name</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Width</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Std Length</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Supplier</th>
+            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Cost/Roll</th>
+          </tr>
+        </thead>
+        <tbody id="m3-tbody" class="bg-white divide-y divide-gray-100">
+          <tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+var m3_formOpen=false;
+function prism_init_materials(){
+  google.script.run
+    .withSuccessHandler(function(r){if(r.success)m3_render(r.data||[]);else m3_err(r.message);})
+    .withFailureHandler(function(e){m3_err(e.message);})
+    .prism_getAllMaterialsPublic();
+}
+function m3_render(data){
+  document.getElementById('m3-count').textContent=data.length+' material'+(data.length!==1?'s':'');
+  var tb=document.getElementById('m3-tbody');
+  if(!data.length){tb.innerHTML='<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">No materials yet. Add one above.</td></tr>';return;}
+  var h='';
+  data.forEach(function(m){
+    h+='<tr><td class="px-4 py-3 text-sm font-bold" style="color:#92400e;">'+m3_esc(m.materialCode)+'</td>'
+      +'<td class="px-4 py-3 text-sm">'+m3_esc(m.materialName)+'</td>'
+      +'<td class="px-4 py-3 text-sm">'+m.width+' ft</td>'
+      +'<td class="px-4 py-3 text-sm">'+m.standardLength+' ft</td>'
+      +'<td class="px-4 py-3 text-sm" style="color:#6b7280;">'+m3_esc(m.supplier||'—')+'</td>'
+      +'<td class="px-4 py-3 text-sm">'+(m.costPerRoll?'₱'+Number(m.costPerRoll).toLocaleString():'—')+'</td></tr>';
+  });
+  tb.innerHTML=h;
+}
+function m3_toggleForm(){
+  m3_formOpen=!m3_formOpen;
+  document.getElementById('m3-addForm').style.display=m3_formOpen?'block':'none';
+  document.getElementById('m3-addBtn').textContent=m3_formOpen?'✕ Cancel':'+  Add Material';
+}
+function m3_save(){
+  var code=document.getElementById('m3-code').value.trim();
+  var name=document.getElementById('m3-name').value.trim();
+  var w=parseFloat(document.getElementById('m3-width').value)||0;
+  var l=parseFloat(document.getElementById('m3-len').value)||0;
+  if(!code||!name){prism_toast('error','Code and Name are required.');return;}
+  if(!w||!l){prism_toast('error','Width and Length are required.');return;}
+  var btn=document.getElementById('m3-saveBtn');btn.disabled=true;btn.textContent='Saving…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      btn.disabled=false;btn.textContent='Save Material';
+      if(r.success){prism_toast('success',r.message);m3_toggleForm();prism_init_materials();['m3-code','m3-name','m3-width','m3-len','m3-cost','m3-supplier'].forEach(function(id){document.getElementById(id).value='';});}
+      else prism_toast('error',r.message);
+    })
+    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Save Material';prism_toast('error',e.message);})
+    .prism_addMaterial({materialCode:code,materialName:name,width:w,standardLength:l,costPerRoll:parseFloat(document.getElementById('m3-cost').value)||0,supplier:document.getElementById('m3-supplier').value.trim()});
+}
+function m3_err(m){document.getElementById('m3-tbody').innerHTML='<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#ef4444;">'+m3_esc(m)+'</td></tr>';}
+function m3_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+</script>

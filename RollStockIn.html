@@ -1,0 +1,181 @@
+<!-- RollStockIn.html v2 — Admin Team Leader: Stock In using LFP_Materials -->
+<style>
+  #tab-stock-in,#tab-stock-in *{color:#111827!important;}
+  #tab-stock-in .text-white *{color:#fff!important;}
+  #tab-stock-in input,#tab-stock-in select,#tab-stock-in textarea{color-scheme:light;background:#fff;color:#111827!important;}
+  .si2-card{background:#fff;border-radius:16px;border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;}
+  .si2-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
+  .si2-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;font-size:14px;color:#111827!important;outline:none;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s;}
+  .si2-input:focus{border-color:#0d9488;box-shadow:0 0 0 3px rgba(13,148,136,.12);}
+  .mat-row{border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .15s;margin-bottom:8px;background:#fff;}
+  .mat-row:hover{border-color:#5eead4;background:#f0fdfa;}
+  .mat-row.selected{border-color:#0d9488;background:#f0fdfa;}
+</style>
+
+<div class="p-4 space-y-0 pb-10">
+  <div class="mb-4">
+    <h2 class="text-xl font-bold">Stock In Rolls</h2>
+    <p class="text-sm mt-0.5" style="color:#6b7280;">Admin Team Leader — Register new roll delivery</p>
+  </div>
+
+  <div id="si2-access" style="display:none;background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:14px;margin-bottom:12px;">
+    <p class="text-sm font-semibold" style="color:#92400e;">⚠ Only Admin Team Leaders can stock in rolls.</p>
+  </div>
+
+  <!-- Step 1: Select material -->
+  <div class="si2-card">
+    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 1 — Select Material from LFP_Materials</p>
+    <div class="relative mb-3">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></div>
+      <input type="text" id="si2-matSearch" placeholder="Search material code or name…" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none" style="color:#111827;" oninput="si2_filterMats()">
+    </div>
+    <div id="si2-matList" style="max-height:220px;overflow-y:auto;">
+      <div class="text-sm py-4 text-center" style="color:#9ca3af;">Loading materials…</div>
+    </div>
+  </div>
+
+  <!-- Selected material summary -->
+  <div id="si2-selCard" style="display:none;background:#f0fdfa;border:1px solid #5eead4;border-radius:12px;padding:14px;margin-bottom:12px;">
+    <p class="text-xs font-bold mb-2" style="color:#0d9488;">Selected Material</p>
+    <div id="si2-selBody" class="text-sm space-y-1" style="color:#374151;"></div>
+  </div>
+
+  <!-- Step 2: Quantity -->
+  <div class="si2-card" id="si2-qtySection" style="display:none;">
+    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 2 — Quantity of Rolls</p>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="si2-label">Number of Rolls <span style="color:#ef4444;">*</span></label>
+        <input type="number" id="si2-qty" class="si2-input" min="1" max="50" step="1" value="1" oninput="si2_updatePreview()">
+      </div>
+      <div>
+        <label class="si2-label">Batch / DR Reference</label>
+        <input type="text" id="si2-batchRef" class="si2-input" placeholder="e.g. DR-2026-001">
+      </div>
+    </div>
+    <div class="mt-3">
+      <label class="si2-label">Notes (optional)</label>
+      <input type="text" id="si2-notes" class="si2-input" placeholder="Any notes about this delivery…">
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div id="si2-preview" style="display:none;background:#f0fdfa;border:1px solid #5eead4;border-radius:12px;padding:14px;margin-bottom:12px;">
+    <p class="text-sm font-bold mb-2" style="color:#0d9488;">📦 Stock-In Preview</p>
+    <div id="si2-prevBody" class="text-sm space-y-1" style="color:#374151;"></div>
+  </div>
+
+  <button id="si2-btn" onclick="si2_submit()" disabled class="w-full py-4 rounded-xl text-base font-bold text-white" style="background:#9ca3af;cursor:not-allowed;">Stock In Rolls</button>
+  <p class="text-center text-xs mt-2" style="color:#9ca3af;">Roll IDs are auto-generated (e.g. PMT001-R01, PMT001-R02…)</p>
+  <div id="si2-result" style="display:none;margin-top:12px;"></div>
+</div>
+
+<script>
+var si2_mats=[], si2_selMat=null;
+
+function prism_init_stock_in(){
+  google.script.run
+    .withSuccessHandler(function(r){
+      if(!r.success){document.getElementById('si2-matList').innerHTML='<div class="text-sm py-4 text-center" style="color:#ef4444;">'+si2_esc(r.message)+'</div>';return;}
+      si2_mats=r.data||[];
+      si2_renderMats(si2_mats);
+      // Access check
+      google.script.run
+        .withSuccessHandler(function(u){
+          var role=(u.role||'').toLowerCase();
+          var ok=role.includes('admin')||role.includes('admin team leader')||role.includes('admin tl');
+          if(!ok){document.getElementById('si2-access').style.display='block';document.getElementById('si2-matList').style.opacity='.4';document.getElementById('si2-matList').style.pointerEvents='none';}
+        })
+        .withFailureHandler(function(){})
+        .prism_getUserInfoPublic();
+    })
+    .withFailureHandler(function(e){document.getElementById('si2-matList').innerHTML='<div class="text-sm py-4 text-center" style="color:#ef4444;">'+si2_esc(e.message)+'</div>';})
+    .prism_getAllMaterialsPublic();
+}
+
+function si2_filterMats(){
+  var q=(document.getElementById('si2-matSearch').value||'').trim().toLowerCase();
+  var f=si2_mats.filter(function(m){return !q||(m.materialCode+' '+m.materialName).toLowerCase().indexOf(q)!==-1;});
+  si2_renderMats(f);
+}
+
+function si2_renderMats(mats){
+  var el=document.getElementById('si2-matList');
+  if(!mats.length){el.innerHTML='<div class="text-sm py-4 text-center" style="color:#9ca3af;">No materials found. Add materials in the Materials tab first.</div>';return;}
+  var h='';
+  mats.forEach(function(m){
+    var sel=si2_selMat&&si2_selMat.materialCode===m.materialCode?' selected':'';
+    h+='<div class="mat-row'+sel+'" onclick="si2_selectMat(\''+si2_esc(m.materialCode).replace(/'/g,"\\'")+'\')">';
+    h+='<div class="flex items-center justify-between">';
+    h+='<span class="text-sm font-bold">'+si2_esc(m.materialCode)+'</span>';
+    h+='<span class="text-xs px-2 py-0.5 rounded-full" style="background:#f0fdfa;color:#0d9488;">'+m.width+' ft × '+m.standardLength+' ft</span>';
+    h+='</div>';
+    h+='<div class="text-xs mt-0.5" style="color:#6b7280;">'+si2_esc(m.materialName)+'</div>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+
+function si2_selectMat(code){
+  for(var i=0;i<si2_mats.length;i++){if(si2_mats[i].materialCode===code){si2_selMat=si2_mats[i];break;}}
+  si2_filterMats();
+  var c=document.getElementById('si2-selCard');
+  c.style.display='block';
+  document.getElementById('si2-selBody').innerHTML=
+    '<div class="flex justify-between"><span>Code:</span><strong>'+si2_esc(si2_selMat.materialCode)+'</strong></div>'
+    +'<div class="flex justify-between"><span>Name:</span><strong>'+si2_esc(si2_selMat.materialName)+'</strong></div>'
+    +'<div class="flex justify-between"><span>Width:</span><strong>'+si2_selMat.width+' ft</strong></div>'
+    +'<div class="flex justify-between"><span>Std. Length:</span><strong>'+si2_selMat.standardLength+' ft</strong></div>'
+    +(si2_selMat.costPerRoll?'<div class="flex justify-between"><span>Cost/Roll:</span><strong>₱'+Number(si2_selMat.costPerRoll).toLocaleString()+'</strong></div>':'');
+  document.getElementById('si2-qtySection').style.display='block';
+  si2_updatePreview();
+}
+
+function si2_updatePreview(){
+  if(!si2_selMat)return;
+  var qty=parseInt(document.getElementById('si2-qty').value)||0;
+  var valid=qty>=1;
+  var btn=document.getElementById('si2-btn');
+  btn.disabled=!valid;btn.style.background=valid?'#0d9488':'#9ca3af';btn.style.cursor=valid?'pointer':'not-allowed';
+  var prev=document.getElementById('si2-preview');
+  if(!valid){prev.style.display='none';return;}
+  prev.style.display='block';
+  document.getElementById('si2-prevBody').innerHTML=
+    '<div class="flex justify-between"><span>Material:</span><strong>'+si2_esc(si2_selMat.materialCode)+'</strong></div>'
+    +'<div class="flex justify-between"><span>Dimensions:</span><strong>'+si2_selMat.width+' ft × '+si2_selMat.standardLength+' ft</strong></div>'
+    +'<div class="flex justify-between"><span>Qty:</span><strong>'+qty+' roll(s)</strong></div>'
+    +'<p class="text-xs mt-1" style="color:#0d9488;">Roll IDs will be auto-generated on submit.</p>';
+}
+
+function si2_submit(){
+  if(!si2_selMat){prism_toast('error','Select a material first.');return;}
+  var qty=parseInt(document.getElementById('si2-qty').value)||0;
+  if(qty<1){prism_toast('error','Quantity must be at least 1.');return;}
+  var btn=document.getElementById('si2-btn');
+  btn.disabled=true;btn.textContent='Stocking In…';
+  google.script.run
+    .withSuccessHandler(function(r){
+      btn.disabled=false;btn.textContent='Stock In Rolls';si2_updatePreview();
+      var res=document.getElementById('si2-result');res.style.display='block';
+      if(r.success){
+        res.style.cssText='display:block;background:#f0fdfa;border:1px solid #5eead4;border-radius:12px;padding:14px;';
+        res.innerHTML='<p class="text-sm font-bold" style="color:#0d9488;">✅ '+si2_esc(r.message)+'</p>'
+          +'<p class="text-xs mt-1" style="color:#374151;">Roll IDs: <strong>'+(r.rollIds||[]).join(', ')+'</strong></p>';
+        prism_toast('success',r.message);
+        si2_selMat=null;document.getElementById('si2-selCard').style.display='none';
+        document.getElementById('si2-qtySection').style.display='none';document.getElementById('si2-preview').style.display='none';
+        document.getElementById('si2-matSearch').value='';document.getElementById('si2-qty').value='1';
+        document.getElementById('si2-batchRef').value='';document.getElementById('si2-notes').value='';
+        si2_renderMats(si2_mats);
+        btn.disabled=true;btn.style.background='#9ca3af';btn.style.cursor='not-allowed';
+      }else{
+        res.style.cssText='display:block;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px;';
+        res.innerHTML='<p class="text-sm font-semibold" style="color:#dc2626;">❌ '+si2_esc(r.message)+'</p>';
+        prism_toast('error',r.message);
+      }
+    })
+    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Stock In Rolls';si2_updatePreview();prism_toast('error',e.message);})
+    .prism_stockIn({materialCode:si2_selMat.materialCode,width:si2_selMat.width,originalLength:si2_selMat.standardLength,qty:qty,batchRef:document.getElementById('si2-batchRef').value.trim(),notes:document.getElementById('si2-notes').value.trim()});
+}
+function si2_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+</script>
