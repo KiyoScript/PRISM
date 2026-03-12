@@ -1,581 +1,396 @@
-<!-- PRISM.html v3 — Digital Operator: Record Usage, JO dropdown with info card -->
+<!-- PRISM.html v4 — Record Usage, unified design + reload -->
 <style>
-  #tab-usage,#tab-usage *{color:#111827!important;}
-  #tab-usage .text-white *{color:#fff!important;}
-  #tab-usage input,#tab-usage textarea{color-scheme:light;background:#fff;color:#111827!important;}
+  #tab-usage, #tab-usage * { color: var(--p-text); }
+  #tab-usage .text-white * { color: #fff; }
 
-  .u2-card{background:#fff;border-radius:16px;border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;}
-  .u2-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
-  .u2-input{
-    width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;
-    font-size:14px;color:#111827!important;outline:none;background:#fff;
-    box-sizing:border-box;transition:border-color .15s,box-shadow .15s;
+  /* JO combo */
+  .u4-combo-wrap { position: relative; }
+  .u4-combo-row {
+    display: flex; align-items: center;
+    border: 1.5px solid var(--p-border); border-radius: 10px;
+    background: var(--p-surface); overflow: hidden;
+    transition: border-color .15s, box-shadow .15s;
   }
-  .u2-input:focus{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.12);}
+  .u4-combo-row.focused { border-color: var(--p-purple); box-shadow: 0 0 0 3px rgba(124,58,237,.12); }
+  .u4-combo-icon { padding: 0 10px 0 12px; color: var(--p-faint); flex-shrink: 0; pointer-events: none; }
+  .u4-combo-input {
+    flex: 1; border: none; outline: none; background: transparent;
+    padding: 10px 4px; font-size: 13px; color: var(--p-text); min-width: 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .u4-combo-clear { padding: 0 12px; color: var(--p-faint); background: none; border: none; cursor: pointer; font-size: 15px; line-height: 1; display: none; }
+  .u4-combo-clear:hover { color: var(--p-red); }
+  .u4-combo-dropdown {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+    background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 11px;
+    box-shadow: var(--p-shadow-md); z-index: 200;
+    max-height: 240px; overflow-y: auto; display: none;
+  }
+  .u4-combo-dropdown.open { display: block; }
+  .u4-combo-opt {
+    padding: 10px 14px; font-size: 13px; cursor: pointer;
+    border-bottom: 1px solid #f3f4f6; transition: background .1s;
+  }
+  .u4-combo-opt:last-child { border-bottom: none; }
+  .u4-combo-opt:hover, .u4-combo-opt.active { background: var(--p-purple-lt); }
+  .u4-jo-num { font-weight: 700; color: var(--p-purple); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .u4-jo-cust { color: var(--p-muted); font-size: 12px; margin-left: 6px; }
 
-  /* Combo shared styles */
-  .u2-combo-wrap{position:relative;}
-  .u2-combo-row{
-    display:flex;align-items:center;
-    border:1px solid #d1d5db;border-radius:12px;
-    background:#fff;overflow:hidden;
-    transition:border-color .15s,box-shadow .15s;
+  /* JO info card */
+  #u4-joInfoCard {
+    display: none;
+    background: var(--p-purple-lt); border: 1px solid var(--p-purple-bd);
+    border-radius: 11px; padding: 14px; margin-top: 10px;
   }
-  .u2-combo-row.focused{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.12);}
-  .u2-combo-icon{padding:0 10px 0 12px;color:#9ca3af;flex-shrink:0;pointer-events:none;}
-  .u2-combo-input{
-    flex:1;border:none;outline:none;background:transparent;
-    padding:11px 4px;font-size:14px;color:#111827!important;min-width:0;
-  }
-  .u2-combo-clear{
-    padding:0 12px;color:#9ca3af;background:none;border:none;
-    cursor:pointer;font-size:16px;line-height:1;display:none;
-  }
-  .u2-combo-clear:hover{color:#ef4444;}
-  .u2-combo-dropdown{
-    position:absolute;left:0;right:0;top:calc(100% + 4px);
-    background:#fff;border:1px solid #e5e7eb;border-radius:12px;
-    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;
-    max-height:240px;overflow-y:auto;display:none;
-  }
-  .u2-combo-dropdown.open{display:block;}
-  .u2-combo-opt{
-    padding:10px 14px;font-size:13px;cursor:pointer;
-    border-bottom:1px solid #f3f4f6;transition:background .1s;
-  }
-  .u2-combo-opt:last-child{border-bottom:none;}
-  .u2-combo-opt:hover,.u2-combo-opt.active{background:#faf5ff;}
-  .u2-combo-opt .opt-jo{font-weight:700;color:#7c3aed!important;}
-  .u2-combo-opt .opt-cust{color:#374151!important;margin-left:6px;font-size:12px;}
-  .u2-combo-opt .opt-status{
-    float:right;font-size:11px;font-weight:600;
-    padding:1px 8px;border-radius:9999px;
-  }
-
-  /* JO Info card */
-  #u2-joInfoCard{
-    display:none;
-    background:#faf5ff;border:1px solid #e9d5ff;
-    border-radius:12px;padding:14px;margin-top:10px;
-  }
-  .jo-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;}
-  .jo-info-row{display:flex;flex-direction:column;}
-  .jo-info-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af!important;}
-  .jo-info-value{font-size:13px;font-weight:600;color:#111827!important;margin-top:1px;}
-
-  /* Status badges */
-  .st-FOR_PLOTTING{background:#fef9c3;color:#854d0e!important;}
-  .st-PLOTTED{background:#dbeafe;color:#1e40af!important;}
-  .st-FOR_PRINTING{background:#e0e7ff;color:#3730a3!important;}
-  .st-PRINTING{background:#dcfce7;color:#166534!important;}
-  .st-COMPLETED{background:#f1f5f9;color:#64748b!important;}
+  .u4-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+  .u4-info-row { display: flex; flex-direction: column; }
+  .u4-info-lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--p-faint); }
+  .u4-info-val { font-size: 13px; font-weight: 600; margin-top: 1px; }
 
   /* Roll picker */
-  .roll-pick{
-    border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;
-    cursor:pointer;transition:all .15s;margin-bottom:8px;background:#fff;
+  .u4-roll-row {
+    border: 1.5px solid var(--p-border); border-radius: 11px; padding: 12px 14px;
+    cursor: pointer; transition: all .15s; margin-bottom: 8px; background: var(--p-surface);
   }
-  .roll-pick:hover{border-color:#c4b5fd;background:#faf5ff;}
-  .roll-pick.selected{border-color:#7c3aed;background:#faf5ff;}
-  .hp-green{background:#dcfce7;color:#166534!important;}
-  .hp-yellow{background:#fef9c3;color:#854d0e!important;}
-  .hp-red{background:#fee2e2;color:#991b1b!important;}
+  .u4-roll-row:hover   { border-color: var(--p-purple-bd); background: var(--p-purple-lt); }
+  .u4-roll-row.selected { border-color: var(--p-purple); background: var(--p-purple-lt); }
 
-  #u2-calcPrev{
-    display:none;background:#faf5ff;border:1px solid #c4b5fd;
-    border-radius:12px;padding:14px;margin-bottom:12px;
-  }
-  #u2-widthWarn{
-    display:none;background:#fef9c3;border:1px solid #fde68a;
-    border-radius:12px;padding:12px 14px;margin-bottom:12px;
+  /* Calc preview */
+  #u4-calcPrev {
+    display: none; background: var(--p-purple-lt); border: 1px solid var(--p-purple-bd);
+    border-radius: 11px; padding: 14px; margin-bottom: 12px;
   }
 </style>
 
-<div class="p-4 space-y-0 pb-10">
+<div style="padding:20px 20px 40px;max-width:640px;">
 
-  <div class="mb-4">
-    <h2 class="text-xl font-bold">Record Roll Usage</h2>
-    <p class="text-sm mt-0.5" style="color:#6b7280;">Digital Operator — Log material consumption</p>
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Record Roll Usage</h2>
+      <p style="font-size:13px;color:var(--p-muted);margin:0;">Digital Operator — Log material consumption</p>
+    </div>
+    <button id="u4-reloadBtn" class="p-btn-reload" onclick="u4_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Reload
+    </button>
   </div>
 
   <!-- Access warning -->
-  <div id="u2-access" style="display:none;background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:14px;margin-bottom:12px;">
-    <p class="text-sm font-semibold" style="color:#92400e;">⚠ Only Digital Operators can record roll usage.</p>
+  <div id="u4-access" style="display:none;margin-bottom:14px;" class="p-alert p-alert-warn">
+    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px;">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+    </svg>
+    Only Digital Operators can record roll usage.
   </div>
 
-  <!-- ── Step 1: JO Number dropdown ── -->
-  <div class="u2-card">
-    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 1 — Select Job Order</p>
-
-    <div>
-      <label class="u2-label">Job Order <span style="color:#ef4444;">*</span></label>
-      <div class="u2-combo-wrap" id="u2-joWrap">
-        <div class="u2-combo-row" id="u2-joRow">
-          <span class="u2-combo-icon">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-            </svg>
-          </span>
-          <input type="text" id="u2-joSearch" class="u2-combo-input"
-            placeholder="Search JO number or customer…"
-            autocomplete="off"
-            oninput="u2_filterJOs()"
-            onfocus="u2_joOpen()">
-          <button class="u2-combo-clear" id="u2-joClear" onclick="u2_joReset()">✕</button>
-        </div>
-        <div class="u2-combo-dropdown" id="u2-joDropdown"></div>
+  <!-- Step 1 -->
+  <div class="p-card" style="padding:18px;margin-bottom:12px;">
+    <p class="p-section-title">Step 1 — Select Job Order</p>
+    <label class="p-label">Job Order <span style="color:var(--p-red);">*</span></label>
+    <div class="u4-combo-wrap" id="u4-joWrap">
+      <div class="u4-combo-row" id="u4-joRow">
+        <span class="u4-combo-icon"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></span>
+        <input type="text" id="u4-joSearch" class="u4-combo-input" placeholder="Search JO number or customer…" autocomplete="off" oninput="u4_filterJOs()" onfocus="u4_joOpen()">
+        <button class="u4-combo-clear" id="u4-joClear" onclick="u4_joReset()">✕</button>
       </div>
-      <p class="text-xs mt-1" style="color:#6b7280;">Select from PRISM Job Orders.</p>
+      <div class="u4-combo-dropdown" id="u4-joDropdown"></div>
     </div>
+    <p style="font-size:11px;color:var(--p-faint);margin:5px 0 0;">Select from PRISM Job Orders (synced from Job Web App).</p>
 
-    <!-- JO Info Card -->
-    <div id="u2-joInfoCard">
-      <div class="flex items-center justify-between mb-3">
-        <p class="text-xs font-bold uppercase tracking-wide" style="color:#7c3aed;">Job Order Details</p>
-        <span id="u2-joStatusBadge" class="text-xs font-bold px-2 py-0.5 rounded-full"></span>
+    <!-- JO Info -->
+    <div id="u4-joInfoCard">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-purple);margin:0;">Job Details</p>
+        <span id="u4-joStatusBadge" class="p-badge"></span>
       </div>
-      <div class="jo-info-grid">
-        <div class="jo-info-row">
-          <span class="jo-info-label">JO Number</span>
-          <span class="jo-info-value" id="u2-infoJO"></span>
+      <div class="u4-info-grid">
+        <div class="u4-info-row"><span class="u4-info-lbl">JO Number</span><span class="u4-info-val mono" id="u4-infoJO" style="color:var(--p-purple);font-size:12px;"></span></div>
+        <div class="u4-info-row"><span class="u4-info-lbl">Customer</span><span class="u4-info-val" id="u4-infoCust"></span></div>
+        <div class="u4-info-row"><span class="u4-info-lbl">Category</span><span class="u4-info-val" id="u4-infoCat"></span></div>
+        <div class="u4-info-row"><span class="u4-info-lbl">Size</span><span class="u4-info-val" id="u4-infoSize"></span></div>
+        <div class="u4-info-row"><span class="u4-info-lbl">Qty</span><span class="u4-info-val" id="u4-infoQty"></span></div>
+        <div class="u4-info-row"><span class="u4-info-lbl">Prod. Type</span><span class="u4-info-val" id="u4-infoProd"></span></div>
+        <div class="u4-info-row" style="grid-column:1/-1;"><span class="u4-info-lbl">Description</span><span class="u4-info-val" id="u4-infoDesc" style="font-weight:400;font-size:12px;white-space:pre-line;"></span></div>
+        <div class="u4-info-row" id="u4-infoPlotRow" style="grid-column:1/-1;display:none;">
+          <span class="u4-info-lbl">Plotting Link</span>
+          <a id="u4-infoPlot" href="#" target="_blank" style="font-size:12px;font-weight:700;color:var(--p-purple);text-decoration:underline;">View Plotting Sheet ↗</a>
         </div>
-        <div class="jo-info-row">
-          <span class="jo-info-label">Customer</span>
-          <span class="jo-info-value" id="u2-infoCust"></span>
-        </div>
-        <div class="jo-info-row">
-          <span class="jo-info-label">Category</span>
-          <span class="jo-info-value" id="u2-infoCat"></span>
-        </div>
-        <div class="jo-info-row">
-          <span class="jo-info-label">Production Type</span>
-          <span class="jo-info-value" id="u2-infoProd"></span>
-        </div>
-        <div class="jo-info-row">
-          <span class="jo-info-label">Size</span>
-          <span class="jo-info-value" id="u2-infoSize"></span>
-        </div>
-        <div class="jo-info-row">
-          <span class="jo-info-label">Quantity</span>
-          <span class="jo-info-value" id="u2-infoQty"></span>
-        </div>
-        <div class="jo-info-row" style="grid-column:1/-1;">
-          <span class="jo-info-label">Description</span>
-          <span class="jo-info-value" id="u2-infoDesc" style="font-weight:400;font-size:13px;white-space:pre-line;"></span>
-        </div>
-        <div class="jo-info-row" id="u2-infoPlotRow" style="grid-column:1/-1;display:none;">
-          <span class="jo-info-label">Plotting Link</span>
-          <a id="u2-infoPlot" href="#" target="_blank"
-            class="text-xs font-semibold mt-0.5" style="color:#7c3aed;text-decoration:underline;">View Plotting Sheet</a>
-        </div>
-        <div class="jo-info-row" id="u2-infoRollRow" style="display:none;">
-          <span class="jo-info-label">Assigned Roll</span>
-          <span class="jo-info-value" id="u2-infoRoll" style="color:#7c3aed!important;"></span>
+        <div class="u4-info-row" id="u4-infoRollRow" style="display:none;">
+          <span class="u4-info-lbl">Rolls Used</span>
+          <span class="u4-info-val" id="u4-infoRoll" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;"></span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Step 2: Select Open Roll ── -->
-  <div class="u2-card">
-    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 2 — Select Open Roll</p>
-    <div class="relative mb-3">
-      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-        </svg>
-      </div>
-      <input type="text" id="u2-rollSearch"
-        placeholder="Search Roll ID or material code…"
-        class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none"
-        style="color:#111827;" oninput="u2_filterRolls()">
+  <!-- Step 2 -->
+  <div class="p-card" style="padding:18px;margin-bottom:12px;">
+    <p class="p-section-title">Step 2 — Select Open Roll</p>
+    <div class="p-search-wrap" style="margin-bottom:10px;">
+      <span class="icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></span>
+      <input type="text" id="u4-rollSearch" class="p-input" placeholder="Search Roll ID or material…" oninput="u4_filterRolls()">
     </div>
-    <div id="u2-rollList" style="max-height:250px;overflow-y:auto;">
-      <div class="text-sm py-4 text-center" style="color:#9ca3af;">Loading open rolls…</div>
+    <div id="u4-rollList" style="max-height:240px;overflow-y:auto;">
+      <div style="text-align:center;padding:24px;font-size:13px;color:var(--p-faint);">Loading open rolls…</div>
     </div>
   </div>
 
   <!-- Width warning -->
-  <div id="u2-widthWarn">
-    <p class="text-sm font-semibold" id="u2-widthWarnMsg" style="color:#92400e!important;"></p>
+  <div id="u4-widthWarn" style="display:none;margin-bottom:12px;" class="p-alert p-alert-warn">
+    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <span id="u4-widthWarnMsg"></span>
   </div>
 
   <!-- Calc preview -->
-  <div id="u2-calcPrev">
-    <p class="text-sm font-bold mb-2" style="color:#7c3aed;">📐 Usage Preview</p>
-    <div id="u2-calcBody" class="text-sm space-y-1" style="color:#374151;"></div>
+  <div id="u4-calcPrev">
+    <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-purple);margin:0 0 10px;">📐 Usage Preview</p>
+    <div id="u4-calcBody" style="font-size:13px;display:flex;flex-direction:column;gap:5px;"></div>
   </div>
 
-  <!-- ── Step 3: Usage Details ── -->
-  <div class="u2-card">
-    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">Step 3 — Usage Details</p>
-    <div class="grid grid-cols-2 gap-3 mb-3">
+  <!-- Step 3 -->
+  <div class="p-card" style="padding:18px;margin-bottom:12px;">
+    <p class="p-section-title">Step 3 — Usage Details</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
       <div>
-        <label class="u2-label">Width Used (ft)</label>
-        <input type="number" id="u2-widthUsed" class="u2-input"
-          placeholder="e.g. 6" min="0.1" step="0.1" oninput="u2_calcPreview()">
-        <p class="text-xs mt-1" style="color:#9ca3af;">Auto-filled from JO width.</p>
+        <label class="p-label">Width Used (ft)</label>
+        <input type="number" id="u4-widthUsed" class="p-input" placeholder="e.g. 6" min="0.1" step="0.1" oninput="u4_calcPreview()">
+        <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Auto-filled from JO width.</p>
       </div>
       <div>
-        <label class="u2-label">Length Used (ft) <span style="color:#ef4444;">*</span></label>
-        <input type="number" id="u2-lengthUsed" class="u2-input"
-          placeholder="e.g. 15" min="0.1" step="0.1" oninput="u2_calcPreview()">
+        <label class="p-label">Length Used (ft) <span style="color:var(--p-red);">*</span></label>
+        <input type="number" id="u4-lengthUsed" class="p-input" placeholder="e.g. 15" min="0.1" step="0.1" oninput="u4_calcPreview()">
       </div>
     </div>
     <div>
-      <label class="u2-label">Plotting Sheet Link <span style="color:#ef4444;">*</span></label>
-      <input type="url" id="u2-plottingLink" class="u2-input"
-        placeholder="https://docs.google.com/spreadsheets/d/…">
-      <p class="text-xs mt-1" style="color:#6b7280;">Required — plotting sheet must be linked before printing.</p>
+      <label class="p-label">Plotting Sheet Link <span style="color:var(--p-red);">*</span></label>
+      <input type="url" id="u4-plottingLink" class="p-input" placeholder="https://docs.google.com/spreadsheets/d/…">
+      <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Required — must be linked before printing can proceed.</p>
     </div>
   </div>
 
-  <button id="u2-btn" onclick="u2_submit()"
-    class="w-full py-4 rounded-xl text-base font-bold text-white"
-    style="background:#7c3aed;">
+  <button id="u4-btn" onclick="u4_submit()" class="p-btn p-btn-green" style="width:100%;padding:14px;font-size:14px;background:var(--p-purple);">
     Record Usage
   </button>
-  <p class="text-center text-xs mt-2" style="color:#9ca3af;">
-    Roll remaining length will be updated immediately. JO status → PRINTING.
-  </p>
+  <p style="text-align:center;font-size:11px;color:var(--p-faint);margin-top:6px;">Roll remaining length updates immediately. JO status → PRINTING.</p>
 
 </div>
 
 <script>
-var u2_rolls      = [];
-var u2_settings   = {};
-var u2_selRollId  = '';
-var u2_joData     = null;
-var u2_allJOs     = [];
-var u2_joActiveIdx = -1;
+var u4_rolls = [], u4_settings = {}, u4_selRollId = '';
+var u4_joData = null, u4_allJOs = [], u4_joActiveIdx = -1;
 
-/* ── Init ── */
 function prism_init_usage() {
+  u4_loadData();
+}
+
+function u4_reload() {
+  prism_setReloading('u4-reloadBtn', true);
+  u4_loadData();
+}
+
+function u4_loadData() {
   google.script.run
     .withSuccessHandler(function(r) {
+      prism_setReloading('u4-reloadBtn', false);
       if (!r.success) return;
-      u2_rolls    = (r.rolls || []).filter(function(x) { return x.status === 'OPEN'; });
-      u2_settings = r.settings || {};
-      u2_renderRolls(u2_rolls);
-
+      u4_rolls    = (r.rolls || []).filter(function(x) { return x.status === 'OPEN'; });
+      u4_settings = r.settings || {};
+      u4_renderRolls(u4_rolls);
       var role = ((r.user && r.user.role) || '').toLowerCase();
-      var ok   = role.includes('admin') || role.includes('digital operator') || role.includes('operator');
-      if (!ok) document.getElementById('u2-access').style.display = 'block';
+      var ok = role.includes('admin') || role.includes('digital operator') || role.includes('operator');
+      if (!ok) document.getElementById('u4-access').style.display = 'flex';
     })
-    .withFailureHandler(function() {})
+    .withFailureHandler(function() { prism_setReloading('u4-reloadBtn', false); })
     .prism_getInitData();
 
-  // Load JOs for dropdown
   google.script.run
-    .withSuccessHandler(function(r) {
-      if (r && r.success) {
-        u2_allJOs = r.data || [];
-      }
-    })
+    .withSuccessHandler(function(r) { if (r && r.success) u4_allJOs = r.data || []; })
     .withFailureHandler(function() {})
     .prism_getJobOrdersPublic();
 }
 
-/* ══ JO Combo ══════════════════════════════════════════════ */
-function u2_joOpen() {
-  u2_renderJODropdown(u2_allJOs);
-  document.getElementById('u2-joDropdown').classList.add('open');
-  document.getElementById('u2-joRow').classList.add('focused');
+/* ── JO Combo ── */
+function u4_joOpen() { u4_renderJODropdown(u4_allJOs); document.getElementById('u4-joDropdown').classList.add('open'); document.getElementById('u4-joRow').classList.add('focused'); }
+function u4_filterJOs() {
+  var q = (document.getElementById('u4-joSearch').value || '').trim().toLowerCase();
+  u4_renderJODropdown(u4_allJOs.filter(function(j) { return !q || (j.joNumber + ' ' + j.customer).toLowerCase().indexOf(q) !== -1; }));
+  document.getElementById('u4-joDropdown').classList.add('open');
+  if (u4_joData) { u4_joData = null; document.getElementById('u4-joInfoCard').style.display = 'none'; document.getElementById('u4-joClear').style.display = 'none'; }
+  u4_joActiveIdx = -1;
 }
-
-function u2_filterJOs() {
-  var q  = (document.getElementById('u2-joSearch').value || '').trim().toLowerCase();
-  var dd = document.getElementById('u2-joDropdown');
-  var filtered = u2_allJOs.filter(function(j) {
-    return !q || (j.joNumber + ' ' + j.customer).toLowerCase().indexOf(q) !== -1;
-  });
-  u2_renderJODropdown(filtered);
-  dd.classList.add('open');
-
-  // Clear selection if typing
-  if (u2_joData) {
-    u2_joData = null;
-    document.getElementById('u2-joInfoCard').style.display = 'none';
-    document.getElementById('u2-joClear').style.display    = 'none';
-  }
-  u2_joActiveIdx = -1;
-}
-
-function u2_renderJODropdown(jos) {
-  var dd = document.getElementById('u2-joDropdown');
-  if (!jos.length) {
-    dd.innerHTML = '<div class="u2-combo-opt" style="color:#9ca3af;cursor:default;">No job orders found.</div>';
-    return;
-  }
-  dd.innerHTML = jos.map(function(j, i) {
-    var stClass = 'st-' + (j.status || 'FOR_PLOTTING');
-    return '<div class="u2-combo-opt" data-idx="' + i + '"'
-      + ' onmousedown="u2_selectJO(\'' + u2_esc(j.joNumber).replace(/'/g,"\\'") + '\')">'
-      + '<span class="opt-jo">' + u2_esc(j.joNumber) + '</span>'
-      + '<span class="opt-cust">' + u2_esc(j.customer || '—') + '</span>'
-      + '<span class="opt-status ' + stClass + '">' + u2_esc(j.status || 'FOR_PLOTTING') + '</span>'
+function u4_renderJODropdown(jos) {
+  var dd = document.getElementById('u4-joDropdown');
+  if (!jos.length) { dd.innerHTML = '<div class="u4-combo-opt" style="color:var(--p-faint);cursor:default;">No job orders found.</div>'; return; }
+  dd.innerHTML = jos.map(function(j) {
+    var sc = 'p-badge st-' + (j.status || 'FOR_PLOTTING');
+    return '<div class="u4-combo-opt" onmousedown="u4_selectJO(\'' + u4_esc(j.joNumber).replace(/'/g,"\\'") + '\')">'
+      + '<span class="u4-jo-num">' + u4_esc(j.joNumber) + '</span>'
+      + '<span class="u4-jo-cust">' + u4_esc(j.customer || '—') + '</span>'
+      + '<span class="' + sc + '" style="float:right;font-size:10px;">' + u4_esc(j.status || 'FOR_PLOTTING') + '</span>'
       + '</div>';
   }).join('');
 }
-
-function u2_selectJO(joNumber) {
+function u4_selectJO(joNumber) {
   var jo = null;
-  for (var i = 0; i < u2_allJOs.length; i++) {
-    if (u2_allJOs[i].joNumber === joNumber) { jo = u2_allJOs[i]; break; }
-  }
+  for (var i = 0; i < u4_allJOs.length; i++) { if (u4_allJOs[i].joNumber === joNumber) { jo = u4_allJOs[i]; break; } }
   if (!jo) return;
-
-  u2_joData = jo;
-  document.getElementById('u2-joSearch').value           = jo.joNumber + (jo.customer ? ' — ' + jo.customer : '');
-  document.getElementById('u2-joClear').style.display    = 'block';
-  document.getElementById('u2-joDropdown').classList.remove('open');
-  document.getElementById('u2-joRow').classList.remove('focused');
-
-  // Populate info card
-  var stClass = 'st-' + (jo.status || 'FOR_PLOTTING');
-  document.getElementById('u2-joStatusBadge').textContent = jo.status || 'FOR_PLOTTING';
-  document.getElementById('u2-joStatusBadge').className   = 'text-xs font-bold px-2 py-0.5 rounded-full ' + stClass;
-  document.getElementById('u2-infoJO').textContent        = jo.joNumber;
-  document.getElementById('u2-infoCust').textContent      = jo.customer   || '—';
-  document.getElementById('u2-infoCat').textContent       = jo.category   || '—';
-  document.getElementById('u2-infoProd').textContent      = jo.productionType || '—';
-  document.getElementById('u2-infoSize').textContent      =
-    (jo.width && jo.height) ? jo.width + ' × ' + jo.height + ' ft' : '—';
-  document.getElementById('u2-infoQty').textContent       = jo.quantity   || '—';
-  document.getElementById('u2-infoDesc').textContent      = jo.jobDescription || '—';
-
-  // Plotting link
-  var plotRow = document.getElementById('u2-infoPlotRow');
+  u4_joData = jo;
+  document.getElementById('u4-joSearch').value = jo.joNumber + (jo.customer ? ' — ' + jo.customer : '');
+  document.getElementById('u4-joClear').style.display = 'block';
+  document.getElementById('u4-joDropdown').classList.remove('open');
+  document.getElementById('u4-joRow').classList.remove('focused');
+  var sc = 'p-badge st-' + (jo.status || 'FOR_PLOTTING');
+  document.getElementById('u4-joStatusBadge').textContent  = jo.status || 'FOR_PLOTTING';
+  document.getElementById('u4-joStatusBadge').className    = sc;
+  document.getElementById('u4-infoJO').textContent   = jo.joNumber;
+  document.getElementById('u4-infoCust').textContent  = jo.customer   || '—';
+  document.getElementById('u4-infoCat').textContent   = jo.category   || '—';
+  document.getElementById('u4-infoProd').textContent  = jo.productionType || '—';
+  document.getElementById('u4-infoSize').textContent  = (jo.width && jo.height) ? jo.width + ' × ' + jo.height + ' ft' : '—';
+  document.getElementById('u4-infoQty').textContent   = jo.quantity   || '—';
+  document.getElementById('u4-infoDesc').textContent  = jo.jobDescription || '—';
+  var plotRow = document.getElementById('u4-infoPlotRow');
   if (jo.plottingLink) {
-    document.getElementById('u2-infoPlot').href = jo.plottingLink;
+    document.getElementById('u4-infoPlot').href = jo.plottingLink;
     plotRow.style.display = 'block';
-    // Auto-fill plotting link in step 3
-    document.getElementById('u2-plottingLink').value = jo.plottingLink;
-  } else {
-    plotRow.style.display = 'none';
-  }
-
-  // Assigned roll
-  var rollRow = document.getElementById('u2-infoRollRow');
+    document.getElementById('u4-plottingLink').value = jo.plottingLink;
+  } else { plotRow.style.display = 'none'; }
+  var rollRow = document.getElementById('u4-infoRollRow');
   if (jo.rollId) {
-    document.getElementById('u2-infoRoll').textContent = jo.rollId;
+    // Render each roll as a separate pill
+    var rollEl = document.getElementById('u4-infoRoll');
+    rollEl.innerHTML = jo.rollId.split(',').map(function(id) {
+      id = id.trim();
+      return id ? '<span class="mono p-badge badge-purple" style="font-size:11px;">' + u4_esc(id) + '</span>' : '';
+    }).join('');
     rollRow.style.display = 'block';
-  } else {
-    rollRow.style.display = 'none';
-  }
-
-  document.getElementById('u2-joInfoCard').style.display = 'block';
-
-  // Auto-fill width from JO
-  if (jo.width && !document.getElementById('u2-widthUsed').value) {
-    document.getElementById('u2-widthUsed').value = jo.width;
-  }
-
-  u2_calcPreview();
+  } else { rollRow.style.display = 'none'; }
+  document.getElementById('u4-joInfoCard').style.display = 'block';
+  if (jo.width && !document.getElementById('u4-widthUsed').value) document.getElementById('u4-widthUsed').value = jo.width;
+  u4_calcPreview();
 }
-
-function u2_joReset() {
-  u2_joData = null;
-  document.getElementById('u2-joSearch').value           = '';
-  document.getElementById('u2-joClear').style.display    = 'none';
-  document.getElementById('u2-joInfoCard').style.display = 'none';
-  document.getElementById('u2-joDropdown').classList.remove('open');
-  document.getElementById('u2-joRow').classList.remove('focused');
-  document.getElementById('u2-widthUsed').value          = '';
-  document.getElementById('u2-plottingLink').value       = '';
-  document.getElementById('u2-calcPrev').style.display   = 'none';
-  document.getElementById('u2-widthWarn').style.display  = 'none';
-  u2_joActiveIdx = -1;
+function u4_joReset() {
+  u4_joData = null;
+  document.getElementById('u4-joSearch').value = '';
+  document.getElementById('u4-joClear').style.display = 'none';
+  document.getElementById('u4-joInfoCard').style.display = 'none';
+  document.getElementById('u4-joDropdown').classList.remove('open');
+  document.getElementById('u4-joRow').classList.remove('focused');
+  document.getElementById('u4-widthUsed').value = '';
+  document.getElementById('u4-plottingLink').value = '';
+  document.getElementById('u4-calcPrev').style.display = 'none';
+  document.getElementById('u4-widthWarn').style.display = 'none';
+  u4_joActiveIdx = -1;
 }
-
-// Keyboard nav for JO dropdown
 document.addEventListener('keydown', function(e) {
-  var dd = document.getElementById('u2-joDropdown');
-  if (!dd.classList.contains('open')) return;
-  var opts = dd.querySelectorAll('.u2-combo-opt');
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    u2_joActiveIdx = Math.min(u2_joActiveIdx + 1, opts.length - 1);
-    opts.forEach(function(o, i) { o.classList.toggle('active', i === u2_joActiveIdx); });
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    u2_joActiveIdx = Math.max(u2_joActiveIdx - 1, 0);
-    opts.forEach(function(o, i) { o.classList.toggle('active', i === u2_joActiveIdx); });
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
-    if (u2_joActiveIdx >= 0 && opts[u2_joActiveIdx]) {
-      opts[u2_joActiveIdx].dispatchEvent(new MouseEvent('mousedown'));
-    }
-  } else if (e.key === 'Escape') {
-    dd.classList.remove('open');
-    document.getElementById('u2-joRow').classList.remove('focused');
-  }
+  var dd = document.getElementById('u4-joDropdown');
+  if (!dd || !dd.classList.contains('open')) return;
+  var opts = dd.querySelectorAll('.u4-combo-opt');
+  if (e.key === 'ArrowDown') { e.preventDefault(); u4_joActiveIdx = Math.min(u4_joActiveIdx+1, opts.length-1); opts.forEach(function(o,i){o.classList.toggle('active',i===u4_joActiveIdx);}); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); u4_joActiveIdx = Math.max(u4_joActiveIdx-1, 0); opts.forEach(function(o,i){o.classList.toggle('active',i===u4_joActiveIdx);}); }
+  else if (e.key === 'Enter') { e.preventDefault(); if(u4_joActiveIdx>=0&&opts[u4_joActiveIdx]) opts[u4_joActiveIdx].dispatchEvent(new MouseEvent('mousedown')); }
+  else if (e.key === 'Escape') { dd.classList.remove('open'); document.getElementById('u4-joRow').classList.remove('focused'); }
 });
-
-// Close on outside click
 document.addEventListener('mousedown', function(e) {
-  var wrap = document.getElementById('u2-joWrap');
-  var dd   = document.getElementById('u2-joDropdown');
-  if (wrap && dd && !wrap.contains(e.target)) {
-    dd.classList.remove('open');
-    document.getElementById('u2-joRow').classList.remove('focused');
-  }
+  var wrap = document.getElementById('u4-joWrap'); var dd = document.getElementById('u4-joDropdown');
+  if (wrap && dd && !wrap.contains(e.target)) { dd.classList.remove('open'); document.getElementById('u4-joRow').classList.remove('focused'); }
 });
 
-/* ══ Roll Picker ════════════════════════════════════════════ */
-function u2_filterRolls() {
-  var q = (document.getElementById('u2-rollSearch').value || '').trim().toLowerCase();
-  var f = u2_rolls.filter(function(r) {
-    return !q || (r.rollId + ' ' + r.materialCode).toLowerCase().indexOf(q) !== -1;
-  });
-  u2_renderRolls(f);
+/* ── Roll Picker ── */
+function u4_filterRolls() {
+  var q = (document.getElementById('u4-rollSearch').value || '').trim().toLowerCase();
+  u4_renderRolls(u4_rolls.filter(function(r) { return !q || (r.rollId + ' ' + r.materialCode).toLowerCase().indexOf(q) !== -1; }));
 }
-
-function u2_getHealth(r) {
-  var t = parseFloat(u2_settings.near_empty_threshold_ft) || 30;
+function u4_getHealth(r) {
+  var t = parseFloat(u4_settings.near_empty_threshold_ft) || 30;
   if (r.remainingLength <= 0) return 'red';
   if (r.remainingLength <= t) return 'yellow';
   return 'green';
 }
-
-function u2_renderRolls(rolls) {
-  var el = document.getElementById('u2-rollList');
-  if (!rolls.length) {
-    el.innerHTML = '<div class="text-sm py-4 text-center" style="color:#9ca3af;">No open rolls. Ask STL to open a roll.</div>';
-    return;
-  }
+function u4_renderRolls(rolls) {
+  var el = document.getElementById('u4-rollList');
+  if (!rolls.length) { el.innerHTML = '<div style="text-align:center;padding:24px;font-size:13px;color:var(--p-faint);">No open rolls. Ask STL to open a roll first.</div>'; return; }
   var h = '';
   rolls.forEach(function(r) {
-    var hp  = 'hp-' + u2_getHealth(r);
-    var sel = u2_selRollId === r.rollId ? ' selected' : '';
-    h += '<div class="roll-pick' + sel + '" onclick="u2_selRoll(\'' + u2_esc(r.rollId).replace(/'/g, "\\'") + '\')">';
-    h += '<div class="flex items-center justify-between">';
-    h += '<span class="text-sm font-bold">' + u2_esc(r.rollId) + '</span>';
-    h += '<span class="text-xs font-bold px-2 py-0.5 rounded-full ' + hp + '">' + r.remainingLength + ' ft left</span>';
-    h += '</div>';
-    h += '<div class="text-xs mt-0.5" style="color:#6b7280;">' + u2_esc(r.materialCode) + ' · ' + r.width + ' ft wide</div>';
-    h += '</div>';
+    var hl = u4_getHealth(r);
+    var bc = hl === 'green' ? 'badge-green' : hl === 'yellow' ? 'badge-amber' : 'badge-red';
+    var sel = u4_selRollId === r.rollId ? ' selected' : '';
+    h += '<div class="u4-roll-row' + sel + '" onclick="u4_selRoll(\'' + u4_esc(r.rollId).replace(/'/g,"\\'") + '\')">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;">'
+      + '<span class="mono" style="font-weight:700;font-size:13px;">' + u4_esc(r.rollId) + '</span>'
+      + '<span class="p-badge ' + bc + '">' + r.remainingLength + ' ft left</span>'
+      + '</div>'
+      + '<p style="font-size:11px;color:var(--p-muted);margin:3px 0 0;">' + u4_esc(r.materialCode) + ' · ' + r.width + ' ft wide</p>'
+      + '</div>';
   });
   el.innerHTML = h;
 }
+function u4_selRoll(id) { u4_selRollId = id; u4_filterRolls(); u4_calcPreview(); }
 
-function u2_selRoll(id) {
-  u2_selRollId = id;
-  u2_filterRolls();
-  u2_calcPreview();
-}
-
-/* ══ Calc Preview ═══════════════════════════════════════════ */
-function u2_calcPreview() {
-  if (!u2_selRollId) return;
+/* ── Calc Preview ── */
+function u4_calcPreview() {
+  if (!u4_selRollId) return;
   var roll = null;
-  for (var i = 0; i < u2_rolls.length; i++) {
-    if (u2_rolls[i].rollId === u2_selRollId) { roll = u2_rolls[i]; break; }
-  }
+  for (var i = 0; i < u4_rolls.length; i++) { if (u4_rolls[i].rollId === u4_selRollId) { roll = u4_rolls[i]; break; } }
   if (!roll) return;
-
-  var wu = parseFloat(document.getElementById('u2-widthUsed').value)  || 0;
-  var lu = parseFloat(document.getElementById('u2-lengthUsed').value) || 0;
-
-  // Width validation
-  var warnEl = document.getElementById('u2-widthWarn');
+  var wu = parseFloat(document.getElementById('u4-widthUsed').value)  || 0;
+  var lu = parseFloat(document.getElementById('u4-lengthUsed').value) || 0;
+  var warnEl = document.getElementById('u4-widthWarn');
   if (wu > 0 && wu > roll.width) {
-    warnEl.style.display = 'block';
-    document.getElementById('u2-widthWarnMsg').textContent =
-      '⚠ Job width (' + wu + ' ft) exceeds roll width (' + roll.width + ' ft). Select a wider roll.';
-  } else {
-    warnEl.style.display = 'none';
-  }
-
-  var prev = document.getElementById('u2-calcPrev');
+    warnEl.style.display = 'flex';
+    document.getElementById('u4-widthWarnMsg').textContent = '⚠ Job width (' + wu + ' ft) exceeds roll width (' + roll.width + ' ft). Select a wider roll.';
+  } else { warnEl.style.display = 'none'; }
+  var prev = document.getElementById('u4-calcPrev');
   if (!lu) { prev.style.display = 'none'; return; }
-
-  var t  = parseFloat(u2_settings.near_empty_threshold_ft) || 30;
+  var t = parseFloat(u4_settings.near_empty_threshold_ft) || 30;
   var nr = Math.max(0, roll.remainingLength - lu);
-  var rc = nr <= 0 ? '#dc2626' : nr <= t ? '#ca8a04' : '#15803d';
+  var rc = nr <= 0 ? 'var(--p-red)' : nr <= t ? 'var(--p-amber)' : 'var(--p-green)';
   var rs = nr <= 0 ? 'Will be CONSUMED' : nr <= t ? 'Near Empty' : 'Still Healthy';
-
   prev.style.display = 'block';
-  document.getElementById('u2-calcBody').innerHTML =
-    '<div class="flex justify-between"><span>Roll selected:</span><strong>' + u2_esc(u2_selRollId) + '</strong></div>'
-    + '<div class="flex justify-between"><span>Length used:</span><strong>' + lu + ' ft</strong></div>'
-    + '<div class="flex justify-between"><span>Current remaining:</span><strong>' + roll.remainingLength + ' ft</strong></div>'
-    + '<div class="flex justify-between"><span>After this job:</span><strong style="color:' + rc + ';">' + nr + ' ft</strong></div>'
-    + '<div class="flex justify-between"><span>Roll status after:</span><strong style="color:' + rc + ';">' + rs + '</strong></div>';
+  document.getElementById('u4-calcBody').innerHTML =
+    '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Roll:</span><strong class="mono" style="font-size:12px;">' + u4_esc(u4_selRollId) + '</strong></div>'
+    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Length used:</span><strong>' + lu + ' ft</strong></div>'
+    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Current remaining:</span><strong>' + roll.remainingLength + ' ft</strong></div>'
+    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">After this job:</span><strong style="color:' + rc + ';">' + nr + ' ft</strong></div>'
+    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Status after:</span><strong style="color:' + rc + ';">' + rs + '</strong></div>';
 }
 
-/* ══ Submit ═════════════════════════════════════════════════ */
-function u2_submit() {
-  if (!u2_joData)   { prism_toast('error', 'Please select a Job Order.'); return; }
-  var jo     = u2_joData.joNumber;
-  var rollId = u2_selRollId;
-  var lu     = parseFloat(document.getElementById('u2-lengthUsed').value) || 0;
-  var wu     = parseFloat(document.getElementById('u2-widthUsed').value)  || 0;
-  var link   = document.getElementById('u2-plottingLink').value.trim();
-
-  if (!rollId) { prism_toast('error', 'Please select a roll.'); return; }
-  if (!lu)     { prism_toast('error', 'Length Used is required.'); return; }
-  if (!link)   { prism_toast('error', 'Plotting Sheet link is required.'); return; }
-
+/* ── Submit ── */
+function u4_submit() {
+  if (!u4_joData)   { prism_toast('error', 'Please select a Job Order.'); return; }
+  var jo   = u4_joData.joNumber;
+  var rid  = u4_selRollId;
+  var lu   = parseFloat(document.getElementById('u4-lengthUsed').value) || 0;
+  var wu   = parseFloat(document.getElementById('u4-widthUsed').value)  || 0;
+  var link = document.getElementById('u4-plottingLink').value.trim();
+  if (!rid)  { prism_toast('error', 'Please select a roll.'); return; }
+  if (!lu)   { prism_toast('error', 'Length Used is required.'); return; }
+  if (!link) { prism_toast('error', 'Plotting Sheet link is required.'); return; }
   var roll = null;
-  for (var i = 0; i < u2_rolls.length; i++) {
-    if (u2_rolls[i].rollId === rollId) { roll = u2_rolls[i]; break; }
-  }
-  if (roll && wu > 0 && wu > roll.width) {
-    prism_toast('error', 'Job width exceeds roll width. Cannot proceed.');
-    return;
-  }
-
-  var btn = document.getElementById('u2-btn');
-  btn.disabled    = true;
-  btn.textContent = 'Recording…';
-
+  for (var i = 0; i < u4_rolls.length; i++) { if (u4_rolls[i].rollId === rid) { roll = u4_rolls[i]; break; } }
+  if (roll && wu > 0 && wu > roll.width) { prism_toast('error', 'Job width exceeds roll width. Cannot proceed.'); return; }
+  var btn = document.getElementById('u4-btn'); btn.disabled = true; btn.textContent = 'Recording…';
   google.script.run
     .withSuccessHandler(function(r) {
-      btn.disabled    = false;
-      btn.textContent = 'Record Usage';
+      btn.disabled = false; btn.textContent = 'Record Usage';
       if (r.success) {
         prism_toast('success', r.message);
-        // Update local roll list
-        if (r.newRollStatus !== 'OPEN') {
-          u2_rolls = u2_rolls.filter(function(x) { return x.rollId !== rollId; });
-        } else {
-          for (var i = 0; i < u2_rolls.length; i++) {
-            if (u2_rolls[i].rollId === rollId) {
-              u2_rolls[i].remainingLength = r.newRemaining;
-              break;
-            }
-          }
-        }
-        // Reset form
-        u2_joReset();
-        u2_selRollId = '';
-        document.getElementById('u2-rollSearch').value       = '';
-        document.getElementById('u2-lengthUsed').value       = '';
-        document.getElementById('u2-calcPrev').style.display = 'none';
-        document.getElementById('u2-widthWarn').style.display = 'none';
-        u2_renderRolls(u2_rolls);
-      } else {
-        prism_toast('error', r.message);
-      }
+        if (r.newRollStatus !== 'OPEN') u4_rolls = u4_rolls.filter(function(x) { return x.rollId !== rid; });
+        else { for (var i = 0; i < u4_rolls.length; i++) { if (u4_rolls[i].rollId === rid) { u4_rolls[i].remainingLength = r.newRemaining; break; } } }
+        u4_joReset(); u4_selRollId = '';
+        document.getElementById('u4-rollSearch').value = '';
+        document.getElementById('u4-lengthUsed').value = '';
+        document.getElementById('u4-calcPrev').style.display = 'none';
+        document.getElementById('u4-widthWarn').style.display = 'none';
+        u4_renderRolls(u4_rolls);
+      } else prism_toast('error', r.message);
     })
-    .withFailureHandler(function(e) {
-      btn.disabled    = false;
-      btn.textContent = 'Record Usage';
-      prism_toast('error', e.message);
-    })
-    .prism_recordUsage({
-      joNumber:     jo,
-      rollId:       rollId,
-      widthUsed:    wu,
-      lengthUsed:   lu,
-      plottingLink: link
-    });
+    .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = 'Record Usage'; prism_toast('error', e.message); })
+    .prism_recordUsage({ joNumber: jo, rollId: rid, widthUsed: wu, lengthUsed: lu, plottingLink: link });
 }
-
-function u2_esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function u4_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>

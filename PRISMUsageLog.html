@@ -1,87 +1,206 @@
-<!-- PRISMUsageLog.html -->
+<!-- PRISMUsageLog.html v4 — unified design + reload + pagination -->
 <style>
-  #tab-usage-log,#tab-usage-log *{color:#111827!important;}
-  .ul3-row:hover td{background:#fdf4ff!important;}
+  #tab-usage-log, #tab-usage-log * { color: var(--p-text); }
+  .ul4-row:hover td { background: var(--p-purple-lt) !important; }
+  .ul4-roll { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--p-purple); }
+  .ul4-jo   { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--p-indigo); }
 </style>
-<div class="p-4 space-y-4">
-  <div class="flex items-start justify-between gap-3">
-    <div><h2 class="text-xl font-bold">Usage Log</h2><p class="text-sm mt-0.5" style="color:#6b7280;">All LFP_Usage entries</p></div>
-    <button onclick="prism_init_usage_log()" class="px-3 py-2 rounded-xl text-sm font-semibold border" style="background:#fdf4ff;color:#7c3aed;border-color:#e9d5ff;">Reload</button>
+
+<div style="padding:20px 20px 40px;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Usage Log</h2>
+      <p style="font-size:13px;color:var(--p-muted);margin:0;">All LFP material consumption entries</p>
+    </div>
+    <button id="ul4-reloadBtn" class="p-btn-reload" onclick="ul4_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Reload
+    </button>
   </div>
-  <div class="relative"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></div>
-    <input type="text" id="ul3-search" placeholder="Search JO number, Roll ID, operator…" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none" style="color:#111827;" oninput="ul3_apply()">
+
+  <!-- Search + count -->
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+    <div class="p-search-wrap" style="flex:1;min-width:200px;">
+      <span class="icon">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+        </svg>
+      </span>
+      <input type="text" id="ul4-search" class="p-input" placeholder="Search JO number, Roll ID, operator…" oninput="ul4_apply()">
+    </div>
+    <p id="ul4-count" style="font-size:12px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;"></p>
   </div>
-  <p id="ul3-count" class="text-xs" style="color:#9ca3af;"></p>
-  <div id="ul3-tableWrap" class="bg-white rounded-xl border border-gray-200 overflow-hidden" style="display:none;">
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead style="background:#fdf4ff;">
+
+  <!-- Desktop table -->
+  <div id="ul4-tableWrap" class="p-card" style="display:none;overflow:hidden;">
+    <div style="overflow-x:auto;">
+      <table class="p-table" style="min-width:600px;">
+        <thead>
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">JO #</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Roll ID</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Width Used</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Length Used</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Operator</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Date</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Plotting</th>
+            <th>JO Number</th>
+            <th>Roll ID</th>
+            <th>Width</th>
+            <th>Length</th>
+            <th>Operator</th>
+            <th>Date</th>
+            <th>Plotting</th>
           </tr>
         </thead>
-        <tbody id="ul3-tbody" class="bg-white divide-y divide-gray-100">
-          <tr><td colspan="7" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">Loading…</td></tr>
+        <tbody id="ul4-tbody">
+          <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--p-faint);">Loading…</td></tr>
         </tbody>
       </table>
     </div>
   </div>
-  <div id="ul3-cards" style="display:none;" class="space-y-3"></div>
+
+  <!-- Mobile cards -->
+  <div id="ul4-cards" style="display:none;" class="space-y-3"></div>
+
+  <!-- Pagination -->
+  <div id="ul4-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
+
 </div>
+
 <script>
-var ul3_all=[];
-function prism_init_usage_log(){
-  document.getElementById('ul3-tableWrap').style.display='none';document.getElementById('ul3-cards').style.display='none';
+var ul4_all = [], ul4_filtered = [];
+var ul4_page = 1, ul4_pageSize = 25;
+
+function prism_init_usage_log() {
+  ul4_initLayout();
+  ul4_loadData();
+}
+
+function ul4_reload() {
+  prism_setReloading('ul4-reloadBtn', true);
+  ul4_loadData();
+}
+
+function ul4_loadData() {
   google.script.run
-    .withSuccessHandler(function(r){if(r.success){ul3_all=r.data||[];ul3_initLayout();ul3_apply();}else ul3_err(r.message);})
-    .withFailureHandler(function(e){ul3_err(e.message);})
+    .withSuccessHandler(function(r) {
+      prism_setReloading('ul4-reloadBtn', false);
+      ul4_initLayout();
+      if (r && r.success) {
+        ul4_all = r.data || [];
+        ul4_page = 1;
+        ul4_apply();
+      } else {
+        ul4_error((r && r.message) || 'Failed to load.');
+      }
+    })
+    .withFailureHandler(function(e) {
+      prism_setReloading('ul4-reloadBtn', false);
+      ul4_initLayout();
+      ul4_error(e.message);
+    })
     .prism_getUsageLog();
 }
-function ul3_initLayout(){var m=window.innerWidth<640;document.getElementById('ul3-tableWrap').style.display=m?'none':'block';document.getElementById('ul3-cards').style.display=m?'block':'none';}
-window.addEventListener('resize',ul3_initLayout);
-function ul3_apply(){
-  var q=(document.getElementById('ul3-search').value||'').trim().toLowerCase();
-  var f=ul3_all.filter(function(r){return !q||(r.joNumber+' '+r.rollId+' '+r.operator).toLowerCase().indexOf(q)!==-1;});
-  ul3_renderTable(f);ul3_renderCards(f);
-  document.getElementById('ul3-count').textContent=f.length+' entr'+(f.length!==1?'ies':'y');
+
+function ul4_initLayout() {
+  var mob = window.innerWidth < 640;
+  document.getElementById('ul4-tableWrap').style.display = mob ? 'none' : 'block';
+  document.getElementById('ul4-cards').style.display     = mob ? 'block' : 'none';
 }
-function ul3_renderTable(data){
-  var tb=document.getElementById('ul3-tbody');
-  if(!data.length){tb.innerHTML='<tr><td colspan="7" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">No entries.</td></tr>';return;}
-  var h='';
-  data.forEach(function(r){
-    var pl=r.plottingLink?'<a href="'+ul3_esc(r.plottingLink)+'" target="_blank" class="text-xs font-semibold" style="color:#7c3aed;text-decoration:underline;">View</a>':'—';
-    h+='<tr class="ul3-row"><td class="px-4 py-3 text-sm font-bold" style="color:#4f46e5;white-space:nowrap;">'+ul3_esc(r.joNumber)+'</td>'
-      +'<td class="px-4 py-3 text-sm font-bold" style="color:#7c3aed;white-space:nowrap;">'+ul3_esc(r.rollId)+'</td>'
-      +'<td class="px-4 py-3 text-sm">'+(r.widthUsed?r.widthUsed+' ft':'—')+'</td>'
-      +'<td class="px-4 py-3 text-sm font-bold">'+r.lengthUsed+' ft</td>'
-      +'<td class="px-4 py-3 text-xs" style="color:#374151;">'+ul3_esc(r.operator)+'</td>'
-      +'<td class="px-4 py-3 text-xs" style="color:#9ca3af;white-space:nowrap;">'+ul3_esc(r.dateUsed)+'</td>'
-      +'<td class="px-4 py-3">'+pl+'</td></tr>';
+window.addEventListener('resize', ul4_initLayout);
+
+function ul4_apply() {
+  var q = (document.getElementById('ul4-search').value || '').trim().toLowerCase();
+  ul4_filtered = ul4_all.filter(function(r) {
+    return !q || (r.joNumber + ' ' + r.rollId + ' ' + r.operator).toLowerCase().indexOf(q) !== -1;
   });
-  tb.innerHTML=h;
+  document.getElementById('ul4-count').textContent = ul4_filtered.length + ' entr' + (ul4_filtered.length !== 1 ? 'ies' : 'y');
+  ul4_renderPage();
+  ul4_renderPagination();
 }
-function ul3_renderCards(data){
-  var el=document.getElementById('ul3-cards');
-  if(!data.length){el.innerHTML='<div class="bg-white rounded-xl border border-gray-200 px-4 py-8 text-center text-sm" style="color:#9ca3af;">No entries.</div>';return;}
-  var h='';
-  data.forEach(function(r){
-    h+='<div class="bg-white rounded-xl border border-gray-200 px-4 py-4 space-y-2">'
-      +'<div class="flex justify-between"><span class="text-sm font-bold" style="color:#4f46e5;">'+ul3_esc(r.joNumber)+'</span><span class="text-xs" style="color:#9ca3af;">'+ul3_esc(r.dateUsed)+'</span></div>'
-      +'<p class="text-sm font-semibold" style="color:#7c3aed;">'+ul3_esc(r.rollId)+'</p>'
-      +'<div class="flex gap-3 text-sm"><span>Used: <strong>'+r.lengthUsed+' ft</strong></span>'+(r.widthUsed?'<span>Width: <strong>'+r.widthUsed+' ft</strong></span>':'')+'</div>'
-      +'<p class="text-xs" style="color:#9ca3af;">'+ul3_esc(r.operator)+'</p>'
-      +(r.plottingLink?'<a href="'+ul3_esc(r.plottingLink)+'" target="_blank" class="text-xs font-semibold" style="color:#7c3aed;">📊 View Plotting Sheet</a>':'')
-      +'</div>';
+
+function ul4_renderPage() {
+  var start = (ul4_page - 1) * ul4_pageSize;
+  var slice = ul4_filtered.slice(start, start + ul4_pageSize);
+  ul4_renderTable(slice);
+  ul4_renderCards(slice);
+}
+
+function ul4_renderPagination() {
+  var total = Math.ceil(ul4_filtered.length / ul4_pageSize);
+  var el = document.getElementById('ul4-pagination');
+  if (total <= 1) { el.innerHTML = ''; return; }
+  var h = '';
+  h += '<button class="p-page-btn" onclick="ul4_goPage(ul4_page-1)" ' + (ul4_page <= 1 ? 'disabled' : '') + '>‹</button>';
+  var start = Math.max(1, ul4_page - 2), end = Math.min(total, ul4_page + 2);
+  if (start > 1) h += '<button class="p-page-btn" onclick="ul4_goPage(1)">1</button>' + (start > 2 ? '<span style="padding:0 4px;color:var(--p-faint);">…</span>' : '');
+  for (var i = start; i <= end; i++) h += '<button class="p-page-btn' + (i === ul4_page ? ' active' : '') + '" onclick="ul4_goPage(' + i + ')">' + i + '</button>';
+  if (end < total) h += (end < total - 1 ? '<span style="padding:0 4px;color:var(--p-faint);">…</span>' : '') + '<button class="p-page-btn" onclick="ul4_goPage(' + total + ')">' + total + '</button>';
+  h += '<button class="p-page-btn" onclick="ul4_goPage(ul4_page+1)" ' + (ul4_page >= total ? 'disabled' : '') + '>›</button>';
+  h += '<span style="font-size:12px;color:var(--p-faint);font-weight:600;margin-left:4px;">Page ' + ul4_page + ' of ' + total + '</span>';
+  el.innerHTML = h;
+}
+
+function ul4_goPage(p) {
+  var total = Math.ceil(ul4_filtered.length / ul4_pageSize);
+  if (p < 1 || p > total) return;
+  ul4_page = p;
+  ul4_renderPage();
+  ul4_renderPagination();
+}
+
+function ul4_renderTable(data) {
+  var tb = document.getElementById('ul4-tbody');
+  if (!data.length) {
+    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--p-faint);">No entries found.</td></tr>';
+    return;
+  }
+  var h = '';
+  data.forEach(function(r) {
+    var pl = r.plottingLink
+      ? '<a href="' + ul4_esc(r.plottingLink) + '" target="_blank" style="font-size:12px;font-weight:700;color:var(--p-purple);text-decoration:underline;">View ↗</a>'
+      : '<span style="color:var(--p-faint);">—</span>';
+    h += '<tr class="ul4-row">'
+      + '<td><span class="ul4-jo">' + ul4_esc(r.joNumber) + '</span></td>'
+      + '<td><span class="ul4-roll">' + ul4_esc(r.rollId) + '</span></td>'
+      + '<td style="color:var(--p-muted);">' + (r.widthUsed ? r.widthUsed + ' ft' : '—') + '</td>'
+      + '<td style="font-weight:700;">' + r.lengthUsed + ' ft</td>'
+      + '<td style="font-size:12px;color:var(--p-muted);">' + ul4_esc(r.operator) + '</td>'
+      + '<td style="font-size:11px;color:var(--p-faint);white-space:nowrap;">' + ul4_esc(r.dateUsed) + '</td>'
+      + '<td>' + pl + '</td>'
+      + '</tr>';
   });
-  el.innerHTML=h;
+  tb.innerHTML = h;
 }
-function ul3_err(m){document.getElementById('ul3-tableWrap').style.display='block';document.getElementById('ul3-tbody').innerHTML='<tr><td colspan="7" class="px-5 py-12 text-center text-sm" style="color:#ef4444;">'+ul3_esc(m)+'</td></tr>';}
-function ul3_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function ul4_renderCards(data) {
+  var el = document.getElementById('ul4-cards');
+  if (!data.length) {
+    el.innerHTML = '<div class="p-card" style="padding:32px;text-align:center;color:var(--p-faint);font-size:13px;">No entries found.</div>';
+    return;
+  }
+  var h = '';
+  data.forEach(function(r) {
+    h += '<div class="p-card" style="padding:14px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">'
+      + '<span class="ul4-jo">' + ul4_esc(r.joNumber) + '</span>'
+      + '<span style="font-size:11px;color:var(--p-faint);">' + ul4_esc(r.dateUsed) + '</span>'
+      + '</div>'
+      + '<p class="ul4-roll" style="margin:0 0 6px;">' + ul4_esc(r.rollId) + '</p>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--p-muted);">'
+      + '<span>Used: <strong style="color:var(--p-text);">' + r.lengthUsed + ' ft</strong></span>'
+      + (r.widthUsed ? '<span>Width: <strong style="color:var(--p-text);">' + r.widthUsed + ' ft</strong></span>' : '')
+      + '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">' + ul4_esc(r.operator) + '</span>'
+      + '</div>'
+      + (r.plottingLink ? '<a href="' + ul4_esc(r.plottingLink) + '" target="_blank" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:700;color:var(--p-purple);">📊 View Plotting Sheet ↗</a>' : '')
+      + '</div>';
+  });
+  el.innerHTML = h;
+}
+
+function ul4_error(msg) {
+  document.getElementById('ul4-tableWrap').style.display = 'block';
+  document.getElementById('ul4-tbody').innerHTML =
+    '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--p-red);">Error: ' + ul4_esc(msg) + '</td></tr>';
+}
+function ul4_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>

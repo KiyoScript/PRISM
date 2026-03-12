@@ -1,461 +1,438 @@
-<!-- PRISMMaterials.html — Add & View LFP_Materials, with AllItems dropdown reference -->
+<!-- PRISMMaterials.html v4 — Search, pagination, reload, unified design -->
 <style>
-  #tab-materials,#tab-materials *{color:#111827!important;}
-  #tab-materials .text-white *{color:#fff!important;}
-  #tab-materials input,#tab-materials select{color-scheme:light;background:#fff;color:#111827!important;}
+  #tab-materials, #tab-materials * { color: var(--p-text); }
+  .m4-row:hover td { background: #fefce8 !important; }
 
-  .m3-input{
-    width:100%;border:1px solid #d1d5db;border-radius:12px;
-    padding:10px 14px;font-size:14px;color:#111827!important;
-    outline:none;background:#fff;box-sizing:border-box;
-    transition:border-color .15s,box-shadow .15s;
+  /* Stock combo */
+  .m4-combo-wrap { position: relative; }
+  .m4-combo-dropdown {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+    background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 11px;
+    box-shadow: var(--p-shadow-md); z-index: 200;
+    max-height: 220px; overflow-y: auto; display: none;
   }
-  .m3-input:focus{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.12);}
-  .m3-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
+  .m4-combo-dropdown.open { display: block; }
+  .m4-combo-opt {
+    padding: 10px 14px; font-size: 13px; cursor: pointer;
+    border-bottom: 1px solid #f3f4f6; transition: background .1s;
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .m4-combo-opt:last-child { border-bottom: none; }
+  .m4-combo-opt:hover { background: var(--p-amber-lt); }
+  .m4-combo-opt .opt-code { font-weight: 700; color: var(--p-amber); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .m4-combo-opt .opt-name { color: var(--p-muted); font-size: 12px; }
 
-  #m3-addForm{
-    display:none;background:#fff;border-radius:16px;
-    border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;
+  /* Add form panel */
+  #m4-addPanel {
+    display: none;
+    background: var(--p-surface);
+    border: 1.5px solid var(--p-amber-bd);
+    border-radius: var(--p-radius);
+    padding: 18px;
+    margin-bottom: 16px;
+    box-shadow: var(--p-shadow);
   }
-
-  /* Stock search combo */
-  .m3-combo-wrap{position:relative;}
-  .m3-combo-dropdown{
-    position:absolute;left:0;right:0;top:calc(100% + 4px);
-    background:#fff;border:1px solid #e5e7eb;border-radius:12px;
-    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;
-    max-height:220px;overflow-y:auto;display:none;
-  }
-  .m3-combo-dropdown.open{display:block;}
-  .m3-combo-opt{
-    padding:10px 14px;font-size:13px;cursor:pointer;
-    border-bottom:1px solid #f3f4f6;
-    transition:background .1s;
-  }
-  .m3-combo-opt:last-child{border-bottom:none;}
-  .m3-combo-opt:hover{background:#fefce8;}
-  .m3-combo-opt .opt-code{font-weight:700;color:#92400e!important;}
-  .m3-combo-opt .opt-desc{color:#374151!important;margin-left:6px;}
 
   /* Selected pill */
-  .m3-selected-pill{
-    display:inline-flex;align-items:center;gap:8px;
-    background:#fefce8;border:1px solid #fde68a;
-    border-radius:9999px;padding:4px 12px 4px 10px;
-    font-size:13px;margin-top:6px;
+  .m4-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--p-amber-lt); border: 1px solid var(--p-amber-bd);
+    border-radius: 9999px; padding: 4px 12px 4px 10px;
+    font-size: 12px; margin-top: 6px;
   }
-  .m3-selected-pill .pill-code{font-weight:700;color:#92400e!important;}
-  .m3-selected-pill .pill-desc{color:#374151!important;}
-  .m3-selected-pill .pill-clear{
-    color:#9ca3af!important;cursor:pointer;font-size:16px;
-    line-height:1;background:none;border:none;padding:0;
-  }
-  .m3-selected-pill .pill-clear:hover{color:#ef4444!important;}
+  .m4-pill .pill-code { font-weight: 700; color: var(--p-amber); font-family: 'JetBrains Mono', monospace; }
+  .m4-pill .pill-name { color: var(--p-muted); }
+  .m4-pill .pill-x { color: var(--p-faint); background: none; border: none; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+  .m4-pill .pill-x:hover { color: var(--p-red); }
 </style>
 
-<div class="p-4 space-y-4 pb-10">
+<div style="padding:20px 20px 40px;">
 
-  <!-- Header -->
-  <div class="flex items-start justify-between gap-3">
+  <!-- Page header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
     <div>
-      <h2 class="text-xl font-bold">Materials</h2>
-      <p class="text-sm mt-0.5" style="color:#6b7280;">LFP_Materials — substrate catalog</p>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Materials</h2>
+      <p style="font-size:13px;color:var(--p-muted);margin:0;">LFP substrate catalog</p>
     </div>
-    <button onclick="m3_toggleForm()" id="m3-addBtn"
-      class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold"
-      style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-      </svg>
-      Add Material
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="m4-reloadBtn" class="p-btn-reload" onclick="m4_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+      <button onclick="m4_toggleForm()" id="m4-addBtn" class="p-btn p-btn-amber">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+        </svg>
+        Add Material
+      </button>
+    </div>
   </div>
 
-  <!-- Add Form -->
-  <div id="m3-addForm">
-    <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">New LFP Material</p>
+  <!-- Add panel -->
+  <div id="m4-addPanel">
+    <p class="p-section-title">New LFP Material</p>
 
-    <!-- Step 1: Select from AllItems -->
-    <div class="mb-4">
-      <label class="m3-label">
-        Select Stock Item <span style="color:#ef4444;">*</span>
-        <span class="text-xs font-normal ml-1" style="color:#9ca3af;">(from AllItems database)</span>
-      </label>
-
-      <div class="m3-combo-wrap" id="m3-comboWrap">
-        <div style="display:flex;align-items:center;border:1px solid #d1d5db;border-radius:12px;background:#fff;overflow:hidden;transition:border-color .15s,box-shadow .15s;" id="m3-comboRow">
-          <span style="padding:0 10px 0 12px;color:#9ca3af;flex-shrink:0;pointer-events:none;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+    <div style="margin-bottom:14px;">
+      <label class="p-label">Select Stock Item <span style="color:var(--p-red);">*</span></label>
+      <div class="m4-combo-wrap" id="m4-comboWrap">
+        <div style="display:flex;align-items:center;border:1.5px solid var(--p-border);border-radius:10px;background:var(--p-surface);overflow:hidden;transition:border-color .15s,box-shadow .15s;" id="m4-comboRow">
+          <span style="padding:0 10px 0 12px;color:var(--p-faint);flex-shrink:0;pointer-events:none;">
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
             </svg>
           </span>
-          <input type="text" id="m3-stockSearch" placeholder="Search item code or description…"
+          <input type="text" id="m4-stockSearch" placeholder="Search by item code or description…"
             autocomplete="off"
-            style="flex:1;border:none;outline:none;background:transparent;padding:11px 4px;font-size:14px;color:#111827!important;min-width:0;"
-            oninput="m3_filterStock()"
-            onfocus="m3_openDropdown()">
-          <button id="m3-comboClear" onclick="m3_clearSelection()"
-            style="padding:0 12px;color:#9ca3af;background:none;border:none;cursor:pointer;font-size:16px;display:none;">✕</button>
+            style="flex:1;border:none;outline:none;background:transparent;padding:10px 4px;font-size:13px;color:var(--p-text);min-width:0;font-family:'DM Sans',sans-serif;"
+            oninput="m4_filterStock()" onfocus="m4_openCombo()">
+          <button id="m4-comboClear" onclick="m4_clearSel()"
+            style="padding:0 12px;color:var(--p-faint);background:none;border:none;cursor:pointer;font-size:15px;display:none;">✕</button>
         </div>
-        <div class="m3-combo-dropdown" id="m3-stockDropdown"></div>
+        <div class="m4-combo-dropdown" id="m4-comboDropdown"></div>
       </div>
-
-      <!-- Selected pill -->
-      <div id="m3-selectedPill" style="display:none;" class="mt-2">
-        <div class="m3-selected-pill">
-          <svg width="13" height="13" fill="none" stroke="#92400e" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-          </svg>
-          <span class="pill-code" id="m3-pillCode"></span>
-          <span class="pill-desc" id="m3-pillDesc"></span>
-          <button class="pill-clear" onclick="m3_clearSelection()" title="Clear selection">✕</button>
-        </div>
-      </div>
-
-      <!-- Hidden fields for actual values -->
-      <input type="hidden" id="m3-code">
-      <input type="hidden" id="m3-name">
+      <div id="m4-selectedPill" style="display:none;"></div>
+      <input type="hidden" id="m4-code">
+      <input type="hidden" id="m4-name">
     </div>
 
-    <!-- Step 2: LFP-specific fields -->
-    <div class="grid grid-cols-3 gap-3 mb-3">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
       <div>
-        <label class="m3-label">Width (ft) <span style="color:#ef4444;">*</span></label>
-        <input type="number" id="m3-width" class="m3-input" min="0.1" step="0.1" placeholder="10.5">
+        <label class="p-label">Width (ft) <span style="color:var(--p-red);">*</span></label>
+        <input type="number" id="m4-width" class="p-input" min="0.1" step="0.1" placeholder="10.5">
       </div>
       <div>
-        <label class="m3-label">Std Length (ft) <span style="color:#ef4444;">*</span></label>
-        <input type="number" id="m3-len" class="m3-input" min="1" step="1" placeholder="164">
+        <label class="p-label">Std Length (ft) <span style="color:var(--p-red);">*</span></label>
+        <input type="number" id="m4-len" class="p-input" min="1" step="1" placeholder="164">
       </div>
       <div>
-        <label class="m3-label">Cost/Roll (₱)</label>
-        <input type="number" id="m3-cost" class="m3-input" min="0" step="1" placeholder="0">
+        <label class="p-label">Cost / Roll (₱)</label>
+        <input type="number" id="m4-cost" class="p-input" min="0" step="1" placeholder="0">
       </div>
     </div>
-
-    <div class="mb-4">
-      <label class="m3-label">Supplier</label>
-      <input type="text" id="m3-supplier" class="m3-input" placeholder="Supplier name…">
+    <div style="margin-bottom:14px;">
+      <label class="p-label">Supplier</label>
+      <input type="text" id="m4-supplier" class="p-input" placeholder="Supplier name…">
     </div>
-
-    <div class="flex gap-2">
-      <button id="m3-saveBtn" onclick="m3_save()"
-        class="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
-        style="background:#f59e0b;">
-        Save Material
-      </button>
-      <button onclick="m3_toggleForm()"
-        class="px-5 py-3 rounded-xl text-sm font-semibold"
-        style="background:#f3f4f6;color:#374151;">
-        Cancel
-      </button>
+    <div style="display:flex;gap:8px;">
+      <button id="m4-saveBtn" onclick="m4_save()" class="p-btn p-btn-amber" style="flex:1;">Save Material</button>
+      <button onclick="m4_toggleForm()" class="p-btn p-btn-ghost">Cancel</button>
     </div>
   </div>
 
-  <!-- Loading state -->
-  <div id="m3-loadingState" style="display:none;" class="bg-white rounded-xl border border-gray-200 px-4 py-12 text-center">
-    <svg class="w-6 h-6 mx-auto mb-2 animate-spin" style="color:#f59e0b;" fill="none" viewBox="0 0 24 24">
+  <!-- Search + count -->
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+    <div class="p-search-wrap" style="flex:1;min-width:180px;">
+      <span class="icon">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+        </svg>
+      </span>
+      <input type="text" id="m4-search" class="p-input" placeholder="Search code or name…" oninput="m4_applyFilter()">
+    </div>
+    <p id="m4-count" style="font-size:12px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;"></p>
+  </div>
+
+  <!-- Loading skeleton -->
+  <div id="m4-loading" class="p-card" style="padding:40px;text-align:center;display:none;">
+    <svg class="p-spin" style="width:20px;height:20px;margin:0 auto 8px;display:block;color:var(--p-amber);" fill="none" viewBox="0 0 24 24">
       <circle style="opacity:.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
       <path style="opacity:.75;" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
     </svg>
-    <p class="text-sm" style="color:#9ca3af;">Loading materials…</p>
+    <p style="font-size:13px;color:var(--p-faint);">Loading materials…</p>
   </div>
 
-  <!-- Count -->
-  <p id="m3-count" class="text-xs" style="color:#9ca3af;"></p>
-
-  <!-- Table (desktop) -->
-  <div id="m3-tableWrap" class="bg-white rounded-xl border border-gray-200 overflow-hidden" style="display:none;">
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-100">
-        <thead style="background:#fefce8;">
+  <!-- Desktop table -->
+  <div id="m4-tableWrap" class="p-card" style="display:none;overflow:hidden;">
+    <div style="overflow-x:auto;">
+      <table class="p-table" style="min-width:600px;">
+        <thead>
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Code</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Name</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Width</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Std Length</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Supplier</th>
-            <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Cost/Roll</th>
+            <th>Code</th>
+            <th>Material Name</th>
+            <th>Width</th>
+            <th>Std Length</th>
+            <th>Supplier</th>
+            <th>Cost / Roll</th>
           </tr>
         </thead>
-        <tbody id="m3-tbody" class="bg-white divide-y divide-gray-100"></tbody>
+        <tbody id="m4-tbody">
+          <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--p-faint);">No materials yet.</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
 
-  <!-- Cards (mobile) -->
-  <div id="m3-cards" style="display:none;" class="space-y-3"></div>
+  <!-- Mobile cards -->
+  <div id="m4-cards" style="display:none;" class="space-y-3"></div>
+
+  <!-- Pagination -->
+  <div id="m4-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
 
 </div>
 
 <script>
-var m3_formOpen   = false;
-var m3_stockItems = [];
-var m3_selCode    = '';
-var m3_selName    = '';
+var m4_formOpen = false;
+var m4_stockItems = [], m4_allMats = [], m4_filteredMats = [];
+var m4_selCode = '', m4_selName = '';
+var m4_page = 1, m4_pageSize = 15;
 
 /* ── Init ── */
 function prism_init_materials() {
-  m3_initLayout();
+  m4_initLayout();
+  m4_showLoading(true);
 
-  // Load stock items for dropdown
   google.script.run
     .withSuccessHandler(function(r) {
-      if (r && r.success) {
-        m3_stockItems = r.data || [];
-      } else {
-        prism_toast('error', 'Could not load stock items: ' + ((r && r.message) || 'Unknown error'));
-      }
+      if (r && r.success) m4_stockItems = r.data || [];
     })
-    .withFailureHandler(function(e) {
-      prism_toast('error', 'Stock items load failed: ' + e.message);
-    })
+    .withFailureHandler(function() {})
     .prism_getStockMaterialsList();
 
-  // Load existing LFP materials
-  m3_loadMaterials();
+  m4_loadMaterials();
 }
 
-function m3_initLayout() {
-  var mob = window.innerWidth < 640;
-  document.getElementById('m3-tableWrap').style.display = mob ? 'none' : 'block';
-  document.getElementById('m3-cards').style.display     = mob ? 'block' : 'none';
+function m4_reload() {
+  prism_setReloading('m4-reloadBtn', true);
+  m4_loadMaterials();
 }
-window.addEventListener('resize', m3_initLayout);
 
-function m3_loadMaterials() {
-  document.getElementById('m3-loadingState').style.display = 'block';
-  document.getElementById('m3-tableWrap').style.display    = 'none';
-  document.getElementById('m3-cards').style.display        = 'none';
-
+function m4_loadMaterials() {
   google.script.run
     .withSuccessHandler(function(r) {
-      document.getElementById('m3-loadingState').style.display = 'none';
-      m3_initLayout();
+      prism_setReloading('m4-reloadBtn', false);
+      m4_showLoading(false);
+      m4_initLayout();
       if (r && r.success) {
-        m3_render(r.data || []);
+        m4_allMats = r.data || [];
+        m4_page = 1;
+        m4_applyFilter();
       } else {
-        m3_err((r && r.message) || 'Failed to load materials.');
+        m4_error((r && r.message) || 'Failed to load.');
       }
     })
     .withFailureHandler(function(e) {
-      document.getElementById('m3-loadingState').style.display = 'none';
-      m3_initLayout();
-      m3_err(e.message);
+      prism_setReloading('m4-reloadBtn', false);
+      m4_showLoading(false);
+      m4_initLayout();
+      m4_error(e.message);
     })
     .prism_getAllMaterialsPublic();
 }
 
-/* ── Render table ── */
-function m3_render(data) {
-  document.getElementById('m3-count').textContent =
-    data.length + ' material' + (data.length !== 1 ? 's' : '');
-
-  // Desktop table
-  var tb = document.getElementById('m3-tbody');
-  if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">No materials yet. Add one above.</td></tr>';
-  } else {
-    var h = '';
-    data.forEach(function(m) {
-      h += '<tr>'
-        + '<td class="px-4 py-3 text-sm font-bold" style="color:#92400e;">' + m3_esc(m.materialCode) + '</td>'
-        + '<td class="px-4 py-3 text-sm">' + m3_esc(m.materialName) + '</td>'
-        + '<td class="px-4 py-3 text-sm">' + m.width + ' ft</td>'
-        + '<td class="px-4 py-3 text-sm">' + m.standardLength + ' ft</td>'
-        + '<td class="px-4 py-3 text-sm" style="color:#6b7280;">' + m3_esc(m.supplier || '—') + '</td>'
-        + '<td class="px-4 py-3 text-sm">' + (m.costPerRoll ? '₱' + Number(m.costPerRoll).toLocaleString() : '—') + '</td>'
-        + '</tr>';
-    });
-    tb.innerHTML = h;
+function m4_showLoading(v) {
+  document.getElementById('m4-loading').style.display = v ? 'block' : 'none';
+  if (v) {
+    document.getElementById('m4-tableWrap').style.display = 'none';
+    document.getElementById('m4-cards').style.display = 'none';
   }
+}
 
-  // Mobile cards
-  var el = document.getElementById('m3-cards');
-  if (!data.length) {
-    el.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 px-4 py-8 text-center text-sm" style="color:#9ca3af;">No materials yet.</div>';
-  } else {
-    var ch = '';
-    data.forEach(function(m) {
-      ch += '<div class="bg-white rounded-xl border border-gray-200 px-4 py-4 space-y-2">'
-        + '<div class="flex items-start justify-between gap-2">'
-        + '<span class="text-sm font-bold" style="color:#92400e;">' + m3_esc(m.materialCode) + '</span>'
-        + (m.costPerRoll ? '<span class="text-sm font-semibold" style="color:#374151;">₱' + Number(m.costPerRoll).toLocaleString() + '</span>' : '')
-        + '</div>'
-        + '<p class="text-sm font-medium" style="color:#111827;">' + m3_esc(m.materialName) + '</p>'
-        + '<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs" style="color:#6b7280;">'
-        + '<span>Width: <strong style="color:#374151;">' + m.width + ' ft</strong></span>'
-        + '<span>Length: <strong style="color:#374151;">' + m.standardLength + ' ft</strong></span>'
-        + (m.supplier ? '<span>Supplier: <strong style="color:#374151;">' + m3_esc(m.supplier) + '</strong></span>' : '')
-        + '</div>'
-        + '</div>';
-    });
-    el.innerHTML = ch;
+function m4_initLayout() {
+  var mob = window.innerWidth < 640;
+  document.getElementById('m4-tableWrap').style.display = mob ? 'none' : 'block';
+  document.getElementById('m4-cards').style.display     = mob ? 'block' : 'none';
+}
+window.addEventListener('resize', m4_initLayout);
+
+function m4_applyFilter() {
+  var q = (document.getElementById('m4-search').value || '').trim().toLowerCase();
+  m4_filteredMats = m4_allMats.filter(function(m) {
+    return !q || (m.materialCode + ' ' + m.materialName).toLowerCase().indexOf(q) !== -1;
+  });
+  document.getElementById('m4-count').textContent =
+    m4_filteredMats.length + ' material' + (m4_filteredMats.length !== 1 ? 's' : '');
+  m4_renderPage();
+  m4_renderPagination();
+}
+
+function m4_renderPage() {
+  var start = (m4_page - 1) * m4_pageSize;
+  var slice = m4_filteredMats.slice(start, start + m4_pageSize);
+  m4_renderTable(slice);
+  m4_renderCards(slice);
+}
+
+function m4_renderPagination() {
+  var total = Math.ceil(m4_filteredMats.length / m4_pageSize);
+  var el = document.getElementById('m4-pagination');
+  if (total <= 1) { el.innerHTML = ''; return; }
+  var h = '';
+  h += '<button class="p-page-btn" onclick="m4_goPage(m4_page-1)" ' + (m4_page <= 1 ? 'disabled' : '') + '>‹</button>';
+  for (var i = 1; i <= total; i++) {
+    if (total <= 7 || i === 1 || i === total || Math.abs(i - m4_page) <= 1) {
+      h += '<button class="p-page-btn' + (i === m4_page ? ' active' : '') + '" onclick="m4_goPage(' + i + ')">' + i + '</button>';
+    } else if (Math.abs(i - m4_page) === 2) {
+      h += '<span style="padding:0 4px;color:var(--p-faint);">…</span>';
+    }
   }
+  h += '<button class="p-page-btn" onclick="m4_goPage(m4_page+1)" ' + (m4_page >= total ? 'disabled' : '') + '>›</button>';
+  h += '<span style="font-size:12px;color:var(--p-faint);font-weight:600;margin-left:4px;">Page ' + m4_page + ' of ' + total + '</span>';
+  el.innerHTML = h;
+}
+
+function m4_goPage(p) {
+  var total = Math.ceil(m4_filteredMats.length / m4_pageSize);
+  if (p < 1 || p > total) return;
+  m4_page = p;
+  m4_renderPage();
+  m4_renderPagination();
+}
+
+function m4_renderTable(data) {
+  var tb = document.getElementById('m4-tbody');
+  if (!data.length) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--p-faint);">No materials found.</td></tr>';
+    return;
+  }
+  var h = '';
+  data.forEach(function(m) {
+    h += '<tr class="m4-row">'
+      + '<td><span class="mono" style="font-weight:700;font-size:12px;color:var(--p-amber);">' + m4_esc(m.materialCode) + '</span></td>'
+      + '<td style="font-weight:600;">' + m4_esc(m.materialName) + '</td>'
+      + '<td style="color:var(--p-muted);">' + m.width + ' ft</td>'
+      + '<td style="color:var(--p-muted);">' + m.standardLength + ' ft</td>'
+      + '<td style="color:var(--p-muted);font-size:12px;">' + m4_esc(m.supplier || '—') + '</td>'
+      + '<td style="font-weight:600;color:var(--p-green);">' + (m.costPerRoll ? '₱' + Number(m.costPerRoll).toLocaleString() : '—') + '</td>'
+      + '</tr>';
+  });
+  tb.innerHTML = h;
+}
+
+function m4_renderCards(data) {
+  var el = document.getElementById('m4-cards');
+  if (!data.length) {
+    el.innerHTML = '<div class="p-card" style="padding:32px;text-align:center;color:var(--p-faint);font-size:13px;">No materials found.</div>';
+    return;
+  }
+  var h = '';
+  data.forEach(function(m) {
+    h += '<div class="p-card" style="padding:14px;">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">'
+      + '<span class="mono" style="font-weight:700;font-size:13px;color:var(--p-amber);">' + m4_esc(m.materialCode) + '</span>'
+      + (m.costPerRoll ? '<span style="font-weight:700;color:var(--p-green);font-size:13px;">₱' + Number(m.costPerRoll).toLocaleString() + '</span>' : '')
+      + '</div>'
+      + '<p style="font-weight:600;font-size:14px;margin:0 0 8px;">' + m4_esc(m.materialName) + '</p>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--p-muted);">'
+      + '<span>Width: <strong style="color:var(--p-text);">' + m.width + ' ft</strong></span>'
+      + '<span>Length: <strong style="color:var(--p-text);">' + m.standardLength + ' ft</strong></span>'
+      + (m.supplier ? '<span>Supplier: <strong style="color:var(--p-text);">' + m4_esc(m.supplier) + '</strong></span>' : '')
+      + '</div>'
+      + '</div>';
+  });
+  el.innerHTML = h;
 }
 
 /* ── Toggle add form ── */
-function m3_toggleForm() {
-  m3_formOpen = !m3_formOpen;
-  document.getElementById('m3-addForm').style.display = m3_formOpen ? 'block' : 'none';
-  var btn = document.getElementById('m3-addBtn');
-  btn.innerHTML = m3_formOpen
-    ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Cancel'
-    : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add Material';
-
-  if (!m3_formOpen) m3_resetForm();
+function m4_toggleForm() {
+  m4_formOpen = !m4_formOpen;
+  document.getElementById('m4-addPanel').style.display = m4_formOpen ? 'block' : 'none';
+  var btn = document.getElementById('m4-addBtn');
+  btn.innerHTML = m4_formOpen
+    ? '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg> Cancel'
+    : '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg> Add Material';
+  if (!m4_formOpen) m4_resetForm();
 }
 
-function m3_resetForm() {
-  m3_clearSelection();
-  document.getElementById('m3-width').value    = '';
-  document.getElementById('m3-len').value      = '';
-  document.getElementById('m3-cost').value     = '';
-  document.getElementById('m3-supplier').value = '';
+function m4_resetForm() {
+  m4_clearSel();
+  ['m4-width','m4-len','m4-cost','m4-supplier'].forEach(function(id) { document.getElementById(id).value = ''; });
 }
 
 /* ── Stock combo ── */
-function m3_openDropdown() {
-  m3_renderDropdown(m3_stockItems);
-  document.getElementById('m3-stockDropdown').classList.add('open');
-  document.getElementById('m3-comboRow').style.borderColor  = '#f59e0b';
-  document.getElementById('m3-comboRow').style.boxShadow    = '0 0 0 3px rgba(245,158,11,.12)';
+function m4_openCombo() {
+  m4_renderCombo(m4_stockItems);
+  document.getElementById('m4-comboDropdown').classList.add('open');
+  document.getElementById('m4-comboRow').style.borderColor = 'var(--p-amber)';
+  document.getElementById('m4-comboRow').style.boxShadow   = '0 0 0 3px rgba(202,138,4,.12)';
 }
-
-function m3_filterStock() {
-  var q        = (document.getElementById('m3-stockSearch').value || '').trim().toLowerCase();
-  var filtered = m3_stockItems.filter(function(i) {
+function m4_filterStock() {
+  var q = (document.getElementById('m4-stockSearch').value || '').trim().toLowerCase();
+  var filtered = m4_stockItems.filter(function(i) {
     return !q || (i.itemCode + ' ' + i.itemDesc).toLowerCase().indexOf(q) !== -1;
   });
-  m3_renderDropdown(filtered);
-  document.getElementById('m3-stockDropdown').classList.add('open');
-
-  // Clear previous selection if user types again
-  if (m3_selCode) {
-    m3_selCode = '';
-    m3_selName = '';
-    document.getElementById('m3-code').value = '';
-    document.getElementById('m3-name').value = '';
-    document.getElementById('m3-selectedPill').style.display = 'none';
-    document.getElementById('m3-comboClear').style.display   = 'none';
-  }
+  m4_renderCombo(filtered);
+  document.getElementById('m4-comboDropdown').classList.add('open');
+  if (m4_selCode) { m4_selCode = ''; m4_selName = ''; document.getElementById('m4-selectedPill').style.display = 'none'; document.getElementById('m4-comboClear').style.display = 'none'; }
 }
-
-function m3_renderDropdown(items) {
-  var dd = document.getElementById('m3-stockDropdown');
+function m4_renderCombo(items) {
+  var dd = document.getElementById('m4-comboDropdown');
   if (!items.length) {
-    dd.innerHTML = '<div class="m3-combo-opt" style="color:#9ca3af;cursor:default;">No items found.</div>';
+    dd.innerHTML = '<div class="m4-combo-opt" style="color:var(--p-faint);cursor:default;">No items found.</div>';
     return;
   }
   dd.innerHTML = items.map(function(i) {
-    return '<div class="m3-combo-opt" onmousedown="m3_selectStock(\''
-      + m3_esc(i.itemCode).replace(/'/g, "\\'") + '\',\''
-      + m3_esc(i.itemDesc).replace(/'/g, "\\'") + '\')">'
-      + '<span class="opt-code">' + m3_esc(i.itemCode) + '</span>'
-      + '<span class="opt-desc">— ' + m3_esc(i.itemDesc) + '</span>'
+    return '<div class="m4-combo-opt" onmousedown="m4_selStock(\'' + m4_esc(i.itemCode).replace(/'/g,"\\'") + '\',\'' + m4_esc(i.itemDesc).replace(/'/g,"\\'") + '\')">'
+      + '<span class="opt-code">' + m4_esc(i.itemCode) + '</span>'
+      + '<span class="opt-name">' + m4_esc(i.itemDesc) + '</span>'
       + '</div>';
   }).join('');
 }
-
-function m3_selectStock(code, name) {
-  m3_selCode = code;
-  m3_selName = name;
-
-  document.getElementById('m3-code').value        = code;
-  document.getElementById('m3-name').value        = name;
-  document.getElementById('m3-stockSearch').value = code + ' — ' + name;
-  document.getElementById('m3-comboClear').style.display   = 'block';
-  document.getElementById('m3-stockDropdown').classList.remove('open');
-
-  // Show pill
-  document.getElementById('m3-pillCode').textContent      = code;
-  document.getElementById('m3-pillDesc').textContent      = name;
-  document.getElementById('m3-selectedPill').style.display = 'block';
-
-  // Reset focus ring
-  document.getElementById('m3-comboRow').style.borderColor = '#d1d5db';
-  document.getElementById('m3-comboRow').style.boxShadow   = 'none';
+function m4_selStock(code, name) {
+  m4_selCode = code; m4_selName = name;
+  document.getElementById('m4-code').value = code;
+  document.getElementById('m4-name').value = name;
+  document.getElementById('m4-stockSearch').value = code + ' — ' + name;
+  document.getElementById('m4-comboClear').style.display = 'block';
+  document.getElementById('m4-comboDropdown').classList.remove('open');
+  document.getElementById('m4-comboRow').style.borderColor = 'var(--p-border)';
+  document.getElementById('m4-comboRow').style.boxShadow = 'none';
+  document.getElementById('m4-selectedPill').style.display = 'block';
+  document.getElementById('m4-selectedPill').innerHTML =
+    '<div class="m4-pill"><svg width="11" height="11" fill="none" stroke="var(--p-amber)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>'
+    + '<span class="pill-code">' + m4_esc(code) + '</span>'
+    + '<span class="pill-name">' + m4_esc(name) + '</span>'
+    + '<button class="pill-x" onclick="m4_clearSel()">✕</button></div>';
 }
-
-function m3_clearSelection() {
-  m3_selCode = '';
-  m3_selName = '';
-  document.getElementById('m3-code').value              = '';
-  document.getElementById('m3-name').value              = '';
-  document.getElementById('m3-stockSearch').value       = '';
-  document.getElementById('m3-comboClear').style.display = 'none';
-  document.getElementById('m3-selectedPill').style.display = 'none';
-  document.getElementById('m3-stockDropdown').classList.remove('open');
+function m4_clearSel() {
+  m4_selCode = ''; m4_selName = '';
+  document.getElementById('m4-code').value = '';
+  document.getElementById('m4-name').value = '';
+  document.getElementById('m4-stockSearch').value = '';
+  document.getElementById('m4-comboClear').style.display = 'none';
+  document.getElementById('m4-selectedPill').style.display = 'none';
+  document.getElementById('m4-comboDropdown').classList.remove('open');
 }
-
-// Close dropdown on outside click
 document.addEventListener('mousedown', function(e) {
-  var wrap = document.getElementById('m3-comboWrap');
-  var dd   = document.getElementById('m3-stockDropdown');
+  var wrap = document.getElementById('m4-comboWrap');
+  var dd   = document.getElementById('m4-comboDropdown');
   if (wrap && dd && !wrap.contains(e.target)) {
     dd.classList.remove('open');
-    document.getElementById('m3-comboRow').style.borderColor = '#d1d5db';
-    document.getElementById('m3-comboRow').style.boxShadow   = 'none';
+    var row = document.getElementById('m4-comboRow');
+    if (row) { row.style.borderColor = 'var(--p-border)'; row.style.boxShadow = 'none'; }
   }
 });
 
 /* ── Save ── */
-function m3_save() {
-  var code = document.getElementById('m3-code').value.trim();
-  var name = document.getElementById('m3-name').value.trim();
-  var w    = parseFloat(document.getElementById('m3-width').value) || 0;
-  var l    = parseFloat(document.getElementById('m3-len').value)   || 0;
-
-  if (!code || !name) {
-    prism_toast('error', 'Please select a stock item from the dropdown.');
-    document.getElementById('m3-stockSearch').focus();
-    return;
-  }
+function m4_save() {
+  var code = document.getElementById('m4-code').value.trim();
+  var name = document.getElementById('m4-name').value.trim();
+  var w    = parseFloat(document.getElementById('m4-width').value) || 0;
+  var l    = parseFloat(document.getElementById('m4-len').value)   || 0;
+  if (!code || !name) { prism_toast('error', 'Please select a stock item.'); return; }
   if (!w) { prism_toast('error', 'Width is required.'); return; }
   if (!l) { prism_toast('error', 'Standard Length is required.'); return; }
-
-  var btn = document.getElementById('m3-saveBtn');
-  btn.disabled    = true;
-  btn.textContent = 'Saving…';
-
+  var btn = document.getElementById('m4-saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
   google.script.run
     .withSuccessHandler(function(r) {
-      btn.disabled    = false;
-      btn.textContent = 'Save Material';
-      if (r.success) {
-        prism_toast('success', r.message);
-        m3_toggleForm();
-        m3_loadMaterials();
-      } else {
-        prism_toast('error', r.message);
-      }
+      btn.disabled = false; btn.textContent = 'Save Material';
+      if (r.success) { prism_toast('success', r.message); m4_toggleForm(); m4_loadMaterials(); }
+      else prism_toast('error', r.message);
     })
-    .withFailureHandler(function(e) {
-      btn.disabled    = false;
-      btn.textContent = 'Save Material';
-      prism_toast('error', e.message);
-    })
-    .prism_addMaterial({
-      materialCode:   code,
-      materialName:   name,
-      width:          w,
-      standardLength: l,
-      costPerRoll:    parseFloat(document.getElementById('m3-cost').value)     || 0,
-      supplier:       document.getElementById('m3-supplier').value.trim()
-    });
+    .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = 'Save Material'; prism_toast('error', e.message); })
+    .prism_addMaterial({ materialCode: code, materialName: name, width: w, standardLength: l,
+      costPerRoll: parseFloat(document.getElementById('m4-cost').value) || 0,
+      supplier: document.getElementById('m4-supplier').value.trim() });
 }
 
-function m3_err(msg) {
-  document.getElementById('m3-tbody').innerHTML =
-    '<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#ef4444;">'
-    + m3_esc(msg) + '</td></tr>';
-  document.getElementById('m3-cards').innerHTML =
-    '<div class="bg-white rounded-xl border border-gray-200 px-4 py-8 text-center text-sm" style="color:#ef4444;">'
-    + m3_esc(msg) + '</div>';
+function m4_error(msg) {
+  document.getElementById('m4-tbody').innerHTML =
+    '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--p-red);">Error: ' + m4_esc(msg) + '</td></tr>';
 }
-
-function m3_esc(s) {
+function m4_esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>

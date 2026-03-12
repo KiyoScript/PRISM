@@ -371,74 +371,131 @@ function prism_openRoll(rollId) {
 }
 
 // ============================================================
-//  RECORD USAGE — Digital Operator
+//  PATCHED SECTION — Replace prism_recordUsage() in PRISMCode.gs
+//  Change: RollID column now stores comma-separated list
+//          (appends new rollId, deduplicates, never overwrites)
 // ============================================================
+
 function prism_recordUsage(payload) {
   try {
     const user = prism_getUserInfo_();
     if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
-      return { success:false, message:'Digital Operators only.' };
-    if (!payload.rollId)                              return { success:false, message:'Roll ID required.' };
-    if (!payload.joNumber||!payload.joNumber.trim())  return { success:false, message:'JO Number required.' };
-    if (!payload.lengthUsed||payload.lengthUsed<=0)   return { success:false, message:'Length used must be > 0.' };
-    if (!payload.plottingLink)                        return { success:false, message:'Plotting link required.' };
+      return { success: false, message: 'Digital Operators only.' };
 
+    // ── Validate inputs ──
+    if (!payload.rollId)
+      return { success: false, message: 'Roll ID required.' };
+    if (!payload.joNumber || !payload.joNumber.trim())
+      return { success: false, message: 'JO Number required.' };
+    if (!payload.lengthUsed || payload.lengthUsed <= 0)
+      return { success: false, message: 'Length used must be > 0.' };
+    if (!payload.plottingLink)
+      return { success: false, message: 'Plotting link required.' };
+
+    // ── Fetch roll row ──
     const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
     const rollLr   = rollSh.getLastRow();
-    const rollData = rollSh.getRange(2,1,rollLr-1,9).getValues();
-    let rollIdx=-1, rollRow=null;
-    rollData.forEach((r,i)=>{ if(String(r[ROLL_COL.ROLL_ID]).trim()===payload.rollId){rollIdx=i+2;rollRow=r;} });
-    if (rollIdx===-1) return { success:false, message:'Roll "'+payload.rollId+'" not found.' };
-    if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase()!==ROLL_STATUS.OPEN)
-      return { success:false, message:'Roll must be OPEN.' };
+    const rollData = rollSh.getRange(2, 1, rollLr - 1, 9).getValues();
+    let rollIdx = -1, rollRow = null;
+    rollData.forEach((r, i) => {
+      if (String(r[ROLL_COL.ROLL_ID]).trim() === payload.rollId) {
+        rollIdx = i + 2; rollRow = r;
+      }
+    });
+    if (rollIdx === -1)
+      return { success: false, message: `Roll "${payload.rollId}" not found.` };
+    if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase() !== ROLL_STATUS.OPEN)
+      return { success: false, message: 'Roll must be OPEN.' };
 
-    const rollWidth  = parseFloat(rollRow[ROLL_COL.WIDTH])||0;
-    const jobWidth   = parseFloat(payload.widthUsed)||0;
-    if (jobWidth>0 && jobWidth>rollWidth)
-      return { success:false, message:'Job width ('+jobWidth+' ft) exceeds roll width ('+rollWidth+' ft).' };
+    // ── Width validation ──
+    const rollWidth = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
+    const jobWidth  = parseFloat(payload.widthUsed) || 0;
+    if (jobWidth > 0 && jobWidth > rollWidth)
+      return { success: false, message: `Job width (${jobWidth} ft) exceeds roll width (${rollWidth} ft).` };
 
-    const remaining  = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH])||0;
-    const lengthUsed = parseFloat(payload.lengthUsed);
-    if (lengthUsed>remaining)
-      return { success:false, message:'Length used ('+lengthUsed+' ft) exceeds remaining ('+remaining+' ft).' };
+    // ── Length validation ──
+    const remaining   = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
+    const lengthUsed  = parseFloat(payload.lengthUsed);
+    if (lengthUsed > remaining)
+      return { success: false, message: `Length used (${lengthUsed} ft) exceeds remaining (${remaining} ft).` };
 
+    // ── Deduct from roll ──
     const settings     = prism_getSettings_();
-    const newRemaining = Math.max(0, remaining-lengthUsed);
-    const newRollStatus= (newRemaining===0 && settings.auto_consume_on_zero==='true')
+    const newRemaining = Math.max(0, remaining - lengthUsed);
+    const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
       ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
 
-    rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH+1).setValue(newRemaining);
-    rollSh.getRange(rollIdx, ROLL_COL.STATUS+1).setValue(newRollStatus);
+    rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
+    rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
 
+    // ── Write usage entry ──
     const today   = new Date();
     const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    usageSh.getRange(usageSh.getLastRow()+1,1,1,8).setValues([[
-      'USE-'+today.getTime(), payload.joNumber.trim().toUpperCase(), payload.rollId,
-      jobWidth, lengthUsed, user.email, payload.plottingLink, today
+    usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+      'USE-' + today.getTime(),
+      payload.joNumber.trim().toUpperCase(),
+      payload.rollId,
+      jobWidth,
+      lengthUsed,
+      user.email,
+      payload.plottingLink,
+      today
     ]]);
 
-    // Update JobOrders: assign RollID, advance status
+    // ── Update JobOrders: append RollID (multi-roll support) ──
     const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
     const joLr = joSh.getLastRow();
-    if (joLr>=2) {
-      const joData = joSh.getRange(2,1,joLr-1,13).getValues();
-      joData.forEach((r,i)=>{
-        if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase()===payload.joNumber.trim().toUpperCase()) {
-          joSh.getRange(i+2, JO_COL.ROLL_ID+1).setValue(payload.rollId);
+    if (joLr >= 2) {
+      const joData = joSh.getRange(2, 1, joLr - 1, 13).getValues();
+      joData.forEach((r, i) => {
+        if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() ===
+            payload.joNumber.trim().toUpperCase()) {
+
+          // ── Multi-roll: append new rollId to existing list ──
+          const existingRolls = String(r[JO_COL.ROLL_ID] || '')
+            .split(',')
+            .map(x => x.trim())
+            .filter(Boolean);
+
+          if (!existingRolls.includes(payload.rollId)) {
+            existingRolls.push(payload.rollId);
+          }
+
+          joSh.getRange(i + 2, JO_COL.ROLL_ID + 1)
+            .setValue(existingRolls.join(', '));
+
+          // ── Advance JO status to PRINTING ──
           const cs = String(r[JO_COL.STATUS]).trim();
-          if (cs===JO_STATUS.FOR_PRINTING||cs===JO_STATUS.PLOTTED)
-            joSh.getRange(i+2, JO_COL.STATUS+1).setValue(JO_STATUS.PRINTING);
+          if (cs === JO_STATUS.FOR_PRINTING || cs === JO_STATUS.PLOTTED) {
+            joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.PRINTING);
+          }
+
+          // ── Keep PlottingLink updated (latest wins) ──
+          if (payload.plottingLink) {
+            joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(payload.plottingLink);
+          }
         }
       });
     }
 
-    prism_audit_('PRISM_RECORD_USAGE',{rollId:payload.rollId,joNumber:payload.joNumber,lengthUsed,newRemaining,by:user.email});
+    prism_audit_('PRISM_RECORD_USAGE', {
+      rollId:       payload.rollId,
+      joNumber:     payload.joNumber,
+      lengthUsed,
+      newRemaining,
+      newRollStatus,
+      by:           user.email
+    });
+
     return {
-      success:true,
-      message:'Usage recorded. '+payload.rollId+': '+newRemaining+' ft remaining.'+(newRollStatus===ROLL_STATUS.CONSUMED?' Roll CONSUMED.':''),
-      newRemaining, newRollStatus
+      success:      true,
+      message:      `Usage recorded. ${payload.rollId}: ${newRemaining} ft remaining.`
+                    + (newRollStatus === ROLL_STATUS.CONSUMED ? ' Roll CONSUMED.' : ''),
+      newRemaining,
+      newRollStatus
     };
-  } catch(e) { return { success:false, message:e.message }; }
+
+  } catch(e) { return { success: false, message: e.message }; }
 }
 
 // ============================================================
