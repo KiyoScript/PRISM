@@ -1,45 +1,172 @@
-<!-- PRISMMaterials.html — Add & View LFP_Materials -->
+<!-- PRISMMaterials.html — Add & View LFP_Materials, with AllItems dropdown reference -->
 <style>
   #tab-materials,#tab-materials *{color:#111827!important;}
   #tab-materials .text-white *{color:#fff!important;}
   #tab-materials input,#tab-materials select{color-scheme:light;background:#fff;color:#111827!important;}
-  .m3-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;font-size:14px;color:#111827!important;outline:none;background:#fff;box-sizing:border-box;}
+
+  .m3-input{
+    width:100%;border:1px solid #d1d5db;border-radius:12px;
+    padding:10px 14px;font-size:14px;color:#111827!important;
+    outline:none;background:#fff;box-sizing:border-box;
+    transition:border-color .15s,box-shadow .15s;
+  }
   .m3-input:focus{border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.12);}
   .m3-label{display:block;font-size:14px;font-weight:600;margin-bottom:6px;color:#374151!important;}
-  #m3-addForm{display:none;background:#fff;border-radius:16px;border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;}
+
+  #m3-addForm{
+    display:none;background:#fff;border-radius:16px;
+    border:1px solid #e5e7eb;padding:16px;margin-bottom:12px;
+  }
+
+  /* Stock search combo */
+  .m3-combo-wrap{position:relative;}
+  .m3-combo-dropdown{
+    position:absolute;left:0;right:0;top:calc(100% + 4px);
+    background:#fff;border:1px solid #e5e7eb;border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;
+    max-height:220px;overflow-y:auto;display:none;
+  }
+  .m3-combo-dropdown.open{display:block;}
+  .m3-combo-opt{
+    padding:10px 14px;font-size:13px;cursor:pointer;
+    border-bottom:1px solid #f3f4f6;
+    transition:background .1s;
+  }
+  .m3-combo-opt:last-child{border-bottom:none;}
+  .m3-combo-opt:hover{background:#fefce8;}
+  .m3-combo-opt .opt-code{font-weight:700;color:#92400e!important;}
+  .m3-combo-opt .opt-desc{color:#374151!important;margin-left:6px;}
+
+  /* Selected pill */
+  .m3-selected-pill{
+    display:inline-flex;align-items:center;gap:8px;
+    background:#fefce8;border:1px solid #fde68a;
+    border-radius:9999px;padding:4px 12px 4px 10px;
+    font-size:13px;margin-top:6px;
+  }
+  .m3-selected-pill .pill-code{font-weight:700;color:#92400e!important;}
+  .m3-selected-pill .pill-desc{color:#374151!important;}
+  .m3-selected-pill .pill-clear{
+    color:#9ca3af!important;cursor:pointer;font-size:16px;
+    line-height:1;background:none;border:none;padding:0;
+  }
+  .m3-selected-pill .pill-clear:hover{color:#ef4444!important;}
 </style>
 
 <div class="p-4 space-y-4 pb-10">
+
+  <!-- Header -->
   <div class="flex items-start justify-between gap-3">
-    <div><h2 class="text-xl font-bold">Materials</h2><p class="text-sm mt-0.5" style="color:#6b7280;">LFP_Materials — substrate catalog</p></div>
-    <button onclick="m3_toggleForm()" id="m3-addBtn" class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Material
+    <div>
+      <h2 class="text-xl font-bold">Materials</h2>
+      <p class="text-sm mt-0.5" style="color:#6b7280;">LFP_Materials — substrate catalog</p>
+    </div>
+    <button onclick="m3_toggleForm()" id="m3-addBtn"
+      class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold"
+      style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      Add Material
     </button>
   </div>
 
-  <!-- Add form -->
+  <!-- Add Form -->
   <div id="m3-addForm">
-    <p class="text-xs font-bold uppercase tracking-wide mb-3" style="color:#6b7280;">New Material</p>
-    <div class="grid grid-cols-2 gap-3 mb-3">
-      <div><label class="m3-label">Material Code <span style="color:#ef4444;">*</span></label><input type="text" id="m3-code" class="m3-input" placeholder="e.g. PMT-003"></div>
-      <div><label class="m3-label">Material Name <span style="color:#ef4444;">*</span></label><input type="text" id="m3-name" class="m3-input" placeholder="Budget Tarp White 10oz…"></div>
+    <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">New LFP Material</p>
+
+    <!-- Step 1: Select from AllItems -->
+    <div class="mb-4">
+      <label class="m3-label">
+        Select Stock Item <span style="color:#ef4444;">*</span>
+        <span class="text-xs font-normal ml-1" style="color:#9ca3af;">(from AllItems database)</span>
+      </label>
+
+      <div class="m3-combo-wrap" id="m3-comboWrap">
+        <div style="display:flex;align-items:center;border:1px solid #d1d5db;border-radius:12px;background:#fff;overflow:hidden;transition:border-color .15s,box-shadow .15s;" id="m3-comboRow">
+          <span style="padding:0 10px 0 12px;color:#9ca3af;flex-shrink:0;pointer-events:none;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+            </svg>
+          </span>
+          <input type="text" id="m3-stockSearch" placeholder="Search item code or description…"
+            autocomplete="off"
+            style="flex:1;border:none;outline:none;background:transparent;padding:11px 4px;font-size:14px;color:#111827!important;min-width:0;"
+            oninput="m3_filterStock()"
+            onfocus="m3_openDropdown()">
+          <button id="m3-comboClear" onclick="m3_clearSelection()"
+            style="padding:0 12px;color:#9ca3af;background:none;border:none;cursor:pointer;font-size:16px;display:none;">✕</button>
+        </div>
+        <div class="m3-combo-dropdown" id="m3-stockDropdown"></div>
+      </div>
+
+      <!-- Selected pill -->
+      <div id="m3-selectedPill" style="display:none;" class="mt-2">
+        <div class="m3-selected-pill">
+          <svg width="13" height="13" fill="none" stroke="#92400e" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+          </svg>
+          <span class="pill-code" id="m3-pillCode"></span>
+          <span class="pill-desc" id="m3-pillDesc"></span>
+          <button class="pill-clear" onclick="m3_clearSelection()" title="Clear selection">✕</button>
+        </div>
+      </div>
+
+      <!-- Hidden fields for actual values -->
+      <input type="hidden" id="m3-code">
+      <input type="hidden" id="m3-name">
     </div>
+
+    <!-- Step 2: LFP-specific fields -->
     <div class="grid grid-cols-3 gap-3 mb-3">
-      <div><label class="m3-label">Width (ft) <span style="color:#ef4444;">*</span></label><input type="number" id="m3-width" class="m3-input" min="0.1" step="0.1" placeholder="10.5"></div>
-      <div><label class="m3-label">Std Length (ft) <span style="color:#ef4444;">*</span></label><input type="number" id="m3-len" class="m3-input" min="1" step="1" placeholder="164"></div>
-      <div><label class="m3-label">Cost/Roll (₱)</label><input type="number" id="m3-cost" class="m3-input" min="0" step="1" placeholder="0"></div>
+      <div>
+        <label class="m3-label">Width (ft) <span style="color:#ef4444;">*</span></label>
+        <input type="number" id="m3-width" class="m3-input" min="0.1" step="0.1" placeholder="10.5">
+      </div>
+      <div>
+        <label class="m3-label">Std Length (ft) <span style="color:#ef4444;">*</span></label>
+        <input type="number" id="m3-len" class="m3-input" min="1" step="1" placeholder="164">
+      </div>
+      <div>
+        <label class="m3-label">Cost/Roll (₱)</label>
+        <input type="number" id="m3-cost" class="m3-input" min="0" step="1" placeholder="0">
+      </div>
     </div>
-    <div class="mb-3"><label class="m3-label">Supplier</label><input type="text" id="m3-supplier" class="m3-input" placeholder="Supplier name…"></div>
+
+    <div class="mb-4">
+      <label class="m3-label">Supplier</label>
+      <input type="text" id="m3-supplier" class="m3-input" placeholder="Supplier name…">
+    </div>
+
     <div class="flex gap-2">
-      <button id="m3-saveBtn" onclick="m3_save()" class="flex-1 py-3 rounded-xl text-sm font-semibold text-white" style="background:#f59e0b;">Save Material</button>
-      <button onclick="m3_toggleForm()" class="px-5 py-3 rounded-xl text-sm font-semibold" style="background:#f3f4f6;color:#374151;">Cancel</button>
+      <button id="m3-saveBtn" onclick="m3_save()"
+        class="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+        style="background:#f59e0b;">
+        Save Material
+      </button>
+      <button onclick="m3_toggleForm()"
+        class="px-5 py-3 rounded-xl text-sm font-semibold"
+        style="background:#f3f4f6;color:#374151;">
+        Cancel
+      </button>
     </div>
   </div>
 
+  <!-- Loading state -->
+  <div id="m3-loadingState" style="display:none;" class="bg-white rounded-xl border border-gray-200 px-4 py-12 text-center">
+    <svg class="w-6 h-6 mx-auto mb-2 animate-spin" style="color:#f59e0b;" fill="none" viewBox="0 0 24 24">
+      <circle style="opacity:.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path style="opacity:.75;" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+    </svg>
+    <p class="text-sm" style="color:#9ca3af;">Loading materials…</p>
+  </div>
+
+  <!-- Count -->
   <p id="m3-count" class="text-xs" style="color:#9ca3af;"></p>
 
-  <!-- Table -->
-  <div id="m3-tableWrap" class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+  <!-- Table (desktop) -->
+  <div id="m3-tableWrap" class="bg-white rounded-xl border border-gray-200 overflow-hidden" style="display:none;">
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-100">
         <thead style="background:#fefce8;">
@@ -52,59 +179,283 @@
             <th class="px-4 py-3 text-left text-xs font-bold uppercase" style="color:#374151;">Cost/Roll</th>
           </tr>
         </thead>
-        <tbody id="m3-tbody" class="bg-white divide-y divide-gray-100">
-          <tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">Loading…</td></tr>
-        </tbody>
+        <tbody id="m3-tbody" class="bg-white divide-y divide-gray-100"></tbody>
       </table>
     </div>
   </div>
+
+  <!-- Cards (mobile) -->
+  <div id="m3-cards" style="display:none;" class="space-y-3"></div>
+
 </div>
 
 <script>
-var m3_formOpen=false;
-function prism_init_materials(){
+var m3_formOpen   = false;
+var m3_stockItems = [];
+var m3_selCode    = '';
+var m3_selName    = '';
+
+/* ── Init ── */
+function prism_init_materials() {
+  m3_initLayout();
+
+  // Load stock items for dropdown
   google.script.run
-    .withSuccessHandler(function(r){if(r.success)m3_render(r.data||[]);else m3_err(r.message);})
-    .withFailureHandler(function(e){m3_err(e.message);})
+    .withSuccessHandler(function(r) {
+      if (r && r.success) {
+        m3_stockItems = r.data || [];
+      } else {
+        prism_toast('error', 'Could not load stock items: ' + ((r && r.message) || 'Unknown error'));
+      }
+    })
+    .withFailureHandler(function(e) {
+      prism_toast('error', 'Stock items load failed: ' + e.message);
+    })
+    .prism_getStockMaterialsList();
+
+  // Load existing LFP materials
+  m3_loadMaterials();
+}
+
+function m3_initLayout() {
+  var mob = window.innerWidth < 640;
+  document.getElementById('m3-tableWrap').style.display = mob ? 'none' : 'block';
+  document.getElementById('m3-cards').style.display     = mob ? 'block' : 'none';
+}
+window.addEventListener('resize', m3_initLayout);
+
+function m3_loadMaterials() {
+  document.getElementById('m3-loadingState').style.display = 'block';
+  document.getElementById('m3-tableWrap').style.display    = 'none';
+  document.getElementById('m3-cards').style.display        = 'none';
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      document.getElementById('m3-loadingState').style.display = 'none';
+      m3_initLayout();
+      if (r && r.success) {
+        m3_render(r.data || []);
+      } else {
+        m3_err((r && r.message) || 'Failed to load materials.');
+      }
+    })
+    .withFailureHandler(function(e) {
+      document.getElementById('m3-loadingState').style.display = 'none';
+      m3_initLayout();
+      m3_err(e.message);
+    })
     .prism_getAllMaterialsPublic();
 }
-function m3_render(data){
-  document.getElementById('m3-count').textContent=data.length+' material'+(data.length!==1?'s':'');
-  var tb=document.getElementById('m3-tbody');
-  if(!data.length){tb.innerHTML='<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">No materials yet. Add one above.</td></tr>';return;}
-  var h='';
-  data.forEach(function(m){
-    h+='<tr><td class="px-4 py-3 text-sm font-bold" style="color:#92400e;">'+m3_esc(m.materialCode)+'</td>'
-      +'<td class="px-4 py-3 text-sm">'+m3_esc(m.materialName)+'</td>'
-      +'<td class="px-4 py-3 text-sm">'+m.width+' ft</td>'
-      +'<td class="px-4 py-3 text-sm">'+m.standardLength+' ft</td>'
-      +'<td class="px-4 py-3 text-sm" style="color:#6b7280;">'+m3_esc(m.supplier||'—')+'</td>'
-      +'<td class="px-4 py-3 text-sm">'+(m.costPerRoll?'₱'+Number(m.costPerRoll).toLocaleString():'—')+'</td></tr>';
+
+/* ── Render table ── */
+function m3_render(data) {
+  document.getElementById('m3-count').textContent =
+    data.length + ' material' + (data.length !== 1 ? 's' : '');
+
+  // Desktop table
+  var tb = document.getElementById('m3-tbody');
+  if (!data.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#9ca3af;">No materials yet. Add one above.</td></tr>';
+  } else {
+    var h = '';
+    data.forEach(function(m) {
+      h += '<tr>'
+        + '<td class="px-4 py-3 text-sm font-bold" style="color:#92400e;">' + m3_esc(m.materialCode) + '</td>'
+        + '<td class="px-4 py-3 text-sm">' + m3_esc(m.materialName) + '</td>'
+        + '<td class="px-4 py-3 text-sm">' + m.width + ' ft</td>'
+        + '<td class="px-4 py-3 text-sm">' + m.standardLength + ' ft</td>'
+        + '<td class="px-4 py-3 text-sm" style="color:#6b7280;">' + m3_esc(m.supplier || '—') + '</td>'
+        + '<td class="px-4 py-3 text-sm">' + (m.costPerRoll ? '₱' + Number(m.costPerRoll).toLocaleString() : '—') + '</td>'
+        + '</tr>';
+    });
+    tb.innerHTML = h;
+  }
+
+  // Mobile cards
+  var el = document.getElementById('m3-cards');
+  if (!data.length) {
+    el.innerHTML = '<div class="bg-white rounded-xl border border-gray-200 px-4 py-8 text-center text-sm" style="color:#9ca3af;">No materials yet.</div>';
+  } else {
+    var ch = '';
+    data.forEach(function(m) {
+      ch += '<div class="bg-white rounded-xl border border-gray-200 px-4 py-4 space-y-2">'
+        + '<div class="flex items-start justify-between gap-2">'
+        + '<span class="text-sm font-bold" style="color:#92400e;">' + m3_esc(m.materialCode) + '</span>'
+        + (m.costPerRoll ? '<span class="text-sm font-semibold" style="color:#374151;">₱' + Number(m.costPerRoll).toLocaleString() + '</span>' : '')
+        + '</div>'
+        + '<p class="text-sm font-medium" style="color:#111827;">' + m3_esc(m.materialName) + '</p>'
+        + '<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs" style="color:#6b7280;">'
+        + '<span>Width: <strong style="color:#374151;">' + m.width + ' ft</strong></span>'
+        + '<span>Length: <strong style="color:#374151;">' + m.standardLength + ' ft</strong></span>'
+        + (m.supplier ? '<span>Supplier: <strong style="color:#374151;">' + m3_esc(m.supplier) + '</strong></span>' : '')
+        + '</div>'
+        + '</div>';
+    });
+    el.innerHTML = ch;
+  }
+}
+
+/* ── Toggle add form ── */
+function m3_toggleForm() {
+  m3_formOpen = !m3_formOpen;
+  document.getElementById('m3-addForm').style.display = m3_formOpen ? 'block' : 'none';
+  var btn = document.getElementById('m3-addBtn');
+  btn.innerHTML = m3_formOpen
+    ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg> Cancel'
+    : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg> Add Material';
+
+  if (!m3_formOpen) m3_resetForm();
+}
+
+function m3_resetForm() {
+  m3_clearSelection();
+  document.getElementById('m3-width').value    = '';
+  document.getElementById('m3-len').value      = '';
+  document.getElementById('m3-cost').value     = '';
+  document.getElementById('m3-supplier').value = '';
+}
+
+/* ── Stock combo ── */
+function m3_openDropdown() {
+  m3_renderDropdown(m3_stockItems);
+  document.getElementById('m3-stockDropdown').classList.add('open');
+  document.getElementById('m3-comboRow').style.borderColor  = '#f59e0b';
+  document.getElementById('m3-comboRow').style.boxShadow    = '0 0 0 3px rgba(245,158,11,.12)';
+}
+
+function m3_filterStock() {
+  var q        = (document.getElementById('m3-stockSearch').value || '').trim().toLowerCase();
+  var filtered = m3_stockItems.filter(function(i) {
+    return !q || (i.itemCode + ' ' + i.itemDesc).toLowerCase().indexOf(q) !== -1;
   });
-  tb.innerHTML=h;
+  m3_renderDropdown(filtered);
+  document.getElementById('m3-stockDropdown').classList.add('open');
+
+  // Clear previous selection if user types again
+  if (m3_selCode) {
+    m3_selCode = '';
+    m3_selName = '';
+    document.getElementById('m3-code').value = '';
+    document.getElementById('m3-name').value = '';
+    document.getElementById('m3-selectedPill').style.display = 'none';
+    document.getElementById('m3-comboClear').style.display   = 'none';
+  }
 }
-function m3_toggleForm(){
-  m3_formOpen=!m3_formOpen;
-  document.getElementById('m3-addForm').style.display=m3_formOpen?'block':'none';
-  document.getElementById('m3-addBtn').textContent=m3_formOpen?'✕ Cancel':'+  Add Material';
+
+function m3_renderDropdown(items) {
+  var dd = document.getElementById('m3-stockDropdown');
+  if (!items.length) {
+    dd.innerHTML = '<div class="m3-combo-opt" style="color:#9ca3af;cursor:default;">No items found.</div>';
+    return;
+  }
+  dd.innerHTML = items.map(function(i) {
+    return '<div class="m3-combo-opt" onmousedown="m3_selectStock(\''
+      + m3_esc(i.itemCode).replace(/'/g, "\\'") + '\',\''
+      + m3_esc(i.itemDesc).replace(/'/g, "\\'") + '\')">'
+      + '<span class="opt-code">' + m3_esc(i.itemCode) + '</span>'
+      + '<span class="opt-desc">— ' + m3_esc(i.itemDesc) + '</span>'
+      + '</div>';
+  }).join('');
 }
-function m3_save(){
-  var code=document.getElementById('m3-code').value.trim();
-  var name=document.getElementById('m3-name').value.trim();
-  var w=parseFloat(document.getElementById('m3-width').value)||0;
-  var l=parseFloat(document.getElementById('m3-len').value)||0;
-  if(!code||!name){prism_toast('error','Code and Name are required.');return;}
-  if(!w||!l){prism_toast('error','Width and Length are required.');return;}
-  var btn=document.getElementById('m3-saveBtn');btn.disabled=true;btn.textContent='Saving…';
+
+function m3_selectStock(code, name) {
+  m3_selCode = code;
+  m3_selName = name;
+
+  document.getElementById('m3-code').value        = code;
+  document.getElementById('m3-name').value        = name;
+  document.getElementById('m3-stockSearch').value = code + ' — ' + name;
+  document.getElementById('m3-comboClear').style.display   = 'block';
+  document.getElementById('m3-stockDropdown').classList.remove('open');
+
+  // Show pill
+  document.getElementById('m3-pillCode').textContent      = code;
+  document.getElementById('m3-pillDesc').textContent      = name;
+  document.getElementById('m3-selectedPill').style.display = 'block';
+
+  // Reset focus ring
+  document.getElementById('m3-comboRow').style.borderColor = '#d1d5db';
+  document.getElementById('m3-comboRow').style.boxShadow   = 'none';
+}
+
+function m3_clearSelection() {
+  m3_selCode = '';
+  m3_selName = '';
+  document.getElementById('m3-code').value              = '';
+  document.getElementById('m3-name').value              = '';
+  document.getElementById('m3-stockSearch').value       = '';
+  document.getElementById('m3-comboClear').style.display = 'none';
+  document.getElementById('m3-selectedPill').style.display = 'none';
+  document.getElementById('m3-stockDropdown').classList.remove('open');
+}
+
+// Close dropdown on outside click
+document.addEventListener('mousedown', function(e) {
+  var wrap = document.getElementById('m3-comboWrap');
+  var dd   = document.getElementById('m3-stockDropdown');
+  if (wrap && dd && !wrap.contains(e.target)) {
+    dd.classList.remove('open');
+    document.getElementById('m3-comboRow').style.borderColor = '#d1d5db';
+    document.getElementById('m3-comboRow').style.boxShadow   = 'none';
+  }
+});
+
+/* ── Save ── */
+function m3_save() {
+  var code = document.getElementById('m3-code').value.trim();
+  var name = document.getElementById('m3-name').value.trim();
+  var w    = parseFloat(document.getElementById('m3-width').value) || 0;
+  var l    = parseFloat(document.getElementById('m3-len').value)   || 0;
+
+  if (!code || !name) {
+    prism_toast('error', 'Please select a stock item from the dropdown.');
+    document.getElementById('m3-stockSearch').focus();
+    return;
+  }
+  if (!w) { prism_toast('error', 'Width is required.'); return; }
+  if (!l) { prism_toast('error', 'Standard Length is required.'); return; }
+
+  var btn = document.getElementById('m3-saveBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
   google.script.run
-    .withSuccessHandler(function(r){
-      btn.disabled=false;btn.textContent='Save Material';
-      if(r.success){prism_toast('success',r.message);m3_toggleForm();prism_init_materials();['m3-code','m3-name','m3-width','m3-len','m3-cost','m3-supplier'].forEach(function(id){document.getElementById(id).value='';});}
-      else prism_toast('error',r.message);
+    .withSuccessHandler(function(r) {
+      btn.disabled    = false;
+      btn.textContent = 'Save Material';
+      if (r.success) {
+        prism_toast('success', r.message);
+        m3_toggleForm();
+        m3_loadMaterials();
+      } else {
+        prism_toast('error', r.message);
+      }
     })
-    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Save Material';prism_toast('error',e.message);})
-    .prism_addMaterial({materialCode:code,materialName:name,width:w,standardLength:l,costPerRoll:parseFloat(document.getElementById('m3-cost').value)||0,supplier:document.getElementById('m3-supplier').value.trim()});
+    .withFailureHandler(function(e) {
+      btn.disabled    = false;
+      btn.textContent = 'Save Material';
+      prism_toast('error', e.message);
+    })
+    .prism_addMaterial({
+      materialCode:   code,
+      materialName:   name,
+      width:          w,
+      standardLength: l,
+      costPerRoll:    parseFloat(document.getElementById('m3-cost').value)     || 0,
+      supplier:       document.getElementById('m3-supplier').value.trim()
+    });
 }
-function m3_err(m){document.getElementById('m3-tbody').innerHTML='<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#ef4444;">'+m3_esc(m)+'</td></tr>';}
-function m3_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function m3_err(msg) {
+  document.getElementById('m3-tbody').innerHTML =
+    '<tr><td colspan="6" class="px-5 py-12 text-center text-sm" style="color:#ef4444;">'
+    + m3_esc(msg) + '</td></tr>';
+  document.getElementById('m3-cards').innerHTML =
+    '<div class="bg-white rounded-xl border border-gray-200 px-4 py-8 text-center text-sm" style="color:#ef4444;">'
+    + m3_esc(msg) + '</div>';
+}
+
+function m3_esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>

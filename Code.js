@@ -208,26 +208,20 @@ function prism_updateSettings(payload) {
 //  ROLL ID GENERATOR  →  MOD001-R01 format, auto-incremented
 // ============================================================
 function prism_generateRollIds_(materialCode, qty, existingRows) {
-  const prefix = (materialCode.split('-')[0] || materialCode).substring(0,3).toUpperCase();
-  let maxBatch = 0;
-  existingRows.forEach(r => {
-    const id = String(r[ROLL_COL.ROLL_ID]||'');
-    if (id.startsWith(prefix)) {
-      const m = id.match(/^[A-Z]{3}(\d{3})-R\d+$/);
-      if (m) { const n=parseInt(m[1]); if(n>maxBatch) maxBatch=n; }
-    }
-  });
-  const batchId = prefix + String(maxBatch+1).padStart(3,'0');
+  // Find highest R number already used for this exact materialCode
   let maxRoll = 0;
   existingRows.forEach(r => {
-    const id = String(r[ROLL_COL.ROLL_ID]||'');
-    if (id.startsWith(batchId+'-R')) {
+    const id = String(r[ROLL_COL.ROLL_ID] || '');
+    const prefix = materialCode + '-R';
+    if (id.startsWith(prefix)) {
       const m = id.match(/-R(\d+)$/);
-      if (m) { const n=parseInt(m[1]); if(n>maxRoll) maxRoll=n; }
+      if (m) { const n = parseInt(m[1]); if (n > maxRoll) maxRoll = n; }
     }
   });
   const ids = [];
-  for (let i=1; i<=qty; i++) ids.push(batchId+'-R'+String(maxRoll+i).padStart(2,'0'));
+  for (let i = 1; i <= qty; i++) {
+    ids.push(materialCode + '-R' + String(maxRoll + i).padStart(2, '0'));
+  }
   return ids;
 }
 
@@ -486,15 +480,25 @@ function prism_submitJobOrder(payload) {
     const existing = prism_getAllJobOrders_();
     if (existing.some(j=>j.joNumber.toLowerCase()===payload.joNumber.trim().toLowerCase()))
       return { success:false, message:'JO "'+payload.joNumber+'" already exists.' };
+
     const sh    = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
     const today = new Date();
+
+    const LFP_CATEGORIES = ['banner', 'sticker', 'signage', 'canvas'];
+    const isLFP = LFP_CATEGORIES.includes((payload.category || '').toLowerCase());
+    const productionType = isLFP ? 'LFP' : (payload.productionType || '');
+    const status = isLFP ? 'FOR_PLOTTING' : (payload.status || JO_STATUS.FOR_PLOTTING);
+
     sh.getRange(sh.getLastRow()+1,1,1,13).setValues([[
       payload.joNumber.trim().toUpperCase(), payload.customer.trim(),
       payload.jobDescription||'', payload.category,
       parseFloat(payload.width)||0, parseFloat(payload.height)||0, parseInt(payload.quantity)||1,
-      payload.productionType||'', payload.plottingLink||'',
-      payload.status||JO_STATUS.FOR_PLOTTING, '', user.email, today
+      productionType,              // ← computed, not payload.productionType
+      payload.plottingLink||'',
+      status,                      // ← computed, not payload.status
+      '', user.email, today
     ]]);
+
     prism_audit_('PRISM_SUBMIT_JO',{joNumber:payload.joNumber,by:user.email});
     return { success:true, message:'JO "'+payload.joNumber+'" submitted.' };
   } catch(e) { return { success:false, message:e.message }; }
@@ -615,4 +619,36 @@ function prism_setRollStatus(rollId, newStatus) {
     prism_audit_('PRISM_SET_ROLL_STATUS',{rollId,newStatus,by:user.email});
     return { success:true, message:rollId+' → '+newStatus };
   } catch(e) { return { success:false, message:e.message }; }
+}
+
+function prism_getStockMaterialsList() {
+  try {
+    const ss        = SpreadsheetApp.getActiveSpreadsheet();
+    const linkSheet = ss.getSheetByName('DatabaseLink');
+    if (!linkSheet) throw new Error('DatabaseLink sheet not found');
+
+    const rows  = linkSheet.getRange(2, 1, linkSheet.getLastRow() - 1, 2).getValues();
+    const match = rows.find(r => r[0].toString().trim() === 'StockDatabase');
+    if (!match) throw new Error('StockDatabase not found in DatabaseLink');
+
+    const idMatch = match[1].toString().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    if (!idMatch) throw new Error('Invalid StockDatabase URL');
+
+    const sheet = SpreadsheetApp.openById(idMatch[1]).getSheetByName('AllItems');
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, data: [] };
+
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues()
+      .filter(r => r[0] && r[1])
+      .map(r => ({
+        itemCode:    String(r[0]).trim(),
+        itemDesc:    String(r[1]).trim(),
+        stockOnHand: r[6] !== '' ? Number(r[6]) : 0,
+        unitCost:    r[7] !== '' ? Number(r[7]) : 0
+      }));
+
+    return { success: true, data };
+  } catch(e) {
+    Logger.log('prism_getStockMaterialsList ERROR: ' + e.message);
+    return { success: false, message: e.message };
+  }
 }
