@@ -1,4 +1,4 @@
-<!-- RollDashboard.html v2 -->
+<!-- RollDashboard.html v3 — grouped by material, same design as v2 -->
 <style>
   #tab-dashboard,#tab-dashboard *{color:#111827!important;}
   #tab-dashboard .text-white *{color:#fff!important;}
@@ -11,19 +11,51 @@
   .fchip:hover:not(.active){background:#f0fdf4;border-color:#86efac;}
   .hbar-track{background:#e5e7eb;border-radius:9999px;height:5px;overflow:hidden;}
   .hbar-fill{height:100%;border-radius:9999px;transition:width .4s ease;}
+
+  /* Material group */
+  .d-mat-group{margin-bottom:16px;}
+  .d-mat-header{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 14px;margin-bottom:8px;
+    background:#f0fdf4;border:1px solid #bbf7d0;
+    border-radius:12px;cursor:pointer;
+    user-select:none;transition:background .15s;
+  }
+  .d-mat-header:hover{background:#dcfce7;}
+  .d-mat-header.warn{background:#fef9c3;border-color:#fde68a;}
+  .d-mat-header.warn:hover{background:#fef08a;}
+  .d-mat-title{font-size:14px;font-weight:700;flex:1;}
+  .d-mat-pills{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .d-mpill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:9999px;}
+  .d-mpill-open{background:#dcfce7;color:#166534!important;}
+  .d-mpill-unop{background:#dbeafe;color:#1e40af!important;}
+  .d-mpill-cons{background:#f1f5f9;color:#94a3b8!important;}
+  .d-mpill-warn{background:#fee2e2;color:#991b1b!important;}
+  .d-mat-remain{font-size:13px;font-weight:700;white-space:nowrap;}
+  .d-chevron{width:16px;height:16px;color:#9ca3af!important;transition:transform .2s;flex-shrink:0;}
+  .d-mat-group.collapsed .d-chevron{transform:rotate(-90deg);}
+  .d-mat-grid{
+    display:grid;gap:10px;
+    grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  }
+  .d-mat-group.collapsed .d-mat-grid{display:none;}
+
   #d-openModal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px;}
   #d-openModal.open{display:flex!important;}
 </style>
 
-<div class="p-4 space-y-4">
+<div class="p-4 space-y-4 pb-10">
   <!-- Header -->
   <div class="flex items-start justify-between gap-3">
     <div>
       <h2 class="text-xl font-bold">Roll Dashboard</h2>
-      <p class="text-sm mt-0.5" style="color:#6b7280;">Available LFP rolls — live inventory</p>
+      <p class="text-sm mt-0.5" style="color:#6b7280;">LFP rolls grouped by material</p>
     </div>
     <button onclick="prism_reloadDashboard()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border" style="background:#f0fdf4;color:#15803d;border-color:#86efac;">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Reload
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>Reload
     </button>
   </div>
 
@@ -38,16 +70,25 @@
   <!-- Filter chips -->
   <div class="flex gap-2 overflow-x-auto pb-1">
     <button class="fchip active" onclick="d_setFilter('AVAILABLE',this)">Available</button>
-    <button class="fchip" onclick="d_setFilter('OPEN',this)">Open</button>
-    <button class="fchip" onclick="d_setFilter('UNOPENED',this)">Unopened</button>
-    <button class="fchip" onclick="d_setFilter('CONSUMED',this)">Consumed</button>
-    <button class="fchip" onclick="d_setFilter('ALL',this)">All</button>
+    <button class="fchip"        onclick="d_setFilter('OPEN',this)">Open</button>
+    <button class="fchip"        onclick="d_setFilter('UNOPENED',this)">Unopened</button>
+    <button class="fchip"        onclick="d_setFilter('CONSUMED',this)">Consumed</button>
+    <button class="fchip"        onclick="d_setFilter('ALL',this)">All</button>
+    <button class="fchip"        onclick="d_setFilter('WARN',this)">⚠ Low Stock</button>
   </div>
 
   <!-- Search -->
   <div class="relative">
-    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></div>
-    <input type="text" id="d-search" placeholder="Search Roll ID or material code…" class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none" style="color:#111827;" oninput="d_apply()">
+    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+      <svg class="w-4 h-4" style="color:#9ca3af;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+      </svg>
+    </div>
+    <input type="text" id="d-search"
+      placeholder="Search Roll ID or material code…"
+      class="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none"
+      style="color:#111827;" oninput="d_apply()">
   </div>
 
   <!-- Legend -->
@@ -59,30 +100,54 @@
   </div>
   <p id="d-count" class="text-xs" style="color:#9ca3af;"></p>
 
-  <!-- Grid -->
-  <div id="d-grid" class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(272px,1fr));">
-    <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3"><div class="d-skel" style="width:100px;height:15px;"></div><div class="d-skel" style="width:70%;height:12px;"></div><div class="d-skel" style="width:100%;height:5px;"></div></div>
-    <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3"><div class="d-skel" style="width:100px;height:15px;"></div><div class="d-skel" style="width:70%;height:12px;"></div><div class="d-skel" style="width:100%;height:5px;"></div></div>
-    <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3"><div class="d-skel" style="width:100px;height:15px;"></div><div class="d-skel" style="width:70%;height:12px;"></div><div class="d-skel" style="width:100%;height:5px;"></div></div>
+  <!-- Groups container -->
+  <div id="d-groups">
+    <div class="d-mat-group">
+      <div class="d-mat-header" style="pointer-events:none;">
+        <div class="d-skel" style="width:120px;height:14px;"></div>
+        <div class="d-skel" style="width:60px;height:14px;margin-left:auto;"></div>
+      </div>
+      <div class="d-mat-grid">
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3"><div class="d-skel" style="width:100px;height:15px;"></div><div class="d-skel" style="width:70%;height:12px;"></div><div class="d-skel" style="width:100%;height:5px;"></div></div>
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-3"><div class="d-skel" style="width:100px;height:15px;"></div><div class="d-skel" style="width:70%;height:12px;"></div><div class="d-skel" style="width:100%;height:5px;"></div></div>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- Open Roll Modal -->
+<!-- Open Roll Modal (same as v2) -->
 <div id="d-openModal">
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.2);overflow:hidden;">
     <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-200">
       <div style="width:38px;height:38px;background:#f0fdf4;border-radius:10px;display:flex;align-items:center;justify-content:center;">
-        <svg width="18" height="18" fill="none" stroke="#15803d" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+        <svg width="18" height="18" fill="none" stroke="#15803d" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+        </svg>
       </div>
-      <div class="flex-1"><h3 class="text-base font-bold">Open Roll</h3><p id="d-modalSub" class="text-xs" style="color:#6b7280;"></p></div>
-      <button onclick="d_closeModal()" class="p-1.5 rounded-lg hover:bg-gray-100"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      <div class="flex-1">
+        <h3 class="text-base font-bold">Open Roll</h3>
+        <p id="d-modalSub" class="text-xs" style="color:#6b7280;"></p>
+      </div>
+      <button onclick="d_closeModal()" class="p-1.5 rounded-lg hover:bg-gray-100">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
     </div>
     <div class="p-5 space-y-4">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;" id="d-modalDetails" class="text-sm space-y-1" style="color:#374151;"></div>
-      <p class="text-sm" style="color:#6b7280;">This will change the roll status from <strong>UNOPENED</strong> → <strong>OPEN</strong>.</p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;"
+        id="d-modalDetails" class="text-sm space-y-1"></div>
+      <p class="text-sm" style="color:#6b7280;">
+        This will change the roll status from <strong>UNOPENED</strong> → <strong>OPEN</strong>.
+      </p>
       <div class="flex gap-2">
-        <button id="d-openBtn" onclick="d_confirmOpen()" class="flex-1 py-3 rounded-xl text-sm font-semibold text-white" style="background:#15803d;">Yes, Open Roll</button>
-        <button onclick="d_closeModal()" class="px-5 py-3 rounded-xl text-sm font-semibold" style="background:#f3f4f6;color:#374151;">Cancel</button>
+        <button id="d-openBtn" onclick="d_confirmOpen()"
+          class="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+          style="background:#15803d;">Yes, Open Roll</button>
+        <button onclick="d_closeModal()"
+          class="px-5 py-3 rounded-xl text-sm font-semibold"
+          style="background:#f3f4f6;color:#374151;">Cancel</button>
       </div>
     </div>
   </div>
@@ -90,12 +155,15 @@
 
 <script>
 var d_rolls=[], d_settings={}, d_filter='AVAILABLE', d_userRole='', d_pendingRoll=null;
+var d_expandState={};
 
+/* ── Init ── */
 function prism_init_dashboard(){
   google.script.run
     .withSuccessHandler(function(r){
       if(!r.success){d_error(r.message);return;}
-      d_rolls=r.rolls||[]; d_settings=r.settings||{}; d_userRole=((r.user&&r.user.role)||'').toLowerCase();
+      d_rolls=r.rolls||[]; d_settings=r.settings||{};
+      d_userRole=((r.user&&r.user.role)||'').toLowerCase();
       d_render();
     })
     .withFailureHandler(function(e){d_error(e.message);})
@@ -103,7 +171,8 @@ function prism_init_dashboard(){
 }
 
 function prism_reloadDashboard(){
-  document.getElementById('d-grid').innerHTML='<div style="grid-column:1/-1;" class="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm" style="color:#9ca3af;">Reloading…</div>';
+  document.getElementById('d-groups').innerHTML=
+    '<div class="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm" style="color:#9ca3af;">Reloading…</div>';
   google.script.run
     .withSuccessHandler(function(r){
       if(!r.success){d_error(r.message);return;}
@@ -113,73 +182,156 @@ function prism_reloadDashboard(){
     .prism_getAllRollsPublic();
 }
 
+/* ── Filter ── */
 function d_setFilter(f,el){
   d_filter=f;
   document.querySelectorAll('.fchip').forEach(function(c){c.classList.remove('active');});
   el.classList.add('active'); d_apply();
 }
+
 function d_apply(){
   var q=(document.getElementById('d-search').value||'').trim().toLowerCase();
   var threshold=parseFloat(d_settings.near_empty_threshold_ft)||30;
-  var out=d_rolls.filter(function(r){
-    var sm=false;
-    if(d_filter==='ALL')        sm=true;
-    else if(d_filter==='AVAILABLE') sm=r.status==='OPEN'||r.status==='UNOPENED';
-    else                        sm=r.status===d_filter;
-    if(!sm) return false;
-    if(q){var h=(r.rollId+' '+r.materialCode).toLowerCase();if(h.indexOf(q)===-1)return false;}
+  var lowFt=parseFloat(d_settings.low_stock_threshold_ft)||100;
+
+  var filtered=d_rolls.filter(function(r){
+    if(d_filter==='ALL')            {} // all pass
+    else if(d_filter==='AVAILABLE') { if(r.status!=='OPEN'&&r.status!=='UNOPENED') return false; }
+    else if(d_filter==='WARN')      {} // handled at group level
+    else                            { if(r.status!==d_filter) return false; }
+    if(q){ var h=(r.rollId+' '+r.materialCode).toLowerCase(); if(h.indexOf(q)===-1) return false; }
     return true;
   });
-  d_renderGrid(out);
-  document.getElementById('d-count').textContent=out.length+' roll'+(out.length!==1?'s':'')+' shown';
+
+  var groups=d_buildGroups(filtered, lowFt);
+
+  if(d_filter==='WARN'){
+    groups=groups.filter(function(g){
+      return g.totalRemaining<lowFt&&(g.openCount+g.unopenedCount)>0;
+    });
+  }
+
+  var totalShown=0;
+  groups.forEach(function(g){ totalShown+=g.rolls.length; });
+  document.getElementById('d-count').textContent=
+    totalShown+' roll'+(totalShown!==1?'s':'')+' in '
+    +groups.length+' material'+(groups.length!==1?'s':'');
+
+  d_renderGroups(groups, threshold, lowFt);
 }
 
-function d_health(r){
-  var t=parseFloat(d_settings.near_empty_threshold_ft)||30;
-  if(r.status==='CONSUMED')    return 'red';
-  if(r.status==='UNOPENED')    return 'grey';
-  if(r.remainingLength<=0)     return 'red';
-  if(r.remainingLength<=t)     return 'yellow';
-  return 'green';
-}
-function d_hColor(h){return h==='green'?'#16a34a':h==='yellow'?'#ca8a04':h==='red'?'#dc2626':'#9ca3af';}
-function d_hBg(h){return h==='green'?'#dcfce7':h==='yellow'?'#fef9c3':h==='red'?'#fee2e2':'#f3f4f6';}
-function d_pct(r){if(!r.originalLength)return 0;return Math.min(100,Math.round(r.remainingLength/r.originalLength*100));}
-function d_esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
-function d_renderGrid(rolls){
-  var grid=document.getElementById('d-grid');
-  var isSTL=d_userRole.includes('senior team leader')||d_userRole.includes('stl');
-  var isAdmin=d_userRole.includes('admin');
-  if(!rolls.length){grid.innerHTML='<div style="grid-column:1/-1;" class="bg-white rounded-xl border border-gray-200 p-12 text-center text-sm" style="color:#9ca3af;">No rolls found.</div>';return;}
-  var h='';
+/* ── Build groups ── */
+function d_buildGroups(rolls, lowFt){
+  var map={};
   rolls.forEach(function(r){
-    var hl=d_health(r),hc=d_hColor(hl),hb=d_hBg(hl),pct=d_pct(r);
-    var bc=hl==='green'?'#16a34a':hl==='yellow'?'#ca8a04':hl==='red'?'#dc2626':'#9ca3af';
-    var consumed=r.status==='CONSUMED';
-    h+='<div class="roll-card bg-white rounded-xl border border-gray-200 p-4 space-y-3"'+(consumed?' style="opacity:.55;"':'')+'>';
-    h+='<div class="flex items-start justify-between gap-2">';
-    h+='<div><span class="text-sm font-bold">'+d_esc(r.rollId)+'</span><br><span class="text-xs" style="color:#6b7280;">'+d_esc(r.materialCode)+'</span></div>';
-    var sc=r.status==='OPEN'?'background:#dcfce7;color:#166534;':r.status==='UNOPENED'?'background:#f3f4f6;color:#374151;':r.status==='CONSUMED'?'background:#f1f5f9;color:#94a3b8;':'background:#dbeafe;color:#1e40af;';
-    h+='<span class="text-xs font-bold px-2 py-0.5 rounded-full border" style="'+sc+'border:none;">'+r.status+'</span></div>';
-    h+='<div class="grid grid-cols-3 gap-2 text-xs">';
-    h+='<div class="bg-slate-50 rounded-lg px-2 py-2 text-center"><div class="font-bold text-sm">'+r.width+' ft</div><div style="color:#6b7280;">Width</div></div>';
-    h+='<div class="rounded-lg px-2 py-2 text-center" style="background:'+hb+';"><div class="font-bold text-sm" style="color:'+hc+';">'+r.remainingLength+' ft</div><div style="color:'+hc+';">Remaining</div></div>';
-    h+='<div class="bg-slate-50 rounded-lg px-2 py-2 text-center"><div class="font-bold text-sm">'+r.originalLength+' ft</div><div style="color:#6b7280;">Original</div></div>';
-    h+='</div>';
-    if(!consumed&&r.status!=='UNOPENED'){
-      h+='<div><div class="flex justify-between text-xs mb-1" style="color:#6b7280;"><span>Roll fill</span><span>'+pct+'%</span></div>';
-      h+='<div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+bc+';"></div></div></div>';
+    var code=(r.materialCode||'UNKNOWN').toString().trim();
+    if(!map[code]){
+      map[code]={ materialCode:code, rolls:[], openCount:0, unopenedCount:0, consumedCount:0, totalRemaining:0 };
     }
-    if(r.dateReceived) h+='<p class="text-xs" style="color:#9ca3af;">Received: '+d_esc(r.dateReceived)+'</p>';
-    if((isAdmin||isSTL)&&r.status==='UNOPENED'){
-      h+='<button data-id="'+d_esc(r.rollId)+'" onclick="d_openModal(this.getAttribute(\'data-id\'))" class="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style="background:#15803d;">🔓 Open Roll</button>';
-    }
-    h+='</div>';
+    map[code].rolls.push(r);
+    var st=(r.status||'').toUpperCase();
+    if(st==='OPEN')     { map[code].openCount++;     map[code].totalRemaining+=parseFloat(r.remainingLength)||0; }
+    else if(st==='UNOPENED'){ map[code].unopenedCount++; }
+    else if(st==='CONSUMED'){ map[code].consumedCount++; }
   });
-  grid.innerHTML=h;
+  return Object.values(map).sort(function(a,b){ return a.materialCode.localeCompare(b.materialCode); });
 }
 
+/* ── Render groups ── */
+function d_renderGroups(groups, threshold, lowFt){
+  var el=document.getElementById('d-groups');
+  if(!groups.length){
+    el.innerHTML='<div class="bg-white rounded-xl border border-gray-200 p-12 text-center text-sm" style="color:#9ca3af;">No rolls found.</div>';
+    return;
+  }
+  var canOpen=d_userRole.includes('admin')||d_userRole.includes('stl')||
+              d_userRole.includes('senior team leader')||d_userRole.includes('atl')||
+              d_userRole.includes('admin team leader');
+
+  var h='';
+  groups.forEach(function(g){
+    var isWarn=g.totalRemaining<lowFt&&(g.openCount+g.unopenedCount)>0;
+    if(d_expandState[g.materialCode]===undefined){
+      d_expandState[g.materialCode]=(g.openCount>0||isWarn);
+    }
+    var expanded=d_expandState[g.materialCode];
+    var safeCode=g.materialCode.replace(/[^a-zA-Z0-9_-]/g,'_');
+
+    h+='<div class="d-mat-group'+(expanded?'':' collapsed')+'" id="dg-'+safeCode+'" data-code="'+d_esc(g.materialCode)+'">';
+
+    // Header
+    h+='<div class="d-mat-header'+(isWarn?' warn':'')+'" onclick="d_toggleGroup(\''+safeCode+'\')">';
+    h+='<svg class="d-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+      +'<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
+    h+='<div class="d-mat-title">'+d_esc(g.materialCode)+'</div>';
+    h+='<div class="d-mat-pills">';
+    if(g.openCount)     h+='<span class="d-mpill d-mpill-open">'+g.openCount+' open</span>';
+    if(g.unopenedCount) h+='<span class="d-mpill d-mpill-unop">'+g.unopenedCount+' sealed</span>';
+    if(g.consumedCount) h+='<span class="d-mpill d-mpill-cons">'+g.consumedCount+' used</span>';
+    if(isWarn)          h+='<span class="d-mpill d-mpill-warn">⚠ low</span>';
+    h+='</div>';
+    if(g.openCount>0){
+      h+='<div class="d-mat-remain" style="color:'+(isWarn?'#dc2626':'#15803d')+'!important;">'
+        +g.totalRemaining.toFixed(1)+' ft</div>';
+    }
+    h+='</div>'; // end header
+
+    // Roll grid
+    h+='<div class="d-mat-grid">';
+    var sorted=g.rolls.slice().sort(function(a,b){
+      var o={OPEN:0,UNOPENED:1,CONSUMED:2};
+      return (o[(a.status||'').toUpperCase()]||1)-(o[(b.status||'').toUpperCase()]||1);
+    });
+    sorted.forEach(function(r){
+      var hl=d_health(r,threshold);
+      var hc=d_hColor(hl),hb=d_hBg(hl),pct=d_pct(r);
+      var bc=hl==='green'?'#16a34a':hl==='yellow'?'#ca8a04':hl==='red'?'#dc2626':'#9ca3af';
+      var consumed=r.status==='CONSUMED';
+      var sc=r.status==='OPEN'     ?'background:#dcfce7;color:#166534;'
+            :r.status==='UNOPENED' ?'background:#f3f4f6;color:#374151;'
+            :r.status==='CONSUMED' ?'background:#f1f5f9;color:#94a3b8;'
+            :                       'background:#dbeafe;color:#1e40af;';
+
+      h+='<div class="roll-card bg-white rounded-xl border border-gray-200 p-4 space-y-3"'+(consumed?' style="opacity:.55;"':'')+' >';
+      h+='<div class="flex items-start justify-between gap-2">';
+      h+='<div><span class="text-sm font-bold">'+d_esc(r.rollId)+'</span><br>'
+        +'<span class="text-xs" style="color:#6b7280;">'+d_esc(r.materialCode)+'</span></div>';
+      h+='<span class="text-xs font-bold px-2 py-0.5 rounded-full" style="'+sc+'">'+r.status+'</span></div>';
+      h+='<div class="grid grid-cols-3 gap-2 text-xs">';
+      h+='<div class="bg-slate-50 rounded-lg px-2 py-2 text-center"><div class="font-bold text-sm">'+r.width+' ft</div><div style="color:#6b7280;">Width</div></div>';
+      h+='<div class="rounded-lg px-2 py-2 text-center" style="background:'+hb+';">'
+        +'<div class="font-bold text-sm" style="color:'+hc+';">'+r.remainingLength+' ft</div>'
+        +'<div style="color:'+hc+';">Remaining</div></div>';
+      h+='<div class="bg-slate-50 rounded-lg px-2 py-2 text-center"><div class="font-bold text-sm">'+r.originalLength+' ft</div><div style="color:#6b7280;">Original</div></div>';
+      h+='</div>';
+      if(!consumed&&r.status!=='UNOPENED'){
+        h+='<div><div class="flex justify-between text-xs mb-1" style="color:#6b7280;"><span>Roll fill</span><span>'+pct+'%</span></div>'
+          +'<div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+bc+';"></div></div></div>';
+      }
+      if(r.dateReceived) h+='<p class="text-xs" style="color:#9ca3af;">Received: '+d_esc(r.dateReceived)+'</p>';
+      if(canOpen&&r.status==='UNOPENED'){
+        h+='<button data-id="'+d_esc(r.rollId)+'" onclick="d_openModal(this.getAttribute(\'data-id\'))"'
+          +' class="w-full py-2.5 rounded-xl text-sm font-semibold text-white" style="background:#15803d;">🔓 Open Roll</button>';
+      }
+      h+='</div>';
+    });
+    h+='</div>'; // mat-grid
+    h+='</div>'; // mat-group
+  });
+  el.innerHTML=h;
+}
+
+/* ── Toggle collapse ── */
+function d_toggleGroup(safeCode){
+  var el=document.getElementById('dg-'+safeCode);
+  if(!el)return;
+  var code=el.getAttribute('data-code');
+  var wasCollapsed=el.classList.contains('collapsed');
+  el.classList.toggle('collapsed');
+  d_expandState[code]=wasCollapsed;
+}
+
+/* ── Summary + render ── */
 function d_render(){
   var total=d_rolls.length;
   var open=d_rolls.filter(function(r){return r.status==='OPEN';}).length;
@@ -187,8 +339,10 @@ function d_render(){
   var t=parseFloat(d_settings.near_empty_threshold_ft)||30;
   var near=d_rolls.filter(function(r){return r.status==='OPEN'&&r.remainingLength<=t&&r.remainingLength>0;}).length;
   document.getElementById('d-summary').innerHTML=
-    d_card(total,'Total','#4f46e5','#eef2ff')+d_card(open,'Open','#15803d','#f0fdf4')+
-    d_card(unop,'Unopened','#374151','#f3f4f6')+d_card(near,'Near Empty ⚠','#ca8a04','#fef9c3');
+    d_card(total,'Total','#4f46e5','#eef2ff')
+    +d_card(open,'Open','#15803d','#f0fdf4')
+    +d_card(unop,'Unopened','#374151','#f3f4f6')
+    +d_card(near,'Near Empty ⚠','#ca8a04','#fef9c3');
   d_apply();
 }
 function d_card(v,l,tc,bg){
@@ -196,14 +350,27 @@ function d_card(v,l,tc,bg){
     +'<div class="text-2xl font-bold" style="color:'+tc+';">'+v+'</div>'
     +'<div class="text-xs font-semibold mt-0.5" style="color:'+tc+';">'+l+'</div></div>';
 }
+function d_health(r,t){
+  if(r.status==='CONSUMED') return 'red';
+  if(r.status==='UNOPENED') return 'grey';
+  if(r.remainingLength<=0)  return 'red';
+  if(r.remainingLength<=t)  return 'yellow';
+  return 'green';
+}
+function d_hColor(h){return h==='green'?'#16a34a':h==='yellow'?'#ca8a04':h==='red'?'#dc2626':'#9ca3af';}
+function d_hBg(h)   {return h==='green'?'#dcfce7':h==='yellow'?'#fef9c3':h==='red'?'#fee2e2':'#f3f4f6';}
+function d_pct(r)   {if(!r.originalLength)return 0;return Math.min(100,Math.round(r.remainingLength/r.originalLength*100));}
+function d_esc(s)   {return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function d_error(msg){
-  document.getElementById('d-grid').innerHTML='<div style="grid-column:1/-1;" class="bg-white rounded-xl border border-gray-200 p-12 text-center text-sm" style="color:#ef4444;">Error: '+d_esc(msg)+'</div>';
+  document.getElementById('d-groups').innerHTML=
+    '<div class="bg-white rounded-xl border border-gray-200 p-12 text-center text-sm" style="color:#ef4444;">Error: '+d_esc(msg)+'</div>';
 }
 
-/* Open modal */
+/* ── Open Roll Modal (same as v2) ── */
 function d_openModal(rollId){
   d_pendingRoll=rollId;
-  var r=null;for(var i=0;i<d_rolls.length;i++){if(d_rolls[i].rollId===rollId){r=d_rolls[i];break;}}
+  var r=null;
+  for(var i=0;i<d_rolls.length;i++){if(d_rolls[i].rollId===rollId){r=d_rolls[i];break;}}
   if(!r)return;
   document.getElementById('d-modalSub').textContent=rollId;
   document.getElementById('d-modalDetails').innerHTML=
@@ -215,10 +382,19 @@ function d_openModal(rollId){
 function d_closeModal(){document.getElementById('d-openModal').classList.remove('open');d_pendingRoll=null;}
 function d_confirmOpen(){
   if(!d_pendingRoll)return;
-  var btn=document.getElementById('d-openBtn');btn.disabled=true;btn.textContent='Opening…';
+  var btn=document.getElementById('d-openBtn');
+  btn.disabled=true;btn.textContent='Opening…';
   google.script.run
-    .withSuccessHandler(function(r){btn.disabled=false;btn.textContent='Yes, Open Roll';d_closeModal();if(r.success){prism_toast('success',r.message);prism_reloadDashboard();}else prism_toast('error',r.message);})
-    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Yes, Open Roll';prism_toast('error',e.message);})
+    .withSuccessHandler(function(r){
+      btn.disabled=false;btn.textContent='Yes, Open Roll';
+      d_closeModal();
+      if(r.success){prism_toast('success',r.message);prism_reloadDashboard();}
+      else prism_toast('error',r.message);
+    })
+    .withFailureHandler(function(e){
+      btn.disabled=false;btn.textContent='Yes, Open Roll';
+      prism_toast('error',e.message);
+    })
     .prism_openRoll(d_pendingRoll);
 }
 </script>

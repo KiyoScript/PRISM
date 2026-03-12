@@ -1,4 +1,4 @@
-<!-- PRISMSettings.html v2 -->
+<!-- PRISMSettings.html v3 — added Low Stock Threshold field -->
 <style>
   #tab-settings,#tab-settings *{color:#111827!important;}
   #tab-settings .text-white *{color:#fff!important;}
@@ -8,33 +8,75 @@
   .cfg2-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 14px;font-size:14px;color:#111827!important;outline:none;background:#fff;box-sizing:border-box;}
   .cfg2-input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.12);}
 </style>
+
 <div class="p-4 space-y-4 pb-10">
-  <div><h2 class="text-xl font-bold">Settings</h2><p class="text-sm mt-0.5" style="color:#6b7280;">Admin only — configure PRISM thresholds</p></div>
+  <div>
+    <h2 class="text-xl font-bold">Settings</h2>
+    <p class="text-sm mt-0.5" style="color:#6b7280;">Admin only — configure PRISM thresholds</p>
+  </div>
+
   <div id="cfg2-denied" style="display:none;background:#fee2e2;border:1px solid #fecaca;border-radius:12px;padding:14px;">
     <p class="text-sm font-semibold" style="color:#dc2626;">🔒 Admin access required.</p>
   </div>
+
   <div id="cfg2-form" style="display:none;">
+
+    <!-- Health Thresholds -->
     <div class="cfg2-card">
-      <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">Health Threshold</p>
-      <div class="mb-4">
+      <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">Health Thresholds</p>
+
+      <!-- Near Empty -->
+      <div class="mb-5">
         <label class="cfg2-label">Near Empty Threshold (ft) <span style="color:#ef4444;">*</span></label>
         <input type="number" id="cfg2-threshold" class="cfg2-input" min="1" step="1" placeholder="e.g. 30">
-        <p class="text-xs mt-1" style="color:#6b7280;">Rolls at or below this length show <strong style="color:#ca8a04;">yellow warning</strong>.</p>
+        <p class="text-xs mt-1" style="color:#6b7280;">Individual rolls at or below this length show <strong style="color:#ca8a04;">yellow warning</strong>.</p>
       </div>
+
+      <!-- Low Stock — NEW -->
+      <div class="mb-5">
+        <label class="cfg2-label">Low Stock Threshold (ft) <span style="color:#ef4444;">*</span></label>
+        <input type="number" id="cfg2-lowstock" class="cfg2-input" min="1" step="1" placeholder="e.g. 200">
+        <p class="text-xs mt-1" style="color:#6b7280;">
+          Material group shows <strong style="color:#dc2626;">⚠ low</strong> warning when
+          <strong>total usable length</strong> (open remaining + sealed full length) falls below this value.
+        </p>
+      </div>
+
+      <!-- Color guide -->
       <div class="space-y-2">
-        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#dcfce7;"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;flex-shrink:0;display:inline-block;"></span><span class="text-sm font-semibold" style="color:#166534;">Green — Healthy (above threshold)</span></div>
-        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#fef9c3;"><span style="width:8px;height:8px;border-radius:50%;background:#ca8a04;flex-shrink:0;display:inline-block;"></span><span class="text-sm font-semibold" style="color:#854d0e;">Yellow — Near Empty (at/below threshold)</span></div>
-        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#fee2e2;"><span style="width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0;display:inline-block;"></span><span class="text-sm font-semibold" style="color:#991b1b;">Red — Consumed (0 ft)</span></div>
+        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#dcfce7;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;flex-shrink:0;display:inline-block;"></span>
+          <span class="text-sm font-semibold" style="color:#166534;">Green — Healthy (above near-empty threshold)</span>
+        </div>
+        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#fef9c3;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#ca8a04;flex-shrink:0;display:inline-block;"></span>
+          <span class="text-sm font-semibold" style="color:#854d0e;">Yellow — Near Empty (at/below near-empty threshold)</span>
+        </div>
+        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#fee2e2;">
+          <span style="width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0;display:inline-block;"></span>
+          <span class="text-sm font-semibold" style="color:#991b1b;">Red — Consumed (0 ft remaining)</span>
+        </div>
+        <div class="flex items-center gap-3 px-3 py-2 rounded-lg" style="background:#fef9c3;border:1px solid #fde68a;">
+          <span style="font-size:13px;">⚠</span>
+          <span class="text-sm font-semibold" style="color:#92400e;">Low Stock — material group total usable length below threshold</span>
+        </div>
       </div>
     </div>
+
+    <!-- Auto Behavior -->
     <div class="cfg2-card">
       <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">Auto Behavior</p>
       <div class="flex items-center justify-between">
-        <div><p class="text-sm font-semibold">Auto-Consume on Zero</p><p class="text-xs mt-0.5" style="color:#6b7280;">Mark roll as CONSUMED when remaining length hits 0.</p></div>
+        <div>
+          <p class="text-sm font-semibold">Auto-Consume on Zero</p>
+          <p class="text-xs mt-0.5" style="color:#6b7280;">Mark roll as CONSUMED when remaining length hits 0.</p>
+        </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;">
           <input type="checkbox" id="cfg2-auto" style="opacity:0;width:0;height:0;">
-          <span id="cfg2-track" onclick="cfg2_toggleAuto()" style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:12px;background:#d1d5db;transition:background .2s;">
-            <span id="cfg2-thumb" style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></span>
+          <span id="cfg2-track" onclick="cfg2_toggleAuto()"
+            style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;border-radius:12px;background:#d1d5db;transition:background .2s;">
+            <span id="cfg2-thumb"
+              style="position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></span>
           </span>
         </label>
       </div>
@@ -44,11 +86,26 @@
     <div class="cfg2-card">
       <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">PRISM Database Sheets</p>
       <div class="space-y-2 text-sm">
-        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;"><span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">JobOrders</span><span style="color:#374151;">JO_Number, Customer, JobDescription, Category, Width, Height, Qty, ProductionType, PlottingLink, Status, RollID, CreatedBy, DateCreated</span></div>
-        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;"><span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">LFP_Materials</span><span style="color:#374151;">MaterialCode, MaterialName, Width, StandardLength, Supplier, CostPerRoll</span></div>
-        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;"><span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">LFP_Rolls</span><span style="color:#374151;">RollID, MaterialCode, Width, OriginalLength, RemainingLength, Status, DateReceived, DateOpened, OpenedBy</span></div>
-        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;"><span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">LFP_Usage</span><span style="color:#374151;">UsageID, JO_Number, RollID, WidthUsed, LengthUsed, Operator, PlottingLink, DateUsed</span></div>
-        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;"><span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">Plotting_Log</span><span style="color:#374151;">PlotID, JO_Number, PlottingSheetLink, Operator, DatePlotted, Remarks</span></div>
+        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">JobOrders</span>
+          <span style="color:#374151;">JO_Number, Customer, JobDescription, Category, Width, Height, Qty, ProductionType, PlottingLink, Status, RollID, CreatedBy, DateCreated</span>
+        </div>
+        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">LFP_Materials</span>
+          <span style="color:#374151;">MaterialCode, MaterialName, Width, StandardLength, Supplier, CostPerRoll</span>
+        </div>
+        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">LFP_Rolls</span>
+          <span style="color:#374151;">RollID, MaterialCode, Width, OriginalLength, RemainingLength, Status, DateReceived, DateOpened, OpenedBy</span>
+        </div>
+        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">LFP_Usage</span>
+          <span style="color:#374151;">UsageID, JO_Number, RollID, WidthUsed, LengthUsed, Operator, PlottingLink, DateUsed</span>
+        </div>
+        <div class="flex items-start gap-3 px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <span class="font-bold px-2 py-0.5 rounded text-xs" style="background:#e0e7ff;color:#3730a3;white-space:nowrap;">Plotting_Log</span>
+          <span style="color:#374151;">PlotID, JO_Number, PlottingSheetLink, Operator, DatePlotted, Remarks</span>
+        </div>
       </div>
     </div>
 
@@ -56,44 +113,84 @@
     <div class="cfg2-card">
       <p class="text-xs font-bold uppercase tracking-wide mb-4" style="color:#6b7280;">Role Permissions</p>
       <div class="space-y-2 text-sm">
-        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#f0fdf4;"><strong style="color:#15803d;">Admin</strong><span style="color:#374151;">Full access — all tabs + settings</span></div>
-        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#f8fafc;"><strong>Admin Team Leader</strong><span style="color:#374151;">Stock In + Materials + Dashboard</span></div>
-        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#f8fafc;"><strong>Senior Team Leader</strong><span style="color:#374151;">Open Rolls + Dashboard</span></div>
-        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#fdf4ff;"><strong style="color:#7c3aed;">Digital Operator</strong><span style="color:#374151;">Record Usage + Job Orders + Dashboard</span></div>
+        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#f0fdf4;">
+          <strong style="color:#15803d;">Admin</strong>
+          <span style="color:#374151;">Full access — all tabs + settings</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <strong>Admin Team Leader</strong>
+          <span style="color:#374151;">Stock In + Materials + Dashboard</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#f8fafc;">
+          <strong>Senior Team Leader</strong>
+          <span style="color:#374151;">Open Rolls + Dashboard</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:#fdf4ff;">
+          <strong style="color:#7c3aed;">Digital Operator</strong>
+          <span style="color:#374151;">Record Usage + Job Orders + Dashboard</span>
+        </div>
       </div>
     </div>
 
-    <button id="cfg2-saveBtn" onclick="cfg2_save()" class="w-full py-4 rounded-xl text-base font-bold text-white" style="background:#4f46e5;">Save Settings</button>
+    <button id="cfg2-saveBtn" onclick="cfg2_save()"
+      class="w-full py-4 rounded-xl text-base font-bold text-white"
+      style="background:#4f46e5;">Save Settings</button>
   </div>
 </div>
+
 <script>
-var cfg2_auto=true;
-function prism_init_settings(){
+var cfg2_auto = true;
+
+function prism_init_settings() {
   google.script.run
-    .withSuccessHandler(function(r){
-      var role=((r.user&&r.user.role)||'').toLowerCase();
-      if(!role.includes('admin')){document.getElementById('cfg2-denied').style.display='block';return;}
-      document.getElementById('cfg2-form').style.display='block';
-      var s=r.settings||{};
-      document.getElementById('cfg2-threshold').value=s.near_empty_threshold_ft||30;
-      cfg2_auto=s.auto_consume_on_zero!=='false';
+    .withSuccessHandler(function(r) {
+      var role = ((r.user && r.user.role) || '').toLowerCase();
+      if (!role.includes('admin')) {
+        document.getElementById('cfg2-denied').style.display = 'block';
+        return;
+      }
+      document.getElementById('cfg2-form').style.display = 'block';
+      var s = r.settings || {};
+      document.getElementById('cfg2-threshold').value = s.near_empty_threshold_ft  || 30;
+      document.getElementById('cfg2-lowstock').value  = s.low_stock_threshold_ft   || 200;
+      cfg2_auto = s.auto_consume_on_zero !== 'false';
       cfg2_updateToggle();
     })
-    .withFailureHandler(function(){})
+    .withFailureHandler(function() {})
     .prism_getInitData();
 }
-function cfg2_toggleAuto(){cfg2_auto=!cfg2_auto;cfg2_updateToggle();}
-function cfg2_updateToggle(){
-  document.getElementById('cfg2-track').style.background=cfg2_auto?'#15803d':'#d1d5db';
-  document.getElementById('cfg2-thumb').style.transform=cfg2_auto?'translateX(20px)':'translateX(0)';
+
+function cfg2_toggleAuto() { cfg2_auto = !cfg2_auto; cfg2_updateToggle(); }
+function cfg2_updateToggle() {
+  document.getElementById('cfg2-track').style.background  = cfg2_auto ? '#15803d' : '#d1d5db';
+  document.getElementById('cfg2-thumb').style.transform   = cfg2_auto ? 'translateX(20px)' : 'translateX(0)';
 }
-function cfg2_save(){
-  var t=parseFloat(document.getElementById('cfg2-threshold').value);
-  if(!t||t<1){prism_toast('error','Threshold must be ≥ 1 ft.');return;}
-  var btn=document.getElementById('cfg2-saveBtn');btn.disabled=true;btn.textContent='Saving…';
+
+function cfg2_save() {
+  var t  = parseFloat(document.getElementById('cfg2-threshold').value);
+  var ls = parseFloat(document.getElementById('cfg2-lowstock').value);
+
+  if (!t  || t  < 1) { prism_toast('error', 'Near Empty Threshold must be ≥ 1 ft.'); return; }
+  if (!ls || ls < 1) { prism_toast('error', 'Low Stock Threshold must be ≥ 1 ft.');  return; }
+  if (ls <= t)       { prism_toast('error', 'Low Stock Threshold must be greater than Near Empty Threshold.'); return; }
+
+  var btn = document.getElementById('cfg2-saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
   google.script.run
-    .withSuccessHandler(function(r){btn.disabled=false;btn.textContent='Save Settings';if(r.success)prism_toast('success',r.message);else prism_toast('error',r.message);})
-    .withFailureHandler(function(e){btn.disabled=false;btn.textContent='Save Settings';prism_toast('error',e.message);})
-    .prism_updateSettings({nearEmptyThreshold:t,autoConsumeOnZero:cfg2_auto});
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Save Settings';
+      if (r.success) prism_toast('success', r.message);
+      else           prism_toast('error', r.message);
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Save Settings';
+      prism_toast('error', e.message);
+    })
+    .prism_updateSettings({
+      nearEmptyThreshold: t,
+      lowStockThreshold:  ls,
+      autoConsumeOnZero:  cfg2_auto
+    });
 }
 </script>
