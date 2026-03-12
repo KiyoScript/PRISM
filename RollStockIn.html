@@ -99,7 +99,7 @@
 </div>
 
 <script>
-var si4_mats = [], si4_selMat = null;
+var si4_mats = [], si4_selMat = null, si4_lastBatch = null;
 
 function prism_init_stock_in() {
   si4_loadMats();
@@ -209,9 +209,35 @@ function si4_submit() {
       var res = document.getElementById('si4-result');
       res.style.display = 'block';
       if (r.success) {
-        res.className = 'p-alert p-alert-success';
-        res.innerHTML = '<svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>'
-          + '<div><strong>' + si4_esc(r.message) + '</strong><br><span style="font-size:12px;">IDs: <span class="mono">' + (r.rollIds || []).join(', ') + '</span></span></div>';
+        var rollIds   = r.rollIds || [];
+        var matCode   = r.materialCode   || '';
+        var matName   = r.materialName   || '';
+        var matWidth  = r.width          || '';
+        var matLength = r.originalLength || '';
+
+        res.style.cssText = 'display:block;background:var(--p-green-lt);border:1.5px solid var(--p-green-bd);border-radius:12px;padding:16px;';
+        res.innerHTML =
+          '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;">'
+          + '<svg width="16" height="16" fill="none" stroke="var(--p-green)" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:2px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>'
+          + '<div><p style="font-weight:800;font-size:14px;color:var(--p-green);margin:0 0 3px;">' + si4_esc(r.message) + '</p>'
+          + '<p style="font-size:12px;color:var(--p-muted);margin:0;">IDs: <span class="mono" style="color:var(--p-text);">' + rollIds.join(', ') + '</span></p></div>'
+          + '</div>'
+          + '<button onclick="si4_printLabels(si4_lastBatch)"'
+          + ' class="p-btn p-btn-green" style="width:100%;padding:12px;font-size:13px;gap:8px;">'
+          + '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>'
+          + '\u{1F5A8} Print Roll Labels (' + rollIds.length + ' label' + (rollIds.length !== 1 ? 's' : '') + ')'
+          + '</button>';
+
+        // Store batch data for print function
+        si4_lastBatch = {
+          rollIds:   rollIds,
+          matCode:   matCode,
+          matName:   matName,
+          matWidth:  matWidth,
+          matLength: matLength,
+          date:      new Date().toLocaleDateString('en-PH', {year:'numeric',month:'short',day:'numeric'})
+        };
+
         prism_toast('success', r.message);
         si4_selMat = null;
         ['si4-selCard','si4-qtySection','si4-preview'].forEach(function(id) { document.getElementById(id).style.display = 'none'; });
@@ -230,6 +256,97 @@ function si4_submit() {
     .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = 'Stock In Rolls'; si4_updatePreview(); prism_toast('error', e.message); })
     .prism_stockIn({ materialCode: si4_selMat.materialCode, width: si4_selMat.width, originalLength: si4_selMat.standardLength, qty: qty,
       batchRef: document.getElementById('si4-batchRef').value.trim(), notes: document.getElementById('si4-notes').value.trim() });
+}
+
+
+/* ── Print Roll Labels ── */
+function si4_printLabels(batch) {
+  if (!batch || !batch.rollIds || !batch.rollIds.length) {
+    prism_toast('error', 'No roll IDs to print.'); return;
+  }
+
+  var today    = batch.date || new Date().toLocaleDateString();
+  var matCode  = batch.matCode  || '';
+  var matName  = batch.matName  || '';
+  var matWidth = batch.matWidth || '';
+  var matLen   = batch.matLength|| '';
+  var dim      = (matWidth && matLen) ? matWidth + ' ft × ' + matLen + ' ft' : '';
+
+  // Build one label per roll ID
+  var labelsHtml = batch.rollIds.map(function(id) {
+    return [
+      '<div class="label">',
+        '<div class="label-top">',
+          '<span class="label-brand">PRISM</span>',
+          '<span class="label-status">UNOPENED</span>',
+        '</div>',
+        '<div class="label-id">' + id + '</div>',
+        '<div class="label-mat">' + matName + '</div>',
+        '<div class="label-dim">' + dim + '</div>',
+        '<div class="label-date">Rcvd: ' + today + '</div>',
+        '<div class="label-barcode">' + id.replace(/-/g, ' ― ') + '</div>',
+      '</div>'
+    ].join('');
+  }).join('');
+
+  var html = [
+    '<!DOCTYPE html><html><head>',
+    '<meta charset="UTF-8">',
+    '<title>PRISM Roll Labels — ' + matCode + '</title>',
+    '<style>',
+      '@page { size: A4; margin: 10mm; }',
+      'body { font-family: "Segoe UI", system-ui, sans-serif; background:#fff; margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }',
+      '.page-header { display:flex; align-items:center; justify-content:space-between; padding:0 0 10px; border-bottom:2px solid #15803d; margin-bottom:14px; }',
+      '.page-header h1 { font-size:15px; font-weight:800; color:#15803d; margin:0; }',
+      '.page-header p  { font-size:11px; color:#6b7280; margin:0; text-align:right; }',
+      '.grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }',
+      '.label {',
+        'border:1.5px solid #15803d; border-radius:8px; padding:10px 12px;',
+        'background:#fff; page-break-inside:avoid; break-inside:avoid;',
+        'box-shadow:inset 0 0 0 3px #f0fdf4;',
+      '}',
+      '.label-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }',
+      '.label-brand { font-size:9px; font-weight:900; letter-spacing:.1em; color:#0d9488; text-transform:uppercase; }',
+      '.label-status { font-size:8px; font-weight:800; background:#f0fdf4; color:#15803d; border:1px solid #86efac; border-radius:4px; padding:1px 6px; letter-spacing:.04em; }',
+      '.label-id { font-family:monospace; font-size:17px; font-weight:900; color:#111827; letter-spacing:.04em; margin-bottom:4px; line-height:1.1; }',
+      '.label-mat { font-size:9px; font-weight:600; color:#374151; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
+      '.label-dim { font-size:10px; font-weight:800; color:#0d9488; margin-bottom:3px; }',
+      '.label-date { font-size:8px; color:#9ca3af; margin-bottom:5px; }',
+      '.label-barcode { font-family:monospace; font-size:7px; color:#d1d5db; letter-spacing:.06em; border-top:1px dashed #e5e7eb; padding-top:4px; margin-top:2px; text-align:center; }',
+      '.cut-hint { font-size:9px; color:#9ca3af; text-align:center; margin-top:12px; padding-top:8px; border-top:1px dashed #e5e7eb; }',
+      '@media print {',
+        '.no-print { display:none !important; }',
+        'body { padding:0; }',
+      '}',
+    '</style>',
+    '</head><body>',
+    '<div class="no-print" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">',
+      '<div>',
+        '<strong style="color:#15803d;font-size:14px;">Roll Labels Ready to Print</strong>',
+        '<p style="font-size:12px;color:#374151;margin:3px 0 0;">' + batch.rollIds.length + ' labels — ' + matCode + ' ' + dim + '</p>',
+      '</div>',
+      '<div style="display:flex;gap:8px;">',
+        '<button onclick="window.print()" style="background:#15803d;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;">&#128438; Print</button>',
+        '<button onclick="window.close()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;">Close</button>',
+      '</div>',
+    '</div>',
+    '<div class="page-header">',
+      '<h1>&#127807; PRISM — Roll Labels</h1>',
+      '<p>' + matCode + ' — ' + matName + '<br>Printed: ' + today + '</p>',
+    '</div>',
+    '<div class="grid">',
+    labelsHtml,
+    '</div>',
+    '<p class="cut-hint">&#9986; Cut along label borders and affix to each roll. All rolls status: UNOPENED.</p>',
+    '</body></html>'
+  ].join('');
+
+  var win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { prism_toast('error', 'Pop-up blocked. Please allow pop-ups for this site.'); return; }
+  win.document.write(html);
+  win.document.close();
+  // Auto-trigger print dialog after a short delay
+  win.onload = function() { setTimeout(function() { win.print(); }, 400); };
 }
 
 function si4_esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
