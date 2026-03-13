@@ -583,7 +583,8 @@ function prism_getAllJobOrders_() {
       rollId:         String(r[JO_COL.ROLL_ID]||'').trim(),
       createdBy:      String(r[JO_COL.CREATED_BY]||'').trim(),
       dateCreated:    prism_fmtShort_(r[JO_COL.DATE_CREATED])
-    }));
+    }))
+    .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 }
 function prism_getJobOrdersPublic() {
   try { return { success:true, data:prism_getAllJobOrders_() }; }

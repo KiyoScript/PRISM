@@ -104,7 +104,9 @@ function jo3_loadData() {
     .withSuccessHandler(function(r) {
       prism_setReloading('jo3-reloadBtn', false);
       if (r && r.success) {
-        jo3_all = r.data || [];
+        jo3_all = (r.data || []).sort(function(a, b) {
+          return new Date(b.dateCreated) - new Date(a.dateCreated);
+        });
         jo3_page = 1;
         jo3_apply();
       } else {
