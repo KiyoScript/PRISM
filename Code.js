@@ -172,37 +172,98 @@ function prism_audit_(action, payload) {
 }
 
 // ============================================================
-//  SETTINGS
+//  PATCHED SECTION — Add/Replace in PRISMCode.gs
+//
+//  PRISM_Settings sheet structure (2 columns):
+//    Col A = key   (e.g. "near_empty_threshold_ft")
+//    Col B = value (e.g. "30")
+//
+//  Keys used:
+//    near_empty_threshold_ft
+//    low_stock_threshold_ft
+//    auto_consume_on_zero
 // ============================================================
+ 
+// ── Private helper: read all settings as a plain object ──────
 function prism_getSettings_() {
   try {
-    const sh = prism_sh_(PRISM_SHEETS.SETTINGS);
-    const lr = sh.getLastRow();
-    if (lr < 2) return { near_empty_threshold_ft: '30', auto_consume_on_zero: 'true' };
-    const rows = sh.getRange(2,1,lr-1,2).getValues();
+    const sh   = prism_sh_(PRISM_SHEETS.SETTINGS);
+    const lr   = sh.getLastRow();
     const out  = {};
-    rows.forEach(r => { if (r[0]) out[String(r[0]).trim()] = String(r[1]).trim(); });
+    if (lr < 1) return out;
+ 
+    const data = sh.getRange(1, 1, lr, 2).getValues();
+    data.forEach(function(row) {
+      const key = String(row[0]).trim();
+      const val = String(row[1]).trim();
+      if (key) out[key] = val;
+    });
     return out;
-  } catch(e) { return { near_empty_threshold_ft: '30', auto_consume_on_zero: 'true' }; }
+  } catch(e) {
+    return {};
+  }
 }
+
+// ── Private helper: upsert a single key in PRISM_Settings ──────
+function prism_setSetting_(key, value) {
+  const sh  = prism_sh_(PRISM_SHEETS.SETTINGS);
+  const lr  = sh.getLastRow();
+ 
+  if (lr >= 1) {
+    const data = sh.getRange(1, 1, lr, 1).getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === key) {
+        sh.getRange(i + 1, 2).setValue(String(value)); // update existing row
+        return;
+      }
+    }
+  }
+  // Key not found — append new row
+  sh.getRange(lr + 1, 1, 1, 2).setValues([[key, String(value)]]);
+}
+
+
+// ── Public: called by PRISMSettings.html cfg_save() ──────────
 function prism_updateSettings(payload) {
   try {
     const user = prism_getUserInfo_();
-    if (!prism_isAdmin_(user.role)) return { success: false, message: 'Admins only.' };
-    const sh = prism_sh_(PRISM_SHEETS.SETTINGS);
-    const lr = sh.getLastRow();
-    const rows = sh.getRange(2,1,lr-1,2).getValues();
-    rows.forEach((r,i) => {
-      const key = String(r[0]).trim();
-      if (key==='near_empty_threshold_ft' && payload.nearEmptyThreshold!==undefined)
-        sh.getRange(i+2,2).setValue(parseFloat(payload.nearEmptyThreshold));
-      if (key==='auto_consume_on_zero' && payload.autoConsumeOnZero!==undefined)
-        sh.getRange(i+2,2).setValue(payload.autoConsumeOnZero?'true':'false');
+    if (!prism_isAdmin_(user.role))
+      return { success: false, message: 'Admin access required.' };
+ 
+    const nearEmpty  = parseFloat(payload.nearEmptyThreshold);
+    const lowStock   = parseFloat(payload.lowStockThreshold);
+    const autoConsume = payload.autoConsumeOnZero;
+ 
+    // Validate
+    if (!nearEmpty || nearEmpty < 1)
+      return { success: false, message: 'Near Empty Threshold must be ≥ 1 ft.' };
+    if (!lowStock || lowStock < 1)
+      return { success: false, message: 'Low Stock Threshold must be ≥ 1 ft.' };
+    if (lowStock <= nearEmpty)
+      return { success: false, message: 'Low Stock must be greater than Near Empty.' };
+ 
+    // Write all three keys
+    prism_setSetting_('near_empty_threshold_ft', nearEmpty);
+    prism_setSetting_('low_stock_threshold_ft',  lowStock);
+    prism_setSetting_('auto_consume_on_zero',     autoConsume === true || autoConsume === 'true' ? 'true' : 'false');
+ 
+    prism_audit_('PRISM_UPDATE_SETTINGS', {
+      nearEmptyThreshold: nearEmpty,
+      lowStockThreshold:  lowStock,
+      autoConsumeOnZero:  autoConsume,
+      by: user.email
     });
-    prism_audit_('PRISM_UPDATE_SETTINGS', payload);
-    return { success: true, message: 'Settings saved.' };
-  } catch(e) { return { success: false, message: e.message }; }
+ 
+    return {
+      success: true,
+      message: `Settings saved. Near Empty: ${nearEmpty} ft, Low Stock: ${lowStock} ft.`
+    };
+ 
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
 }
+
 
 // ============================================================
 //  ROLL ID GENERATOR  →  MOD001-R01 format, auto-incremented
