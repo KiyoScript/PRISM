@@ -1065,7 +1065,9 @@ function pp_renderHistoryMap(L) {
   var priorUsedFt = 0;
   prior.forEach(function(seg) { priorUsedFt += parseFloat(seg.lengthUsed || 0) || 0; });
 
-  var currentStart = Math.max(0, rollLen - (parseFloat(plan.rollAvail) || 0) - (parseFloat(plan.totalLen) || 0));
+  // plan.rollAvail is the remaining length BEFORE applying this current plan.
+  // So the current plan must start at (originalLength - rollAvail), then extend by totalLen.
+  var currentStart = Math.max(0, rollLen - (parseFloat(plan.rollAvail) || 0));
   var currentEnd = Math.min(rollLen, currentStart + (parseFloat(plan.totalLen) || 0));
 
   var AX_L = 46;
