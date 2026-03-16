@@ -135,7 +135,7 @@
         <p id="pp-rollHint" style="font-size:11px;color:var(--p-teal);font-weight:600;margin:0 0 10px;display:none;">
           ✦ Suggested rolls highlighted based on selected JOs
         </p>
-        <div id="pp-rollList">
+        <div id="pp-rollList" style="max-height:300px;overflow-y:auto;">
           <div class="pp-empty">Loading open rolls…</div>
         </div>
       </div>
@@ -353,10 +353,21 @@ function pp_renderRolls() {
     var sug = r._suggested ? ' suggested' : '';
     var pct = r.originalLength > 0 ? Math.round(r.remainingLength / r.originalLength * 100) : 0;
     var bc  = pct > 50 ? 'var(--p-green)' : pct > 20 ? 'var(--p-amber)' : 'var(--p-red)';
+    var simMeta = '';
+    if (r._sim && r._sim.totalPieces > 0) {
+      if (r._sim.unsupportedPieces > 0) {
+        simMeta = '<div class="pp-roll-meta" style="color:var(--p-red);font-weight:700;">Cannot fit ' + r._sim.unsupportedPieces + ' piece(s) in width</div>';
+      } else if (r._sim.overflowFt > 0) {
+        simMeta = '<div class="pp-roll-meta" style="color:var(--p-amber);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft · overflow +' + r._sim.overflowFt.toFixed(1) + 'ft</div>';
+      } else {
+        simMeta = '<div class="pp-roll-meta" style="color:var(--p-teal);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft · waste ' + r._sim.wastePct + '%</div>';
+      }
+    }
     h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
       + '<div>'
       + '<div class="pp-roll-id">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">✦ Best Fit</span>' : '') + '</div>'
       + '<div class="pp-roll-meta">' + r.width + 'ft wide · ' + r.remainingLength + 'ft left</div>'
+      + simMeta
       + '</div>'
       + '<div style="text-align:right;">'
       + '<div style="font-size:12px;font-weight:800;color:' + bc + ';">' + pct + '%</div>'
@@ -377,24 +388,33 @@ function pp_selRollFn(rollId) {
 
 function pp_updateRollSuggestions() {
   var selJOList = pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
-  if (!selJOList.length) { pp_rolls.forEach(function(r){ r._suggested = false; }); pp_renderRolls(); return; }
-  var maxW = 0;
-  selJOList.forEach(function(j) {
-    var w = Math.min(parseFloat(j.width)||0, parseFloat(j.height)||0); // min dimension
-    var h = Math.max(parseFloat(j.width)||0, parseFloat(j.height)||0);
-    // if width (across roll) exceeds roll, try rotating: use min dimension as width
-    if (w > maxW) maxW = w;
-    if (h > maxW) maxW = h; // track both orientations
-  });
-  // Suggest rolls whose width >= smallest required width
+  if (!selJOList.length) {
+    pp_rolls.forEach(function(r){ r._suggested = false; r._sim = null; });
+    document.getElementById('pp-rollHint').style.display = 'none';
+    pp_renderRolls();
+    return;
+  }
+
   pp_rolls.forEach(function(r) {
-    var minNeeded = 0;
-    selJOList.forEach(function(j) {
-      var jw = Math.min(parseFloat(j.width)||0, parseFloat(j.height)||0);
-      if (jw > minNeeded) minNeeded = jw;
-    });
-    r._suggested = r.width >= minNeeded;
+    r._sim = pp_simulateRollPlan(selJOList, parseFloat(r.width)||0, parseFloat(r.remainingLength)||0, false);
+    r._suggested = false;
   });
+
+  var ranked = pp_rolls.slice().sort(function(a, b) {
+    var A = a._sim || {};
+    var B = b._sim || {};
+    var aUnsupported = A.unsupportedPieces > 0 ? 1 : 0;
+    var bUnsupported = B.unsupportedPieces > 0 ? 1 : 0;
+    if (aUnsupported !== bUnsupported) return aUnsupported - bUnsupported;
+    if ((A.overflowFt||0) !== (B.overflowFt||0)) return (A.overflowFt||0) - (B.overflowFt||0);
+    if ((A.wastePct||0) !== (B.wastePct||0)) return (A.wastePct||0) - (B.wastePct||0);
+    return (A.totalLen||0) - (B.totalLen||0);
+  });
+
+  if (ranked.length && ranked[0]._sim && ranked[0]._sim.unsupportedPieces === 0) {
+    ranked[0]._suggested = true;
+  }
+
   document.getElementById('pp-rollHint').style.display = 'block';
   pp_renderRolls();
 }
@@ -402,6 +422,136 @@ function pp_updateRollSuggestions() {
 function pp_checkArrangeBtn() {
   var hasSel = Object.keys(pp_selJOs).some(function(k){ return pp_selJOs[k]; });
   document.getElementById('pp-arrangeBtn').disabled = !(hasSel && pp_selRoll);
+}
+
+function pp_orientationsForSpace(p, rollWidth, spaceLeft) {
+  var out = [];
+  if (p.origW <= rollWidth && p.origW <= spaceLeft) out.push({ w: p.origW, h: p.origH, rotated: false });
+  if (p.origH <= rollWidth && p.origH <= spaceLeft && p.origH !== p.origW) out.push({ w: p.origH, h: p.origW, rotated: true });
+  return out;
+}
+
+function pp_maxFitWidth(p, rollWidth) {
+  var m = 0;
+  if (p.origW <= rollWidth) m = p.origW;
+  if (p.origH <= rollWidth && p.origH > m) m = p.origH;
+  return m;
+}
+
+function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
+  var pieces = [];
+  var colorSeed = Object.keys(pp_colors).length;
+
+  selJOList.forEach(function(j) {
+    var qty = parseInt(j.quantity, 10) || 1;
+    var jw  = parseFloat(j.width)  || 0;
+    var jh  = parseFloat(j.height) || 0;
+
+    if (withColors && !pp_colors[j.joNumber]) {
+      pp_colors[j.joNumber] = PP_PALETTE[colorSeed % PP_PALETTE.length];
+      colorSeed++;
+    }
+
+    for (var q = 0; q < qty; q++) {
+      pieces.push({
+        joNumber: j.joNumber,
+        customer: j.customer,
+        idx: q + 1,
+        qty: qty,
+        origW: jw,
+        origH: jh,
+        color: withColors ? pp_colors[j.joNumber] : null
+      });
+    }
+  });
+
+  // Start with widest-fit pieces first to reduce hard-to-place leftovers.
+  pieces.sort(function(a, b) { return pp_maxFitWidth(b, rollWidth) - pp_maxFitWidth(a, rollWidth); });
+
+  var rows = [];
+  var remaining = pieces.slice();
+  var unsupportedPieces = 0;
+
+  while (remaining.length > 0) {
+    var row = [];
+    var usedW = 0;
+    var rowH = 0;
+
+    while (true) {
+      var spaceLeft = rollWidth - usedW;
+      var bestIdx = -1;
+      var bestOr = null;
+      var bestScore = -999999;
+
+      for (var i = 0; i < remaining.length; i++) {
+        var p = remaining[i];
+        var ors = pp_orientationsForSpace(p, rollWidth, spaceLeft);
+        for (var oi = 0; oi < ors.length; oi++) {
+          var o = ors[oi];
+          var nextH = row.length ? Math.max(rowH, o.h) : o.h;
+          var heightPenalty = row.length ? (nextH - rowH) * 0.25 : 0;
+          var score = o.w - heightPenalty;
+          if (score > bestScore || (score === bestScore && (!bestOr || o.w > bestOr.w))) {
+            bestScore = score;
+            bestIdx = i;
+            bestOr = o;
+          }
+        }
+      }
+
+      if (bestIdx === -1) break;
+
+      var picked = remaining.splice(bestIdx, 1)[0];
+      picked.w = bestOr.w;
+      picked.h = bestOr.h;
+      picked.rotated = bestOr.rotated;
+      picked.oversized = false;
+      row.push(picked);
+      usedW += picked.w;
+      if (picked.h > rowH) rowH = picked.h;
+
+      if (rollWidth - usedW < 0.01) break;
+    }
+
+    if (!row.length) {
+      var forced = remaining.shift();
+      forced.w = Math.min(forced.origW, forced.origH);
+      forced.h = Math.max(forced.origW, forced.origH);
+      forced.rotated = false;
+      forced.oversized = true;
+      unsupportedPieces++;
+      row.push(forced);
+      usedW = forced.w;
+      rowH = forced.h;
+    }
+
+    rows.push({ pieces: row, usedW: usedW, rowH: rowH, wasteW: Math.max(0, rollWidth - usedW) });
+  }
+
+  var totalLen = 0;
+  var totalArea = 0;
+  var wasteArea = 0;
+  rows.forEach(function(r) {
+    totalLen += r.rowH;
+    totalArea += rollWidth * r.rowH;
+    wasteArea += r.wasteW * r.rowH;
+  });
+
+  var overflowFt = Math.max(0, totalLen - rollAvail);
+  var wastePct = totalArea > 0 ? Math.round(wasteArea / totalArea * 100) : 0;
+
+  return {
+    rows: rows,
+    rollWidth: rollWidth,
+    rollAvail: rollAvail,
+    totalLen: totalLen,
+    remaining: Math.max(0, rollAvail - totalLen),
+    overflow: overflowFt > 0,
+    overflowFt: overflowFt,
+    wastePct: wastePct,
+    totalPieces: pieces.length,
+    unsupportedPieces: unsupportedPieces
+  };
 }
 
 /* ══════════════════════════════════════════════
@@ -418,127 +568,26 @@ function pp_autoArrange() {
   var rollWidth = parseFloat(pp_selRoll.width);
   var rollAvail = parseFloat(pp_selRoll.remainingLength);
 
-  // Expand quantities into individual pieces
-  var pieces = [];
-  var colorIdx = 0;
-  selJOList.forEach(function(j) {
-    if (!pp_colors[j.joNumber]) {
-      pp_colors[j.joNumber] = PP_PALETTE[colorIdx % PP_PALETTE.length];
-      colorIdx++;
-    }
-    var qty = parseInt(j.quantity) || 1;
-    var jw  = parseFloat(j.width)  || 0;
-    var jh  = parseFloat(j.height) || 0;
-    for (var q = 0; q < qty; q++) {
-      pieces.push({ joNumber: j.joNumber, customer: j.customer, origW: jw, origH: jh, color: pp_colors[j.joNumber], idx: q+1, qty: qty });
-    }
-  });
-
-  // Assign orientation for each piece — always use origW/origH as source of truth
-  pieces.forEach(function(p) {
-    var w = p.origW, h = p.origH;
-    var canNormal  = w <= rollWidth;
-    var canRotated = h <= rollWidth;
-    if (canNormal && canRotated) {
-      // Both orientations fit — prefer whichever fills the roll width more
-      if (h > w) { p.w = h; p.h = w; p.rotated = true; }
-      else        { p.w = w; p.h = h; p.rotated = false; }
-    } else if (canRotated && !canNormal) {
-      // Only rotated fits
-      p.w = h; p.h = w; p.rotated = true;
-    } else if (canNormal && !canRotated) {
-      // Only normal fits
-      p.w = w; p.h = h; p.rotated = false;
-    } else {
-      // Neither fits — force smaller dim as width, flag oversized
-      p.w = Math.min(w, h); p.h = Math.max(w, h);
-      p.rotated = false; p.oversized = true;
-    }
-  });
-
-  // Sort by width descending so widest pieces go first
-  pieces.sort(function(a, b) { return b.w - a.w; });
-
-  // Smart row packing:
-  // For each row, after placing a piece, scan remaining pieces
-  // and try to fit more into the remaining width (First Fit)
-  var rows     = [];
-  var unpacked = pieces.slice();
-
-  while (unpacked.length > 0) {
-    var row      = [];
-    var usedW    = 0;
-    var rowH     = 0;
-    var remaining_pieces = [];
-
-    // Always start with the first (widest) unpacked piece
-    var first = unpacked[0];
-    if (first.w > rollWidth) {
-      // Oversized — try rotating using origH
-      if (first.origH <= rollWidth) {
-        first.w = first.origH;
-        first.h = first.origW;
-        first.rotated = true;
-        rows.push({ pieces:[first], usedW:first.w, rowH:first.h, wasteW: Math.max(0, rollWidth - first.w) });
-      } else {
-        rows.push({ pieces:[first], usedW:first.w, rowH:first.h, wasteW: Math.max(0, rollWidth - first.w), oversized:true });
-      }
-      unpacked.splice(0,1);
-      continue;
-    }
-
-    row.push(first);
-    usedW = first.w;
-    rowH  = first.h;
-
-    // Try to pack remaining pieces into leftover width
-    for (var pi = 1; pi < unpacked.length; pi++) {
-      var p = unpacked[pi];
-      var spaceLeft = rollWidth - usedW;
-
-      // Try current orientation first
-      if (p.w <= spaceLeft) {
-        row.push(p);
-        usedW += p.w;
-        if (p.h > rowH) rowH = p.h;
-      }
-      // Try rotating — use origW/origH to avoid double-rotation bugs
-      else if (p.origH <= spaceLeft && p.origH <= rollWidth) {
-        // Rotate: swap w and h from original dimensions
-        p.w = p.origH;
-        p.h = p.origW;
-        p.rotated = true;
-        row.push(p);
-        usedW += p.w;
-        if (p.h > rowH) rowH = p.h;
-      }
-      else {
-        remaining_pieces.push(p);
-      }
-    }
-
-    rows.push({ pieces:row, usedW:usedW, rowH:rowH, wasteW: rollWidth - usedW });
-    unpacked = remaining_pieces;
-  }
-
-  // Calculate totals
-  var totalLen  = 0;
-  rows.forEach(function(r) { totalLen += r.rowH; });
-  var overflow  = totalLen > rollAvail;
-  var remaining = Math.max(0, rollAvail - totalLen);
-  var totalArea = 0;
-  var wasteArea = 0;
-  rows.forEach(function(r) {
-    totalArea += rollWidth * r.rowH;
-    wasteArea += r.wasteW * r.rowH;
-  });
-  var wastePct = totalArea > 0 ? Math.round(wasteArea / totalArea * 100) : 0;
-  var totalPieces = pieces.length;
-
-  pp_layout = { rows: rows, rollWidth: rollWidth, rollAvail: rollAvail, totalLen: totalLen, remaining: remaining, overflow: overflow, wastePct: wastePct, totalPieces: totalPieces, roll: pp_selRoll };
+  var simulated = pp_simulateRollPlan(selJOList, rollWidth, rollAvail, true);
+  pp_layout = {
+    rows: simulated.rows,
+    rollWidth: simulated.rollWidth,
+    rollAvail: simulated.rollAvail,
+    totalLen: simulated.totalLen,
+    remaining: simulated.remaining,
+    overflow: simulated.overflow,
+    wastePct: simulated.wastePct,
+    totalPieces: simulated.totalPieces,
+    unsupportedPieces: simulated.unsupportedPieces,
+    roll: pp_selRoll
+  };
 
   pp_renderResults();
-  prism_toast('success', 'Layout arranged — ' + rows.length + ' rows, ' + totalLen.toFixed(1) + 'ft used');
+  if (simulated.unsupportedPieces > 0) {
+    prism_toast('error', 'Some pieces do not fit this roll width. Please pick a wider roll.');
+  } else {
+    prism_toast('success', 'Layout arranged — ' + simulated.rows.length + ' rows, ' + simulated.totalLen.toFixed(1) + 'ft used');
+  }
 }
 
 /* ── Render Results ── */
