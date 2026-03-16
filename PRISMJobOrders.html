@@ -206,7 +206,7 @@ function jo3_renderTable(data) {
     var size = (r.width && r.height) ? r.width + ' × ' + r.height + ' ft' : '—';
     var actionBtn = '';
     if (r.status === 'FOR_PLOTTING') {
-      actionBtn = '<button class="jo3-action-btn jo3-btn-plot" onclick="jo3_goToRecordUsage(\'' + jo3_esc(r.joNumber) + '\')">✏ Record Usage</button>';
+      actionBtn = '<button class="jo3-action-btn jo3-btn-plot" onclick="jo3_goToPlottingPlanner(\'' + jo3_esc(r.joNumber) + '\')">✦ Plot in Planner</button>';
     } else if (r.status === 'READY_TO_PRINT') {
       actionBtn = '<button class="jo3-action-btn jo3-btn-printing" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
     } else if (r.status === 'PRINTING') {
@@ -252,7 +252,7 @@ function jo3_renderCards(data) {
       actionHtml += '<button class="jo3-action-btn jo3-btn-pdf" style="width:100%;margin-top:8px;" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingPdfUrl) + '\')">📄 View PDF</button>';
     }
     if (r.status === 'FOR_PLOTTING') {
-      actionHtml += '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_goToRecordUsage(\'' + jo3_esc(r.joNumber) + '\')">✏ Record Usage</button>';
+      actionHtml += '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_goToPlottingPlanner(\'' + jo3_esc(r.joNumber) + '\')">✦ Plot in Planner</button>';
     } else if (r.status === 'READY_TO_PRINT') {
       actionHtml += '<button class="jo3-action-btn jo3-btn-printing" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
     } else if (r.status === 'PRINTING') {
@@ -325,8 +325,8 @@ function jo3_updateStatus(joNumber, newStatus, btn) {
     .prism_updateJOStatus(joNumber, newStatus);
 }
 
-function jo3_goToRecordUsage(joNumber) {
-  switchTab('usage');
+function jo3_goToPlottingPlanner(joNumber) {
+  switchTab('plotting');
 }
 
 function jo3_error(msg) {

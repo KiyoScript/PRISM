@@ -381,14 +381,6 @@
       <span class="sb-label">Stock In</span>
     </a>
 
-    <a href="#" class="nav-link" data-tab="usage">
-      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-      </svg>
-      <span class="sb-label">Record Usage</span>
-    </a>
-
     <div class="nav-divider"></div>
     <p class="sb-label nav-section">Operations</p>
 
@@ -414,14 +406,6 @@
           d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
       </svg>
       <span class="sb-label">Materials</span>
-    </a>
-
-    <a href="#" class="nav-link" data-tab="usage-log" id="nav-usage-log">
-      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0120 9.414V19a2 2 0 01-2 2z"/>
-      </svg>
-      <span class="sb-label">Usage Log</span>
     </a>
 
     <div class="nav-divider"></div>
@@ -450,11 +434,9 @@
 <main id="mainContent">
   <div id="tab-dashboard"  class="tab-pane active"><?!= include('RollDashboard') ?></div>
   <div id="tab-stock-in"   class="tab-pane"><?!= include('RollStockIn') ?></div>
-  <div id="tab-usage"      class="tab-pane"><?!= include('PRISM') ?></div>
   <div id="tab-job-orders" class="tab-pane"><?!= include('PRISMJobOrders') ?></div>
   <div id="tab-plotting"   class="tab-pane"><?!= include('PRISMPlotting') ?></div>
   <div id="tab-materials"  class="tab-pane"><?!= include('PRISMMaterials') ?></div>
-  <div id="tab-usage-log"  class="tab-pane"><?!= include('PRISMUsageLog') ?></div>
   <div id="tab-settings"   class="tab-pane"><?!= include('PRISMSettings') ?></div>
 </main>
 
@@ -542,8 +524,6 @@ google.script.run
       document.getElementById('nav-settings').style.display  = 'none';
       document.getElementById('nav-plotting').style.display  = 'none';
     }
-    document.getElementById('nav-usage-log').style.display = 'none';
-
     switchTab('dashboard');
     prism_init_dashboard();
   })
