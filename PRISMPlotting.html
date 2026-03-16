@@ -245,10 +245,6 @@
               ✓ Confirm Layout & Proceed
             </button>
 
-            <button id="pp-exportBtn" onclick="pp_saveMapToDrive()" class="p-btn" style="width:100%;padding:11px;font-size:13px;margin-top:8px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">
-              Save PDF/IMG to Drive
-            </button>
-
           </div><!-- /pp-results-left -->
 
           <!-- RIGHT column — Full Roll Map spanning both rows -->
@@ -1532,7 +1528,12 @@ function pp_confirm() {
     .withSuccessHandler(function(r) {
       btn.disabled = false; btn.textContent = '✓ Confirm & Mark Ready to Print';
       if (r.success) {
-        prism_toast('success', r.message);
+        var savedCount = (r.savedPlots && r.savedPlots.length) ? r.savedPlots.length : 0;
+        var successMsg = r.message;
+        if (savedCount > 0) {
+          successMsg += ' Saved PDF/IMG to Drive for ' + savedCount + ' roll(s).';
+        }
+        prism_toast('success', successMsg);
         // Remove confirmed JOs from local list
         joList.forEach(function(jo) {
           pp_selJOs[jo] = false;
