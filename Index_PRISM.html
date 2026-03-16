@@ -542,9 +542,7 @@ google.script.run
       document.getElementById('nav-settings').style.display  = 'none';
       document.getElementById('nav-plotting').style.display  = 'none';
     }
-    if (!isAdmin && !isATL && !isSTL) {
-      document.getElementById('nav-usage-log').style.display = 'none';
-    }
+    document.getElementById('nav-usage-log').style.display = 'none';
 
     switchTab('dashboard');
     prism_init_dashboard();
