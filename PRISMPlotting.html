@@ -34,6 +34,18 @@
   .pp-roll-id { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--p-green); }
   .pp-roll-meta { font-size: 11px; color: var(--p-muted); margin-top: 2px; }
 
+  /* ── Printer visual plan ── */
+  .pp-pr-roll { border: 1px solid var(--p-border); border-radius: 10px; padding: 10px; background: var(--p-bg); margin-bottom: 10px; }
+  .pp-pr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .pp-pr-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 800; color: var(--p-green); }
+  .pp-pr-meta { font-size: 10px; color: var(--p-muted); font-weight: 700; }
+  .pp-pr-row { display: grid; grid-template-columns: 34px 1fr 48px; gap: 6px; align-items: center; margin-bottom: 5px; }
+  .pp-pr-rnum { font-size: 10px; color: var(--p-faint); font-weight: 800; }
+  .pp-pr-strip { display: flex; min-height: 24px; border: 1px solid var(--p-border); border-radius: 7px; overflow: hidden; background: #f8fafc; }
+  .pp-pr-piece { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pp-pr-waste { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #b45309; background: repeating-linear-gradient(-45deg, #fef3c7, #fef3c7 4px, #fde68a 4px, #fde68a 8px); }
+  .pp-pr-len { text-align: right; font-size: 10px; color: var(--p-muted); font-weight: 700; }
+
   /* ── Canvas ── */
   #pp-canvas-wrap {
     background: var(--p-bg); border: 1.5px solid var(--p-border);
@@ -195,13 +207,22 @@
         <div class="p-card" style="padding:14px;margin-bottom:12px;overflow:hidden;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Visual Layout</p>
-            <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select id="pp-rollViewSelect" onchange="pp_onRollViewChange()" class="p-input" style="display:none;font-size:11px;height:30px;padding:4px 8px;"></select>
+              <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
+            </div>
           </div>
           <div id="pp-canvas-wrap">
             <canvas id="pp-canvas"></canvas>
           </div>
           <!-- Legend -->
           <div id="pp-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
+        </div>
+
+        <!-- Printer visual presentation -->
+        <div class="p-card" style="padding:14px;margin-bottom:12px;">
+          <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Printer Visual Plan</p>
+          <div id="pp-printerVisual"></div>
         </div>
 
         <!-- Row-by-row table -->
@@ -249,6 +270,7 @@ var pp_rolls    = [];   // open rolls
 var pp_selRoll  = null; // selected roll object
 var pp_layout   = null; // computed layout result
 var pp_rollPlans = [];  // multi-roll plan segments
+var pp_activeRollViewId = '';
 var pp_colors   = {};   // joNumber → color
 var PP_PALETTE  = [
   '#6366f1','#0d9488','#f59e0b','#ec4899','#10b981',
@@ -348,14 +370,15 @@ function pp_toggleJO(joNumber) {
   pp_checkArrangeBtn();
   pp_layout = null;
   pp_rollPlans = [];
+  pp_activeRollViewId = '';
 }
 
 function pp_selectAll() {
   pp_filtJOs.forEach(function(j) { pp_selJOs[j.joNumber] = true; });
-  pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = [];
+  pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
 }
 function pp_clearAll() {
-  pp_selJOs = {}; pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = [];
+  pp_selJOs = {}; pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
 }
 
 /* ── Roll List ── */
@@ -402,6 +425,7 @@ function pp_selRollFn(rollId) {
   pp_checkArrangeBtn();
   pp_layout = null;
   pp_rollPlans = [];
+  pp_activeRollViewId = '';
 }
 
 function pp_updateRollSuggestions() {
@@ -760,6 +784,7 @@ function pp_autoArrange() {
   }
 
   pp_rollPlans = plan.plans;
+  pp_activeRollViewId = pp_rollPlans.length ? pp_rollPlans[0].rollId : '';
   var primary = pp_rollPlans[0];
   var totalLen = 0;
   var totalRemain = 0;
@@ -829,21 +854,98 @@ function pp_renderResults() {
     }
   } else { ow.style.display = 'none'; }
 
-  // Roll label
-  if (L.rollPlans && L.rollPlans.length > 1) {
+  pp_renderRollViewSelector(L);
+
+  var activePlan = pp_getActivePlan(L);
+  if (activePlan) {
+    document.getElementById('pp-rollLabel').textContent = activePlan.rollId + ' · ' + activePlan.rollWidth + 'ft × ' + activePlan.rollAvail + 'ft';
+  } else if (L.rollPlans && L.rollPlans.length > 1) {
     document.getElementById('pp-rollLabel').textContent = L.rollPlans.length + ' rolls planned · primary ' + L.roll.rollId;
   } else {
     document.getElementById('pp-rollLabel').textContent = L.roll.rollId + ' · ' + L.rollWidth + 'ft × ' + L.rollAvail + 'ft';
   }
 
   // Canvas
-  pp_drawCanvas(L);
+  pp_drawCanvas(activePlan || L);
 
   // Legend
   pp_renderLegend();
 
+  // Printer presentation
+  pp_renderPrinterVisual(L);
+
   // Row list
   pp_renderRowList(L);
+}
+
+function pp_renderRollViewSelector(L) {
+  var sel = document.getElementById('pp-rollViewSelect');
+  var plans = (L.rollPlans && L.rollPlans.length) ? L.rollPlans : [];
+  if (!plans.length) {
+    sel.style.display = 'none';
+    sel.innerHTML = '';
+    return;
+  }
+  if (!pp_activeRollViewId) pp_activeRollViewId = plans[0].rollId;
+  var html = '';
+  plans.forEach(function(p) {
+    var s = (p.rollId === pp_activeRollViewId) ? ' selected' : '';
+    html += '<option value="' + pp_esc(p.rollId) + '"' + s + '>' + pp_esc(p.rollId) + ' · ' + p.totalLen.toFixed(1) + 'ft</option>';
+  });
+  sel.innerHTML = html;
+  sel.style.display = plans.length > 1 ? 'block' : 'none';
+}
+
+function pp_onRollViewChange() {
+  var sel = document.getElementById('pp-rollViewSelect');
+  pp_activeRollViewId = sel.value || '';
+  if (pp_layout) pp_renderResults();
+}
+
+function pp_getActivePlan(L) {
+  var plans = (L.rollPlans && L.rollPlans.length) ? L.rollPlans : [];
+  if (!plans.length) return null;
+  for (var i = 0; i < plans.length; i++) {
+    if (plans[i].rollId === pp_activeRollViewId) return plans[i];
+  }
+  return plans[0];
+}
+
+function pp_renderPrinterVisual(L) {
+  var el = document.getElementById('pp-printerVisual');
+  var plans = (L.rollPlans && L.rollPlans.length) ? L.rollPlans : [{ rollId: L.roll.rollId, rollWidth: L.rollWidth, rollAvail: L.rollAvail, totalLen: L.totalLen, rows: L.rows }];
+  if (!plans.length) {
+    el.innerHTML = '<div class="pp-empty" style="padding:16px 10px;">No printer view available.</div>';
+    return;
+  }
+  var html = '';
+  plans.forEach(function(plan) {
+    html += '<div class="pp-pr-roll">'
+      + '<div class="pp-pr-head">'
+      + '<div class="pp-pr-title">' + pp_esc(plan.rollId) + ' · ' + plan.rollWidth + 'ft</div>'
+      + '<div class="pp-pr-meta">used ' + plan.totalLen.toFixed(1) + 'ft / ' + plan.rollAvail + 'ft</div>'
+      + '</div>';
+
+    (plan.rows || []).forEach(function(r, ri) {
+      html += '<div class="pp-pr-row"><div class="pp-pr-rnum">R' + (ri + 1) + '</div><div class="pp-pr-strip">';
+      (r.pieces || []).forEach(function(p) {
+        var pct = plan.rollWidth > 0 ? Math.max(2, (p.w / plan.rollWidth) * 100) : 0;
+        html += '<div class="pp-pr-piece" style="width:' + pct + '%;background:' + p.color + ';" title="' + pp_esc(p.joNumber + ' ' + p.w + 'x' + p.h + 'ft') + '">' + pp_esc(p.joNumber) + '</div>';
+      });
+      if ((r.wasteW || 0) > 0.03) {
+        var wpct = plan.rollWidth > 0 ? Math.max(2, (r.wasteW / plan.rollWidth) * 100) : 0;
+        html += '<div class="pp-pr-waste" style="width:' + wpct + '%;" title="waste ' + r.wasteW.toFixed(2) + 'ft">waste</div>';
+      }
+      html += '</div><div class="pp-pr-len">' + r.rowH.toFixed(1) + 'ft</div></div>';
+    });
+
+    if (!(plan.rows || []).length) {
+      html += '<div class="pp-empty" style="padding:10px 8px;">No rows allocated.</div>';
+    }
+
+    html += '</div>';
+  });
+  el.innerHTML = html;
 }
 
 function pp_drawCanvas(L) {
@@ -1082,6 +1184,7 @@ function pp_confirm() {
         pp_filtJOs = pp_allJOs.slice();
         pp_layout  = null;
         pp_rollPlans = [];
+        pp_activeRollViewId = '';
         pp_selRoll = null;
         document.getElementById('pp-results').style.display    = 'none';
         document.getElementById('pp-rightEmpty').style.display = 'block';
