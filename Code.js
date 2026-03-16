@@ -570,9 +570,12 @@ function prism_getAllJobOrders_() {
   if (lr<2) return [];
   return sh.getRange(2,1,lr-1,13).getValues()
     .filter(r=>r[JO_COL.JO_NUMBER]&&String(r[JO_COL.JO_NUMBER]).trim())
-    .map((r,i)=>({
+    .map((r,i)=>{
+      const joNumber = String(r[JO_COL.JO_NUMBER]).trim();
+      const plotAsset = latestPlotAssets[String(joNumber || '').toUpperCase()] || {};
+      return {
       rowIndex: i+2,
-      joNumber:       String(r[JO_COL.JO_NUMBER]).trim(),
+      joNumber:       joNumber,
       customer:       String(r[JO_COL.CUSTOMER]||'').trim(),
       jobDescription: String(r[JO_COL.JOB_DESCRIPTION]||'').trim(),
       category:       String(r[JO_COL.CATEGORY]||'').trim(),
@@ -581,11 +584,14 @@ function prism_getAllJobOrders_() {
       quantity:       parseInt(r[JO_COL.QUANTITY])||0,
       productionType: String(r[JO_COL.PRODUCTION_TYPE]||'').trim(),
       plottingLink:   String(r[JO_COL.PLOTTING_LINK]||'').trim(),
+      plottingImageUrl: String(plotAsset.pngUrl || r[JO_COL.PLOTTING_LINK] || '').trim(),
+      plottingPdfUrl: String(plotAsset.pdfUrl || '').trim(),
+      plottingFolderUrl: String(plotAsset.folderUrl || '').trim(),
       status:         String(r[JO_COL.STATUS]||JO_STATUS.FOR_PLOTTING).trim(),
       rollId:         String(r[JO_COL.ROLL_ID]||'').trim(),
       createdBy:      String(r[JO_COL.CREATED_BY]||'').trim(),
       dateCreated:    prism_fmtShort_(r[JO_COL.DATE_CREATED])
-    }))
+    }})
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 }
 
