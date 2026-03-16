@@ -416,7 +416,7 @@
       <span class="sb-label">Materials</span>
     </a>
 
-    <a href="#" class="nav-link" data-tab="usage-log">
+    <a href="#" class="nav-link" data-tab="usage-log" id="nav-usage-log">
       <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0120 9.414V19a2 2 0 01-2 2z"/>
@@ -532,6 +532,7 @@ google.script.run
     var role = ((u.role || '').toLowerCase());
     var isAdmin = role.includes('admin');
     var isATL   = role.includes('admin team leader') || role.includes('admin tl');
+    var isSTL   = role.includes('senior team leader') || role.includes('stl');
 
     if (!isAdmin && !isATL) {
       document.getElementById('nav-stock-in').style.display   = 'none';
@@ -540,6 +541,9 @@ google.script.run
     if (!isAdmin) {
       document.getElementById('nav-settings').style.display  = 'none';
       document.getElementById('nav-plotting').style.display  = 'none';
+    }
+    if (!isAdmin && !isATL && !isSTL) {
+      document.getElementById('nav-usage-log').style.display = 'none';
     }
 
     switchTab('dashboard');
