@@ -156,10 +156,6 @@
       <button id="pp-arrangeBtn" onclick="pp_autoArrange()" class="p-btn p-btn-teal" style="width:100%;padding:13px;font-size:14px;margin-bottom:10px;" disabled>
         ✦ Auto-Arrange
       </button>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--p-muted);margin:0 0 8px;cursor:pointer;">
-        <input id="pp-allowRotate" type="checkbox" checked onchange="pp_onRotationToggle()" style="accent-color:var(--p-teal);width:14px;height:14px;">
-        Auto-rotate pieces (90°) during arrange
-      </label>
       <p style="font-size:11px;color:var(--p-faint);text-align:center;margin:0 0 14px;">Select at least 1 JO and 1 roll to arrange</p>
 
     </div>
@@ -218,6 +214,7 @@
               <div class="pp-pane-head">
                 <p class="pp-pane-title">Visual Layout</p>
                 <div style="display:flex;align-items:center;gap:8px;">
+                  <button id="pp-rotateBtn" onclick="pp_toggleRotation()" class="p-btn" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;font-size:11px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Rotate: ON</button>
                   <select id="pp-rollViewSelect" onchange="pp_onRollViewChange()" class="p-input" style="display:none;font-size:11px;height:30px;padding:4px 8px;"></select>
                   <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
                 </div>
@@ -536,12 +533,73 @@ function pp_updateRollSuggestions() {
 function pp_checkArrangeBtn() {
   var hasSel = Object.keys(pp_selJOs).some(function(k){ return pp_selJOs[k]; });
   document.getElementById('pp-arrangeBtn').disabled = !(hasSel && pp_selRoll);
+  pp_updateRotateBtn();
 }
 
-function pp_onRotationToggle() {
-  var chk = document.getElementById('pp-allowRotate');
-  pp_allowRotation = !!(chk && chk.checked);
-  pp_refreshRollSuggestions();
+function pp_getSelectedJOs() {
+  return pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
+}
+
+function pp_isRotationApplicable() {
+  var selJOList = pp_getSelectedJOs();
+  if (!selJOList.length) return false;
+
+  var candidateRolls = [];
+  if (pp_selRoll) {
+    candidateRolls = [pp_selRoll];
+  } else {
+    candidateRolls = (pp_rolls || []).slice();
+  }
+  if (!candidateRolls.length) return false;
+
+  for (var i = 0; i < selJOList.length; i++) {
+    var w = parseFloat(selJOList[i].width) || 0;
+    var h = parseFloat(selJOList[i].height) || 0;
+    if (!w || !h) continue;
+    if (Math.abs(w - h) < 0.0001) continue;
+
+    for (var r = 0; r < candidateRolls.length; r++) {
+      var rw = parseFloat(candidateRolls[r].width) || 0;
+      if (!rw) continue;
+      if (h <= rw) return true;
+    }
+  }
+  return false;
+}
+
+function pp_updateRotateBtn() {
+  var btn = document.getElementById('pp-rotateBtn');
+  if (!btn) return;
+  var applicable = pp_isRotationApplicable();
+  btn.disabled = !applicable;
+  if (!applicable) {
+    btn.textContent = 'Rotate: N/A';
+    btn.title = 'Rotation is not applicable for current selection/roll.';
+    btn.style.borderColor = 'var(--p-border)';
+    btn.style.color = 'var(--p-faint)';
+    btn.style.background = 'var(--p-surface)';
+    btn.style.opacity = '0.65';
+    btn.style.cursor = 'not-allowed';
+    return;
+  }
+
+  btn.title = 'Toggle auto-rotation (90°) during arrange';
+  btn.textContent = pp_allowRotation ? 'Rotate: ON' : 'Rotate: OFF';
+  btn.style.borderColor = pp_allowRotation ? 'var(--p-teal)' : 'var(--p-border)';
+  btn.style.color = pp_allowRotation ? 'var(--p-teal)' : 'var(--p-muted)';
+  btn.style.background = pp_allowRotation ? 'var(--p-teal-lt)' : 'var(--p-surface)';
+  btn.style.opacity = '1';
+  btn.style.cursor = 'pointer';
+}
+
+function pp_toggleRotation() {
+  if (!pp_isRotationApplicable()) {
+    pp_updateRotateBtn();
+    return;
+  }
+  pp_allowRotation = !pp_allowRotation;
+  pp_updateRotateBtn();
+  pp_updateRollSuggestions();
   if (pp_layout) pp_autoArrange();
 }
 
@@ -943,6 +1001,8 @@ function pp_renderResults() {
   } else {
     document.getElementById('pp-rollLabel').textContent = L.roll.rollId + ' · ' + L.rollWidth + 'ft × ' + L.rollAvail + 'ft';
   }
+
+  pp_updateRotateBtn();
 
   // Canvas
   pp_drawCanvas(activePlan || L);
