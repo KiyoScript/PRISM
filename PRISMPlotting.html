@@ -434,24 +434,25 @@ function pp_autoArrange() {
     }
   });
 
-  // Assign orientation for each piece
-  // Try both orientations, pick the one whose width fits best in roll
+  // Assign orientation for each piece — always use origW/origH as source of truth
   pieces.forEach(function(p) {
     var w = p.origW, h = p.origH;
     var canNormal  = w <= rollWidth;
     var canRotated = h <= rollWidth;
     if (canNormal && canRotated) {
-      // Both fit — pick orientation that leaves least waste as standalone
-      // but prefer the one whose width is LARGER (fills row better)
+      // Both orientations fit — prefer whichever fills the roll width more
       if (h > w) { p.w = h; p.h = w; p.rotated = true; }
       else        { p.w = w; p.h = h; p.rotated = false; }
-    } else if (canRotated) {
+    } else if (canRotated && !canNormal) {
+      // Only rotated fits
       p.w = h; p.h = w; p.rotated = true;
-    } else if (canNormal) {
+    } else if (canNormal && !canRotated) {
+      // Only normal fits
       p.w = w; p.h = h; p.rotated = false;
     } else {
-      // Neither fits — use smaller as width
-      p.w = Math.min(w,h); p.h = Math.max(w,h); p.oversized = true;
+      // Neither fits — force smaller dim as width, flag oversized
+      p.w = Math.min(w, h); p.h = Math.max(w, h);
+      p.rotated = false; p.oversized = true;
     }
   });
 
@@ -473,9 +474,15 @@ function pp_autoArrange() {
     // Always start with the first (widest) unpacked piece
     var first = unpacked[0];
     if (first.w > rollWidth) {
-      // Oversized — try rotating
-      if (first.h <= rollWidth) { var tmp=first.w; first.w=first.h; first.h=tmp; first.rotated=!first.rotated; }
-      rows.push({ pieces:[first], usedW:first.w, rowH:first.h, wasteW: Math.max(0,rollWidth-first.w), oversized:true });
+      // Oversized — try rotating using origH
+      if (first.origH <= rollWidth) {
+        first.w = first.origH;
+        first.h = first.origW;
+        first.rotated = true;
+        rows.push({ pieces:[first], usedW:first.w, rowH:first.h, wasteW: Math.max(0, rollWidth - first.w) });
+      } else {
+        rows.push({ pieces:[first], usedW:first.w, rowH:first.h, wasteW: Math.max(0, rollWidth - first.w), oversized:true });
+      }
       unpacked.splice(0,1);
       continue;
     }
@@ -487,19 +494,25 @@ function pp_autoArrange() {
     // Try to pack remaining pieces into leftover width
     for (var pi = 1; pi < unpacked.length; pi++) {
       var p = unpacked[pi];
-      // Try current orientation
-      if (usedW + p.w <= rollWidth) {
+      var spaceLeft = rollWidth - usedW;
+
+      // Try current orientation first
+      if (p.w <= spaceLeft) {
         row.push(p);
         usedW += p.w;
         if (p.h > rowH) rowH = p.h;
       }
-      // Try rotated orientation
-      else if (usedW + p.h <= rollWidth && p.h <= rollWidth) {
-        var tmp=p.w; p.w=p.h; p.h=tmp; p.rotated=!p.rotated;
+      // Try rotating — use origW/origH to avoid double-rotation bugs
+      else if (p.origH <= spaceLeft && p.origH <= rollWidth) {
+        // Rotate: swap w and h from original dimensions
+        p.w = p.origH;
+        p.h = p.origW;
+        p.rotated = true;
         row.push(p);
         usedW += p.w;
         if (p.h > rowH) rowH = p.h;
-      } else {
+      }
+      else {
         remaining_pieces.push(p);
       }
     }
