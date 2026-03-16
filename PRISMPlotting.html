@@ -1072,6 +1072,8 @@ function pp_renderHistoryMap(L) {
   var history = pp_rollHistory[rollId] || [];
   var prior = history.slice();
   prior.sort(function(a,b){ return (a.startAtFt||0) - (b.startAtFt||0); });
+  var priorUsedFt = 0;
+  prior.forEach(function(seg) { priorUsedFt += parseFloat(seg.lengthUsed || 0) || 0; });
 
   var currentStart = Math.max(0, rollLen - (parseFloat(plan.rollAvail) || 0) - (parseFloat(plan.totalLen) || 0));
   var currentEnd = Math.min(rollLen, currentStart + (parseFloat(plan.totalLen) || 0));
@@ -1118,6 +1120,23 @@ function pp_renderHistoryMap(L) {
     }
   });
 
+  // Legacy rolls may have existing consumed length without saved snapshots.
+  // Show that section as previously used so the map still reads as continuous.
+  if (!prior.length && currentStart > 0.05) {
+    var legacyH = Math.max(2, Math.round(currentStart * pxPerFtY));
+    ctx.fillStyle = 'rgba(148,163,184,0.16)';
+    ctx.fillRect(x0 + 1, y0 + 1, bodyW - 2, Math.max(1, legacyH - 2));
+    ctx.strokeStyle = 'rgba(100,116,139,0.28)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(x0 + 1, y0 + 1, bodyW - 2, Math.max(1, legacyH - 2));
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#475569';
+    ctx.font = '10px DM Sans, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('PREVIOUSLY USED (' + currentStart.toFixed(1) + 'ft)', x0 + 6, Math.min(y0 + 14, y0 + legacyH - 6));
+  }
+
   // Current planned rows with true width proportions
   var cy = y0 + Math.round(currentStart * pxPerFtY);
   (plan.rows || []).forEach(function(r) {
@@ -1156,6 +1175,19 @@ function pp_renderHistoryMap(L) {
   ctx.font = 'bold 10px DM Sans, sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText('CURRENT PLAN', x0 + 6, Math.max(16, curY + 12));
+
+  // Continuation marker: shows where the new plotting starts on the roll.
+  if (currentStart > 0.05) {
+    ctx.strokeStyle = 'rgba(5,150,105,0.65)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, curY); ctx.lineTo(x0 + bodyW, curY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 10px DM Sans, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Continuation starts @ ' + currentStart.toFixed(1) + 'ft', x0 + bodyW - 6, Math.max(14, curY - 6));
+  }
 
   // Left length scale marks
   ctx.fillStyle = '#64748b';
@@ -1202,7 +1234,10 @@ function pp_renderHistoryMap(L) {
   ctx.textAlign = 'right';
   ctx.fillText(rollWidth + 'ft', x0 + bodyW, by + 12);
 
-  meta.textContent = 'Roll ' + rollId + ' · length ' + rollLen + 'ft · previous segments: ' + prior.length + ' · current plan: ' + (plan.totalLen || 0).toFixed(1) + 'ft';
+  meta.textContent = 'Roll ' + rollId + ' · length ' + rollLen + 'ft · previous used: ' + Math.max(priorUsedFt, currentStart).toFixed(1) + 'ft · previous segments: ' + prior.length + ' · current plan: ' + (plan.totalLen || 0).toFixed(1) + 'ft';
+
+  // Bring the operator near the continuation point automatically.
+  wrap.scrollTop = Math.max(0, Math.round(currentStart * pxPerFtY) - 120);
 }
 
 function pp_exportHistoryImage() {
