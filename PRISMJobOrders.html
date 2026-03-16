@@ -12,6 +12,8 @@
   .jo3-btn-completed { background: #f1f5f9; color: #374151; }
   .jo3-btn-printing:hover  { background: #bbf7d0; }
   .jo3-btn-completed:hover { background: #e5e7eb; }
+  .jo3-btn-plot { background: #f3e8ff; color: #6d28d9; }
+  .jo3-btn-plot:hover { background: #e9d5ff; }
 </style>
 
 <div style="padding:20px 20px 40px;">
@@ -199,7 +201,9 @@ function jo3_renderTable(data) {
     var sc = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
     var size = (r.width && r.height) ? r.width + ' × ' + r.height + ' ft' : '—';
     var actionBtn = '';
-    if (r.status === 'READY_TO_PRINT') {
+    if (r.status === 'FOR_PLOTTING') {
+      actionBtn = '<button class="jo3-action-btn jo3-btn-plot" onclick="jo3_goToRecordUsage(\'' + jo3_esc(r.joNumber) + '\')">✏ Record Usage</button>';
+    } else if (r.status === 'READY_TO_PRINT') {
       actionBtn = '<button class="jo3-action-btn jo3-btn-printing" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
     } else if (r.status === 'PRINTING') {
       actionBtn = '<button class="jo3-action-btn jo3-btn-completed" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>';
@@ -241,6 +245,7 @@ function jo3_renderCards(data) {
       + (size ? '<span style="font-size:11px;color:var(--p-muted);">' + size + '</span>' : '')
       + (r.rollId ? jo3_renderRollsInline(r.rollId) : '')
       + '</div>'
+      + (r.status === 'FOR_PLOTTING' ? '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;" onclick="jo3_goToRecordUsage(\'' + jo3_esc(r.joNumber) + '\')">✏ Record Usage</button>' : '')
       + (r.status === 'READY_TO_PRINT' ? '<button class="jo3-action-btn jo3-btn-printing" style="width:100%;" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>' : '')
       + (r.status === 'PRINTING' ? '<button class="jo3-action-btn jo3-btn-completed" style="width:100%;" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>' : '')
       + '</div>';
@@ -290,6 +295,10 @@ function jo3_updateStatus(joNumber, newStatus, btn) {
       prism_toast('error', e.message);
     })
     .prism_updateJOStatus(joNumber, newStatus);
+}
+
+function jo3_goToRecordUsage(joNumber) {
+  switchTab('usage');
 }
 
 function jo3_error(msg) {
