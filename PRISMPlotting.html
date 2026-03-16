@@ -282,6 +282,7 @@ var pp_activeRollViewId = '';
 var pp_rollHistory = {}; // { rollId: [historySegments...] }
 var pp_colors   = {};   // joNumber → color
 var pp_allowRotation = true;
+var pp_historyRenderMode = 'view'; // 'view' | 'export'
 var pp_resizeObserver = null;
 var pp_resizeTimer = null;
 var pp_resizeBound = false;
@@ -1076,20 +1077,26 @@ function pp_renderHistoryMap(L) {
   // If history exists, enforce continuation below the latest plotted segment.
   currentStart = Math.max(currentStart, lastHistoryEnd);
   var currentEnd = Math.min(rollLen, currentStart + (parseFloat(plan.totalLen) || 0));
+  var isExport = pp_historyRenderMode === 'export';
 
   var AX_L = 46;
   var AX_B = 36;
   var innerW = Math.max((wrap.clientWidth || 420) - AX_L - 28, 220);
   var bodyW = innerW;
-  var bodyH = Math.max(980, Math.round(rollLen * 14));
+  var bodyH = isExport
+    ? Math.max(1800, Math.round(rollLen * 24))
+    : Math.max(980, Math.round(rollLen * 14));
+  var pxScale = isExport ? 2 : 1;
 
-  canvas.width = bodyW + AX_L + 8;
-  canvas.height = bodyH + AX_B + 8;
+  canvas.width = Math.round((bodyW + AX_L + 8) * pxScale);
+  canvas.height = Math.round((bodyH + AX_B + 8) * pxScale);
   canvas.style.width = (bodyW + AX_L + 8) + 'px';
   canvas.style.height = (bodyH + AX_B + 8) + 'px';
 
   var ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(pxScale, 0, 0, pxScale, 0, 0);
 
   var x0 = AX_L;
   var y0 = 6;
@@ -1236,22 +1243,35 @@ function pp_renderHistoryMap(L) {
   meta.textContent = 'Roll ' + rollId + ' · length ' + rollLen + 'ft · previous used: ' + Math.max(priorUsedFt, currentStart).toFixed(1) + 'ft · previous segments: ' + prior.length + ' · current plan: ' + (plan.totalLen || 0).toFixed(1) + 'ft';
 
   // Bring the operator near the continuation point automatically.
-  wrap.scrollTop = Math.max(0, Math.round(currentStart * pxPerFtY) - 120);
+  if (!isExport) {
+    wrap.scrollTop = Math.max(0, Math.round(currentStart * pxPerFtY) - 120);
+  }
+}
+
+function pp_getHighResHistoryDataUrl() {
+  if (!pp_layout) return '';
+  var prevMode = pp_historyRenderMode;
+  pp_historyRenderMode = 'export';
+  pp_renderHistoryMap(pp_layout);
+  var canvas = document.getElementById('pp-historyCanvas');
+  var url = (canvas && canvas.width) ? canvas.toDataURL('image/png') : '';
+  pp_historyRenderMode = prevMode;
+  pp_renderHistoryMap(pp_layout);
+  return url;
 }
 
 function pp_exportHistoryImage() {
-  var canvas = document.getElementById('pp-historyCanvas');
-  if (!canvas || !canvas.width) { prism_toast('error', 'No full roll map to export.'); return; }
+  var url = pp_getHighResHistoryDataUrl();
+  if (!url) { prism_toast('error', 'No full roll map to export.'); return; }
   var a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png');
+  a.href = url;
   a.download = 'prism-roll-map-' + (pp_activeRollViewId || 'roll') + '.png';
   a.click();
 }
 
 function pp_exportHistoryPdf() {
-  var canvas = document.getElementById('pp-historyCanvas');
-  if (!canvas || !canvas.width) { prism_toast('error', 'No full roll map to print.'); return; }
-  var url = canvas.toDataURL('image/png');
+  var url = pp_getHighResHistoryDataUrl();
+  if (!url) { prism_toast('error', 'No full roll map to print.'); return; }
   var w = window.open('', '_blank');
   if (!w) { prism_toast('error', 'Popup blocked. Allow popups to print.'); return; }
   w.document.write('<html><head><title>PRISM Roll Map</title></head><body style="margin:16px;font-family:Arial,sans-serif;">'
@@ -1486,9 +1506,12 @@ function pp_showConfirmPanel() {
 function pp_captureRollMapImages() {
   if (!pp_layout) return [];
   var originalRollViewId = pp_activeRollViewId;
+  var originalMode = pp_historyRenderMode;
   var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
   var canvas = document.getElementById('pp-historyCanvas');
   var out = [];
+
+  pp_historyRenderMode = 'export';
 
   plans.forEach(function(plan, idx) {
     var rollId = plan.rollId || (plan.roll && plan.roll.rollId) || '';
@@ -1504,6 +1527,7 @@ function pp_captureRollMapImages() {
     }
   });
 
+  pp_historyRenderMode = originalMode;
   pp_activeRollViewId = originalRollViewId || (plans[0] && plans[0].rollId) || '';
   pp_renderResults();
   return out;
