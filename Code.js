@@ -778,3 +778,112 @@ function prism_getStockMaterialsList() {
     return { success: false, message: e.message };
   }
 }
+
+// ============================================================
+//  PLOTTING PLANNER — Confirm layout
+//  Add this function to Code.js
+// ============================================================
+function prism_confirmPlotLayout(payload) {
+  try {
+    const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role))
+      return { success: false, message: 'Admin access required.' };
+
+    if (!payload.joNumbers || !payload.joNumbers.length)
+      return { success: false, message: 'No JOs provided.' };
+    if (!payload.rollId)
+      return { success: false, message: 'Roll ID required.' };
+    if (!payload.lengthUsed || payload.lengthUsed <= 0)
+      return { success: false, message: 'Length used must be > 0.' };
+
+    // ── Deduct from roll ──
+    const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollLr   = rollSh.getLastRow();
+    const rollData = rollSh.getRange(2, 1, rollLr - 1, 9).getValues();
+    let rollIdx = -1, rollRow = null;
+    rollData.forEach((r, i) => {
+      if (String(r[ROLL_COL.ROLL_ID]).trim() === payload.rollId) {
+        rollIdx = i + 2; rollRow = r;
+      }
+    });
+    if (rollIdx === -1)
+      return { success: false, message: `Roll "${payload.rollId}" not found.` };
+    if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase() !== ROLL_STATUS.OPEN)
+      return { success: false, message: 'Roll must be OPEN.' };
+
+    const remaining   = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
+    const lengthUsed  = parseFloat(payload.lengthUsed);
+    const rollWidth   = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
+    const settings    = prism_getSettings_();
+    const newRemaining = Math.max(0, remaining - lengthUsed);
+    const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
+      ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
+
+    rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
+    rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
+
+    // ── Write one usage entry per JO ──
+    const today   = new Date();
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const joSh    = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr    = joSh.getLastRow();
+    const joData  = joLr >= 2 ? joSh.getRange(2, 1, joLr - 1, 13).getValues() : [];
+
+    // Calculate per-JO length used from layout rows
+    const joLengths = {};
+    if (payload.rows && payload.rows.length) {
+      payload.rows.forEach(row => {
+        const rowJOs = {};
+        row.pieces.forEach(p => { rowJOs[p.joNumber] = true; });
+        Object.keys(rowJOs).forEach(jo => {
+          joLengths[jo] = (joLengths[jo] || 0) + parseFloat(row.rowH || 0);
+        });
+      });
+    } else {
+      // Fallback: split evenly
+      const perJO = lengthUsed / payload.joNumbers.length;
+      payload.joNumbers.forEach(jo => { joLengths[jo] = perJO; });
+    }
+
+    payload.joNumbers.forEach(joNumber => {
+      const joLen = joLengths[joNumber] || 0;
+
+      // Write usage row
+      usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+        'USE-' + today.getTime() + '-' + joNumber,
+        joNumber.trim().toUpperCase(),
+        payload.rollId,
+        rollWidth,
+        joLen,
+        user.email,
+        payload.plottingLink || '',
+        today
+      ]]);
+
+      // Update JO: append rollId + set READY_TO_PRINT
+      joData.forEach((r, i) => {
+        if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() === joNumber.trim().toUpperCase()) {
+          const existingRolls = String(r[JO_COL.ROLL_ID] || '')
+            .split(',').map(x => x.trim()).filter(Boolean);
+          if (!existingRolls.includes(payload.rollId)) existingRolls.push(payload.rollId);
+          joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
+          if (payload.plottingLink) {
+            joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(payload.plottingLink);
+          }
+        }
+      });
+    });
+
+    prism_audit_('PRISM_CONFIRM_PLOT_LAYOUT', {
+      rollId: payload.rollId, lengthUsed, joNumbers: payload.joNumbers, by: user.email
+    });
+
+    return {
+      success: true,
+      message: `Layout confirmed! ${payload.joNumbers.length} JO(s) → READY_TO_PRINT. Roll used: ${lengthUsed.toFixed(1)}ft.`
+        + (newRollStatus === ROLL_STATUS.CONSUMED ? ' Roll CONSUMED.' : '')
+    };
+
+  } catch(e) { return { success: false, message: e.message }; }
+}
