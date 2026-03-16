@@ -434,52 +434,79 @@ function pp_autoArrange() {
     }
   });
 
-  // For each piece, decide orientation: w = across roll, h = down the roll
-  // Rotate if: piece width > roll width but height <= roll width
+  // Assign orientation for each piece
+  // Try both orientations, pick the one whose width fits best in roll
   pieces.forEach(function(p) {
     var w = p.origW, h = p.origH;
-    if (w > rollWidth && h <= rollWidth) { p.w = h; p.h = w; p.rotated = true; }
-    else if (h > rollWidth && w <= rollWidth) { p.w = w; p.h = h; p.rotated = false; }
-    else if (w <= rollWidth && h <= rollWidth) {
-      // Both fit — choose orientation that wastes less width
-      var wasteNormal  = rollWidth - w;
-      var wasteRotated = rollWidth - h;
-      if (wasteRotated < wasteNormal) { p.w = h; p.h = w; p.rotated = true; }
-      else { p.w = w; p.h = h; p.rotated = false; }
+    var canNormal  = w <= rollWidth;
+    var canRotated = h <= rollWidth;
+    if (canNormal && canRotated) {
+      // Both fit — pick orientation that leaves least waste as standalone
+      // but prefer the one whose width is LARGER (fills row better)
+      if (h > w) { p.w = h; p.h = w; p.rotated = true; }
+      else        { p.w = w; p.h = h; p.rotated = false; }
+    } else if (canRotated) {
+      p.w = h; p.h = w; p.rotated = true;
+    } else if (canNormal) {
+      p.w = w; p.h = h; p.rotated = false;
     } else {
-      // Neither fits in width — flag as oversized
-      p.w = Math.min(w, h); p.h = Math.max(w, h); p.oversized = true;
+      // Neither fits — use smaller as width
+      p.w = Math.min(w,h); p.h = Math.max(w,h); p.oversized = true;
     }
   });
 
-  // Sort by width descending (greedy — widest first per row)
+  // Sort by width descending so widest pieces go first
   pieces.sort(function(a, b) { return b.w - a.w; });
 
-  // Pack into rows
-  var rows = [];
-  var currentRow = [];
-  var currentW   = 0;
-  var currentH   = 0;
+  // Smart row packing:
+  // For each row, after placing a piece, scan remaining pieces
+  // and try to fit more into the remaining width (First Fit)
+  var rows     = [];
+  var unpacked = pieces.slice();
 
-  function closeRow() {
-    if (currentRow.length) {
-      rows.push({ pieces: currentRow.slice(), usedW: currentW, rowH: currentH, wasteW: rollWidth - currentW });
-      currentRow = []; currentW = 0; currentH = 0;
+  while (unpacked.length > 0) {
+    var row      = [];
+    var usedW    = 0;
+    var rowH     = 0;
+    var remaining_pieces = [];
+
+    // Always start with the first (widest) unpacked piece
+    var first = unpacked[0];
+    if (first.w > rollWidth) {
+      // Oversized — try rotating
+      if (first.h <= rollWidth) { var tmp=first.w; first.w=first.h; first.h=tmp; first.rotated=!first.rotated; }
+      rows.push({ pieces:[first], usedW:first.w, rowH:first.h, wasteW: Math.max(0,rollWidth-first.w), oversized:true });
+      unpacked.splice(0,1);
+      continue;
     }
+
+    row.push(first);
+    usedW = first.w;
+    rowH  = first.h;
+
+    // Try to pack remaining pieces into leftover width
+    for (var pi = 1; pi < unpacked.length; pi++) {
+      var p = unpacked[pi];
+      // Try current orientation
+      if (usedW + p.w <= rollWidth) {
+        row.push(p);
+        usedW += p.w;
+        if (p.h > rowH) rowH = p.h;
+      }
+      // Try rotated orientation
+      else if (usedW + p.h <= rollWidth && p.h <= rollWidth) {
+        var tmp=p.w; p.w=p.h; p.h=tmp; p.rotated=!p.rotated;
+        row.push(p);
+        usedW += p.w;
+        if (p.h > rowH) rowH = p.h;
+      } else {
+        remaining_pieces.push(p);
+      }
+    }
+
+    rows.push({ pieces:row, usedW:usedW, rowH:rowH, wasteW: rollWidth - usedW });
+    unpacked = remaining_pieces;
   }
-
-  pieces.forEach(function(p) {
-    if (p.w > rollWidth) {
-      closeRow();
-      rows.push({ pieces: [p], usedW: p.w, rowH: p.h, wasteW: rollWidth - p.w, oversized: true });
-      return;
-    }
-    if (currentW + p.w > rollWidth) { closeRow(); }
-    currentRow.push(p);
-    currentW += p.w;
-    if (p.h > currentH) currentH = p.h;
-  });
-  closeRow();
 
   // Calculate totals
   var totalLen  = 0;
@@ -543,81 +570,102 @@ function pp_drawCanvas(L) {
   var canvas = document.getElementById('pp-canvas');
   var ctx    = canvas.getContext('2d');
 
-  var maxDispW = wrap.clientWidth - 24;
-  var scale    = Math.min(maxDispW / L.rollWidth, 60); // px per ft, max 60
-  var dispW    = Math.round(L.rollWidth * scale);
-  var totalDispH = Math.round(Math.min(L.totalLen, L.rollAvail) * scale);
-  var maxH     = Math.min(totalDispH, 600);
+  // True-to-size: scale so the roll width fills available space
+  // and height is proportional to actual roll dimensions
+  var maxDispW   = Math.max(wrap.clientWidth - 24, 200);
+  var scale      = maxDispW / L.rollWidth; // px per ft — true ratio
+  var dispW      = Math.round(L.rollWidth * scale);
+  var totalLen   = Math.min(L.totalLen, L.rollAvail);
+  var totalDispH = Math.round(totalLen * scale);
+  // Cap height at 700px but keep ratio label accurate
+  var maxH       = Math.min(totalDispH, 700);
+  var heightScale = maxH / (totalDispH || 1); // compression factor if capped
+  var LABEL_H    = 40; // space for bottom labels
+  var LABEL_W    = 36; // space for left length labels
 
-  canvas.width  = dispW;
-  canvas.height = maxH + 30;
-  canvas.style.width  = dispW + 'px';
-  canvas.style.height = (maxH + 30) + 'px';
+  canvas.width  = dispW + LABEL_W;
+  canvas.height = maxH + LABEL_H;
+  canvas.style.width  = (dispW + LABEL_W) + 'px';
+  canvas.style.height = (maxH + LABEL_H) + 'px';
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Background
+  // Background for roll area
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, dispW, maxH);
+  ctx.fillRect(LABEL_W, 0, dispW, maxH);
 
   // Draw rows
   var y = 0;
+  var cumLen = 0;
   L.rows.forEach(function(row, ri) {
-    var rowDispH = Math.round(row.rowH * scale);
+    var rowDispH = Math.round(row.rowH * scale * heightScale);
     if (y + rowDispH > maxH) rowDispH = maxH - y;
     if (rowDispH <= 0) return;
 
-    // Row background alternating
+    // Alternating row background
     ctx.fillStyle = ri % 2 === 0 ? '#f0f4f2' : '#e8f0ec';
-    ctx.fillRect(0, y, dispW, rowDispH);
+    ctx.fillRect(LABEL_W, y, dispW, rowDispH);
 
     // Draw pieces
-    var x = 0;
+    var x = LABEL_W;
     row.pieces.forEach(function(p) {
       var pw = Math.round(p.w * scale);
-      var alpha = p.oversized ? '99' : 'cc';
-      ctx.fillStyle = p.color + alpha;
-      ctx.fillRect(x + 1, y + 1, pw - 2, rowDispH - 2);
-
-      // Border
+      var ph = rowDispH;
+      ctx.fillStyle = p.color + 'bb';
+      ctx.fillRect(x + 1, y + 1, pw - 2, ph - 2);
       ctx.strokeStyle = p.color;
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(x + 1, y + 1, pw - 2, rowDispH - 2);
+      ctx.strokeRect(x + 1, y + 1, pw - 2, ph - 2);
 
-      // Label if wide enough
-      if (pw > 30 && rowDispH > 14) {
+      // Size label inside piece
+      if (pw > 40 && ph > 22) {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        var label = p.joNumber.length > 10 ? p.joNumber.slice(-6) : p.joNumber;
-        ctx.fillText(label, x + pw/2, y + rowDispH/2 + 3);
+        var joLabel = p.joNumber.slice(-8);
+        ctx.fillText(joLabel, x + pw/2, y + ph/2 - 3);
+        ctx.font = '8px DM Sans, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText(p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : ''), x + pw/2, y + ph/2 + 8);
       }
       x += pw;
     });
 
-    // Waste area
+    // Waste hatching
     if (row.wasteW > 0.05) {
-      var wasteX = Math.round((L.rollWidth - row.wasteW) * scale);
-      var wasteW = dispW - wasteX;
-      if (wasteW > 0) {
-        ctx.fillStyle = 'rgba(251,191,36,0.18)';
-        ctx.fillRect(wasteX + 1, y + 1, wasteW - 2, rowDispH - 2);
-        // Hatching
-        ctx.save();
-        ctx.strokeStyle = 'rgba(251,191,36,0.45)';
-        ctx.lineWidth = 1;
-        for (var xi = wasteX; xi < dispW + rowDispH; xi += 6) {
-          ctx.beginPath(); ctx.moveTo(xi, y); ctx.lineTo(xi - rowDispH, y + rowDispH); ctx.stroke();
-        }
-        ctx.restore();
+      var wasteX = LABEL_W + Math.round((L.rollWidth - row.wasteW) * scale);
+      var wasteW2 = LABEL_W + dispW - wasteX;
+      ctx.fillStyle = 'rgba(251,191,36,0.15)';
+      ctx.fillRect(wasteX, y + 1, wasteW2, rowDispH - 2);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(251,191,36,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var xi = wasteX; xi < wasteX + wasteW2 + rowDispH; xi += 7) {
+        ctx.moveTo(xi, y); ctx.lineTo(xi - rowDispH, y + rowDispH);
+      }
+      ctx.stroke();
+      ctx.restore();
+      // Waste label
+      if (wasteW2 > 20 && rowDispH > 12) {
+        ctx.fillStyle = '#b45309';
+        ctx.font = '8px DM Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(row.wasteW.toFixed(2)+'ft', wasteX + wasteW2/2, y + rowDispH/2 + 3);
       }
     }
 
-    // Row length label
-    ctx.fillStyle = 'rgba(92,114,104,0.9)';
-    ctx.font = '9px DM Sans, sans-serif';
+    // Left axis: cumulative length label
+    cumLen += row.rowH;
+    ctx.fillStyle = '#5c7268';
+    ctx.font = '8px DM Sans, sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(row.rowH.toFixed(1) + 'ft', dispW - 2, y + rowDispH - 3);
+    ctx.fillText(cumLen.toFixed(1), LABEL_W - 3, y + rowDispH - 2);
+
+    // Row divider line
+    ctx.strokeStyle = 'rgba(156,180,174,0.4)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(LABEL_W, y + rowDispH); ctx.lineTo(LABEL_W + dispW, y + rowDispH); ctx.stroke();
 
     y += rowDispH;
     if (y >= maxH) return;
@@ -625,18 +673,45 @@ function pp_drawCanvas(L) {
 
   // Roll border
   ctx.strokeStyle = '#9db5ae';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(0, 0, dispW, maxH);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(LABEL_W, 0, dispW, maxH);
 
-  // Ruler top
-  ctx.fillStyle = '#5c7268';
-  ctx.font = 'bold 9px DM Sans, sans-serif';
+  // ── Bottom axis: WIDTH ──
+  ctx.fillStyle = '#374151';
+  ctx.font = 'bold 10px DM Sans, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('0', 2, maxH + 18);
+  ctx.fillText('0', LABEL_W, maxH + 14);
+  // Width midpoint
   ctx.textAlign = 'center';
-  ctx.fillText(L.rollWidth + 'ft', dispW/2, maxH + 18);
+  ctx.fillText(L.rollWidth + 'ft wide', LABEL_W + dispW/2, maxH + 14);
   ctx.textAlign = 'right';
-  ctx.fillText('←width→', dispW - 2, maxH + 18);
+  ctx.fillText(L.rollWidth + 'ft', LABEL_W + dispW, maxH + 14);
+  // Arrow line
+  ctx.strokeStyle = '#9db5ae';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(LABEL_W, maxH + 22); ctx.lineTo(LABEL_W + dispW, maxH + 22); ctx.stroke();
+  // Arrow heads
+  ctx.fillStyle = '#9db5ae';
+  ctx.beginPath(); ctx.moveTo(LABEL_W, maxH+22); ctx.lineTo(LABEL_W+6, maxH+18); ctx.lineTo(LABEL_W+6, maxH+26); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(LABEL_W+dispW, maxH+22); ctx.lineTo(LABEL_W+dispW-6, maxH+18); ctx.lineTo(LABEL_W+dispW-6, maxH+26); ctx.fill();
+
+  // ── Left axis label: LENGTH ──
+  ctx.save();
+  ctx.translate(10, maxH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillStyle = '#374151';
+  ctx.font = 'bold 10px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('length (ft)', 0, 0);
+  ctx.restore();
+
+  // Compression note if canvas was capped
+  if (heightScale < 0.99) {
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '8px DM Sans, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('(scaled ' + Math.round(heightScale*100) + '%)', LABEL_W + dispW - 2, 10);
+  }
 }
 
 function pp_renderLegend() {
