@@ -1076,6 +1076,24 @@ function pp_renderHistoryMap(L) {
   ctx.strokeStyle = '#9db5ae';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(x0, by); ctx.lineTo(x0 + bodyW, by); ctx.stroke();
+  // Arrow heads
+  ctx.fillStyle = '#9db5ae';
+  ctx.beginPath(); ctx.moveTo(x0, by); ctx.lineTo(x0 + 6, by - 4); ctx.lineTo(x0 + 6, by + 4); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x0 + bodyW, by); ctx.lineTo(x0 + bodyW - 6, by - 4); ctx.lineTo(x0 + bodyW - 6, by + 4); ctx.fill();
+  // Width tick marks (5ft steps)
+  var widthStep = 5;
+  if (rollWidth > widthStep) {
+    for (var wx = widthStep; wx < rollWidth; wx += widthStep) {
+      var tx = x0 + Math.round((wx / rollWidth) * bodyW);
+      ctx.strokeStyle = '#9db5ae';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(tx, by - 4); ctx.lineTo(tx, by + 4); ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(wx), tx, by + 14);
+    }
+  }
   ctx.fillStyle = '#374151';
   ctx.font = 'bold 10px DM Sans, sans-serif';
   ctx.textAlign = 'left';
@@ -1239,6 +1257,20 @@ function pp_drawCanvas(L) {
   ctx.strokeStyle = '#9db5ae';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(LABEL_W, maxH + 22); ctx.lineTo(LABEL_W + dispW, maxH + 22); ctx.stroke();
+  // Width tick marks (10ft steps)
+  var widthStep = 10;
+  if (L.rollWidth > widthStep) {
+    for (var wx = widthStep; wx < L.rollWidth; wx += widthStep) {
+      var tx = LABEL_W + Math.round((wx / L.rollWidth) * dispW);
+      ctx.strokeStyle = '#9db5ae';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(tx, maxH + 18); ctx.lineTo(tx, maxH + 26); ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(wx), tx, maxH + 36);
+    }
+  }
   // Arrow heads
   ctx.fillStyle = '#9db5ae';
   ctx.beginPath(); ctx.moveTo(LABEL_W, maxH+22); ctx.lineTo(LABEL_W+6, maxH+18); ctx.lineTo(LABEL_W+6, maxH+26); ctx.fill();
