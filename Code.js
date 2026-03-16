@@ -832,36 +832,120 @@ function prism_getRollPlotHistoryMap(rollIds) {
     const out = {};
     wanted.forEach(id => { out[id] = []; });
 
+    const rollMeta = {};
+    const rollSh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollLr = rollSh.getLastRow();
+    if (rollLr >= 2) {
+      rollSh.getRange(2, 1, rollLr - 1, 9).getValues().forEach(r => {
+        const rollId = String(r[ROLL_COL.ROLL_ID] || '').trim();
+        if (!rollId || !wantedSet[rollId]) return;
+        rollMeta[rollId] = {
+          width: parseFloat(r[ROLL_COL.WIDTH]) || 0,
+          originalLength: parseFloat(r[ROLL_COL.ORIGINAL_LENGTH]) || 0,
+          remainingLength: parseFloat(r[ROLL_COL.REMAINING_LENGTH]) || 0
+        };
+      });
+    }
+
     const sh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
     const lr = sh.getLastRow();
-    if (lr < 2 || !wanted.length) return { success: true, data: out };
+    if (lr >= 2 && wanted.length) {
+      const rows = sh.getRange(2, 1, lr - 1, 6).getValues();
+      rows.forEach(r => {
+        const remarks = String(r[PLOT_COL.REMARKS] || '').trim();
+        if (!remarks || remarks.charAt(0) !== '{') return;
 
-    const rows = sh.getRange(2, 1, lr - 1, 6).getValues();
-    rows.forEach(r => {
-      const remarks = String(r[PLOT_COL.REMARKS] || '').trim();
-      if (!remarks || remarks.charAt(0) !== '{') return;
+        let parsed = null;
+        try { parsed = JSON.parse(remarks); } catch (_) { parsed = null; }
+        if (!parsed || parsed.type !== 'ROLL_PLAN') return;
 
-      let parsed = null;
-      try { parsed = JSON.parse(remarks); } catch (_) { parsed = null; }
-      if (!parsed || parsed.type !== 'ROLL_PLAN') return;
+        const rollId = String(parsed.rollId || '').trim();
+        if (!rollId || !wantedSet[rollId]) return;
 
-      const rollId = String(parsed.rollId || '').trim();
-      if (!rollId || !wantedSet[rollId]) return;
-
-      out[rollId].push({
-        plotId: String(r[PLOT_COL.PLOT_ID] || '').trim(),
-        rollId: rollId,
-        rollWidth: parseFloat(parsed.rollWidth) || 0,
-        originalLength: parseFloat(parsed.originalLength) || 0,
-        startAtFt: parseFloat(parsed.startAtFt) || 0,
-        endAtFt: parseFloat(parsed.endAtFt) || 0,
-        lengthUsed: parseFloat(parsed.lengthUsed) || 0,
-        joNumbers: Array.isArray(parsed.joNumbers) ? parsed.joNumbers : [],
-        createdBy: String(parsed.createdBy || r[PLOT_COL.OPERATOR] || '').trim(),
-        datePlotted: prism_fmtShort_(r[PLOT_COL.DATE_PLOTTED]),
-        rows: Array.isArray(parsed.rows) ? parsed.rows : []
+        out[rollId].push({
+          plotId: String(r[PLOT_COL.PLOT_ID] || '').trim(),
+          rollId: rollId,
+          rollWidth: parseFloat(parsed.rollWidth) || 0,
+          originalLength: parseFloat(parsed.originalLength) || 0,
+          startAtFt: parseFloat(parsed.startAtFt) || 0,
+          endAtFt: parseFloat(parsed.endAtFt) || 0,
+          lengthUsed: parseFloat(parsed.lengthUsed) || 0,
+          joNumbers: Array.isArray(parsed.joNumbers) ? parsed.joNumbers : [],
+          createdBy: String(parsed.createdBy || r[PLOT_COL.OPERATOR] || '').trim(),
+          datePlotted: prism_fmtShort_(r[PLOT_COL.DATE_PLOTTED]),
+          rows: Array.isArray(parsed.rows) ? parsed.rows : [],
+          source: 'ROLL_PLAN'
+        });
       });
+    }
+
+    const fallbackNeeded = wanted.filter(rollId => {
+      if (!out[rollId].length) return true;
+      const firstStart = out[rollId].reduce((m, seg) => Math.min(m, parseFloat(seg.startAtFt) || 0), Number.POSITIVE_INFINITY);
+      return firstStart > 0.05;
     });
+
+    if (fallbackNeeded.length) {
+      const fallbackSet = {};
+      fallbackNeeded.forEach(id => { fallbackSet[id] = true; });
+      const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+      const usageLr = usageSh.getLastRow();
+      if (usageLr >= 2) {
+        const grouped = {};
+        usageSh.getRange(2, 1, usageLr - 1, 8).getValues().forEach(r => {
+          const rollId = String(r[USAGE_COL.ROLL_ID] || '').trim();
+          if (!rollId || !fallbackSet[rollId]) return;
+          const joNumber = String(r[USAGE_COL.JO_NUMBER] || '').trim().toUpperCase();
+          const lengthUsed = parseFloat(r[USAGE_COL.LENGTH_USED]) || 0;
+          if (!joNumber || lengthUsed <= 0) return;
+          if (!grouped[rollId]) grouped[rollId] = [];
+          grouped[rollId].push({
+            usageId: String(r[USAGE_COL.USAGE_ID] || '').trim(),
+            joNumber: joNumber,
+            widthUsed: parseFloat(r[USAGE_COL.WIDTH_USED]) || 0,
+            lengthUsed: lengthUsed,
+            operator: String(r[USAGE_COL.OPERATOR] || '').trim(),
+            dateRaw: r[USAGE_COL.DATE_USED],
+            dateLabel: prism_fmtShort_(r[USAGE_COL.DATE_USED])
+          });
+        });
+
+        Object.keys(grouped).forEach(rollId => {
+          grouped[rollId].sort((a, b) => {
+            const ad = a.dateRaw ? new Date(a.dateRaw).getTime() : 0;
+            const bd = b.dateRaw ? new Date(b.dateRaw).getTime() : 0;
+            if (ad !== bd) return ad - bd;
+            return String(a.usageId).localeCompare(String(b.usageId));
+          });
+
+          const firstSnapshotStart = out[rollId].length
+            ? out[rollId].reduce((m, seg) => Math.min(m, parseFloat(seg.startAtFt) || 0), Number.POSITIVE_INFINITY)
+            : Number.POSITIVE_INFINITY;
+          let cursorFt = 0;
+
+          grouped[rollId].forEach(item => {
+            const nextEnd = cursorFt + item.lengthUsed;
+            if (nextEnd <= firstSnapshotStart + 0.0001) {
+              out[rollId].push({
+                plotId: item.usageId,
+                rollId: rollId,
+                rollWidth: (rollMeta[rollId] && rollMeta[rollId].width) || 0,
+                originalLength: (rollMeta[rollId] && rollMeta[rollId].originalLength) || 0,
+                startAtFt: cursorFt,
+                endAtFt: nextEnd,
+                lengthUsed: item.lengthUsed,
+                joNumbers: [item.joNumber],
+                createdBy: item.operator,
+                datePlotted: item.dateLabel,
+                rows: [],
+                source: 'USAGE_FALLBACK'
+              });
+            }
+            cursorFt = nextEnd;
+          });
+        });
+      }
+    }
 
     Object.keys(out).forEach(rollId => {
       out[rollId].sort((a, b) => (a.startAtFt || 0) - (b.startAtFt || 0));
