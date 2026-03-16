@@ -771,3 +771,8 @@ function prism_getStockMaterialsList() {
     return { success: false, message: e.message };
   }
 }
+
+function debugEmail() {
+  Logger.log('Active user: ' + Session.getActiveUser().getEmail());
+  Logger.log('Effective user: ' + Session.getEffectiveUser().getEmail());
+}
