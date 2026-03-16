@@ -293,6 +293,9 @@ var pp_rollPlans = [];  // multi-roll plan segments
 var pp_activeRollViewId = '';
 var pp_rollHistory = {}; // { rollId: [historySegments...] }
 var pp_colors   = {};   // joNumber → color
+var pp_resizeObserver = null;
+var pp_resizeTimer = null;
+var pp_resizeBound = false;
 var PP_PALETTE  = [
   '#6366f1','#0d9488','#f59e0b','#ec4899','#10b981',
   '#8b5cf6','#ef4444','#3b82f6','#f97316','#14b8a6',
@@ -300,8 +303,36 @@ var PP_PALETTE  = [
 ];
 
 /* ── Init ── */
-function prism_init_plotting() { pp_loadData(); }
+function prism_init_plotting() {
+  pp_bindResponsiveRender();
+  pp_loadData();
+}
 function pp_reload() { prism_setReloading('pp-reloadBtn', true); pp_loadData(); }
+
+function pp_bindResponsiveRender() {
+  if (pp_resizeBound) return;
+  pp_resizeBound = true;
+
+  function rerender() {
+    if (!pp_layout) return;
+    var results = document.getElementById('pp-results');
+    if (!results || results.style.display === 'none') return;
+    clearTimeout(pp_resizeTimer);
+    pp_resizeTimer = setTimeout(function() {
+      if (pp_layout) pp_renderResults();
+    }, 90);
+  }
+
+  window.addEventListener('resize', rerender);
+
+  if (typeof ResizeObserver !== 'undefined') {
+    pp_resizeObserver = new ResizeObserver(rerender);
+    ['pp-results','pp-canvas-wrap','pp-historyWrap'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) pp_resizeObserver.observe(el);
+    });
+  }
+}
 
 function pp_loadData() {
   google.script.run
