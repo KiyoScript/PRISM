@@ -230,6 +230,28 @@
               <div id="pp-rowList"></div>
             </div>
 
+            <!-- Confirm panel -->
+            <div id="pp-confirmPanel">
+              <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-green);margin:0 0 10px;">✓ Confirm Plotting Layout</p>
+              <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will set all plotted JOs to <strong>READY_TO_PRINT</strong> and record roll usage.</p>
+              <div style="margin-bottom:12px;">
+                <label class="p-label">Plotting Sheet Link (optional)</label>
+                <input type="url" id="pp-plotLink" class="p-input" placeholder="https://docs.google.com/spreadsheets/d/…" style="font-size:13px;">
+              </div>
+              <button id="pp-confirmBtn" onclick="pp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
+                ✓ Confirm & Mark Ready to Print
+              </button>
+            </div>
+
+            <!-- Show confirm button -->
+            <button id="pp-showConfirm" onclick="pp_showConfirmPanel()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;margin-top:4px;">
+              ✓ Confirm Layout & Proceed
+            </button>
+
+            <button id="pp-exportBtn" onclick="pp_exportSheet()" class="p-btn" style="width:100%;padding:11px;font-size:13px;margin-top:8px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">
+              Export Plotting Sheet
+            </button>
+
           </div><!-- /pp-results-left -->
 
           <!-- RIGHT column — Full Roll Map spanning both rows -->
@@ -250,28 +272,6 @@
           </div><!-- /pp-results-right -->
 
         </div><!-- /pp-results-grid -->
-
-        <!-- Confirm panel -->
-        <div id="pp-confirmPanel">
-          <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-green);margin:0 0 10px;">✓ Confirm Plotting Layout</p>
-          <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will set all plotted JOs to <strong>READY_TO_PRINT</strong> and record roll usage.</p>
-          <div style="margin-bottom:12px;">
-            <label class="p-label">Plotting Sheet Link (optional)</label>
-            <input type="url" id="pp-plotLink" class="p-input" placeholder="https://docs.google.com/spreadsheets/d/…" style="font-size:13px;">
-          </div>
-          <button id="pp-confirmBtn" onclick="pp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
-            ✓ Confirm & Mark Ready to Print
-          </button>
-        </div>
-
-        <!-- Show confirm button -->
-        <button id="pp-showConfirm" onclick="pp_showConfirmPanel()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;margin-top:4px;">
-          ✓ Confirm Layout & Proceed
-        </button>
-
-        <button id="pp-exportBtn" onclick="pp_exportSheet()" class="p-btn" style="width:100%;padding:11px;font-size:13px;margin-top:8px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">
-          Export Plotting Sheet
-        </button>
 
       </div>
     </div>
