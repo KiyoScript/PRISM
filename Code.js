@@ -947,6 +947,17 @@ function prism_confirmPlotLayout(payload) {
     if (!rollPlans.length)
       return { success: false, message: 'No valid roll plan found.' };
 
+    let savedPlot = null;
+    let effectivePlottingLink = String(payload.plottingLink || '').trim();
+    if (payload.imageDataUrl) {
+      savedPlot = prism_saveRollMapToDrive_({
+        rollId: String(payload.plotRollId || rollPlans[0].rollId || '').trim(),
+        imageDataUrl: payload.imageDataUrl,
+        userEmail: user.email
+      });
+      effectivePlottingLink = String(savedPlot.pngUrl || '').trim();
+    }
+
     // ── Validate + deduct from each roll ──
     const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
     const rollLr   = rollSh.getLastRow();
@@ -1047,7 +1058,7 @@ function prism_confirmPlotLayout(payload) {
           (rollSnapshots[rollId] && rollSnapshots[rollId].width) || 0,
           len,
           user.email,
-          payload.plottingLink || '',
+          effectivePlottingLink || '',
           today
         ]]);
       });
@@ -1062,8 +1073,8 @@ function prism_confirmPlotLayout(payload) {
           });
           joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
           joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
-          if (payload.plottingLink) {
-            joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(payload.plottingLink);
+          if (effectivePlottingLink) {
+            joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
           }
         }
       });
@@ -1091,7 +1102,7 @@ function prism_confirmPlotLayout(payload) {
         endAtFt: snap.endAtFt || 0,
         lengthUsed: parseFloat(plan.lengthUsed) || 0,
         joNumbers: Object.keys(joSet),
-        plottingLink: payload.plottingLink || '',
+        plottingLink: effectivePlottingLink || '',
         createdBy: user.email,
         rows: prism_compactRollRows_(plan.rows)
       };
@@ -1099,7 +1110,7 @@ function prism_confirmPlotLayout(payload) {
       plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
         'PLN-' + today.getTime() + '-' + rollId,
         Object.keys(joSet).slice(0, 8).join(', '),
-        payload.plottingLink || '',
+        effectivePlottingLink || '',
         user.email,
         today,
         JSON.stringify(remarksObj)
@@ -1122,7 +1133,14 @@ function prism_confirmPlotLayout(payload) {
       message: 'Layout confirmed! ' + payload.joNumbers.length
         + ' JO(s) -> READY_TO_PRINT. Total roll used: ' + totalLengthUsed.toFixed(1) + 'ft across '
         + rollPlans.length + ' roll plan(s).'
-        + (consumedRolls.length ? (' Consumed: ' + consumedRolls.join(', ') + '.') : '')
+        + (consumedRolls.length ? (' Consumed: ' + consumedRolls.join(', ') + '.') : ''),
+      plottingLink: effectivePlottingLink || '',
+      savedPlot: savedPlot ? {
+        fileBaseName: savedPlot.fileBaseName,
+        pngUrl: savedPlot.pngUrl,
+        pdfUrl: savedPlot.pdfUrl,
+        folderUrl: savedPlot.folderUrl
+      } : null
     };
 
   } catch(e) { return { success: false, message: e.message }; }
@@ -1220,6 +1238,43 @@ function prism_exportPlottingSheet(payload) {
   }
 }
 
+function prism_saveRollMapToDrive_(payload) {
+  const rollId = String((payload && payload.rollId) || '').trim();
+  const imageDataUrl = String((payload && payload.imageDataUrl) || '').trim();
+  const userEmail = String((payload && payload.userEmail) || '').trim();
+  if (!rollId) throw new Error('Roll ID is required.');
+  if (!imageDataUrl) throw new Error('Image data is required.');
+
+  const m = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!m) throw new Error('Invalid image format.');
+
+  const contentType = m[1];
+  const b64 = m[2];
+  const bytes = Utilities.base64Decode(b64);
+  const safeRollId = rollId.replace(/[\\/:*?"<>|]/g, '_').trim() || 'ROLL';
+
+  const folder = DriveApp.getFolderById(PRISM_PLOTTING_DRIVE_FOLDER_ID);
+  const pngBlob = Utilities.newBlob(bytes, contentType, safeRollId + '.png');
+  const pngFile = folder.createFile(pngBlob);
+  const pdfBlob = pngBlob.getAs(MimeType.PDF).setName(safeRollId + '.pdf');
+  const pdfFile = folder.createFile(pdfBlob);
+
+  prism_audit_('PRISM_SAVE_ROLL_MAP_DRIVE', {
+    rollId: rollId,
+    pngFileId: pngFile.getId(),
+    pdfFileId: pdfFile.getId(),
+    folderId: PRISM_PLOTTING_DRIVE_FOLDER_ID,
+    by: userEmail
+  });
+
+  return {
+    fileBaseName: safeRollId,
+    pngUrl: pngFile.getUrl(),
+    pdfUrl: pdfFile.getUrl(),
+    folderUrl: folder.getUrl()
+  };
+}
+
 function prism_saveRollMapToDrive(payload) {
   try {
     const user = prism_getUserInfo_();
@@ -1227,41 +1282,19 @@ function prism_saveRollMapToDrive(payload) {
       return { success: false, message: 'Admin or Digital Operator access required.' };
     }
 
-    const rollId = String((payload && payload.rollId) || '').trim();
-    const imageDataUrl = String((payload && payload.imageDataUrl) || '').trim();
-    if (!rollId) return { success: false, message: 'Roll ID is required.' };
-    if (!imageDataUrl) return { success: false, message: 'Image data is required.' };
-
-    const m = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-    if (!m) return { success: false, message: 'Invalid image format.' };
-
-    const contentType = m[1];
-    const b64 = m[2];
-    const bytes = Utilities.base64Decode(b64);
-    const safeRollId = rollId.replace(/[\\/:*?"<>|]/g, '_').trim() || 'ROLL';
-
-    const folder = DriveApp.getFolderById(PRISM_PLOTTING_DRIVE_FOLDER_ID);
-    const pngBlob = Utilities.newBlob(bytes, contentType, safeRollId + '.png');
-    const pngFile = folder.createFile(pngBlob);
-
-    const pdfBlob = pngBlob.getAs(MimeType.PDF).setName(safeRollId + '.pdf');
-    const pdfFile = folder.createFile(pdfBlob);
-
-    prism_audit_('PRISM_SAVE_ROLL_MAP_DRIVE', {
-      rollId: rollId,
-      pngFileId: pngFile.getId(),
-      pdfFileId: pdfFile.getId(),
-      folderId: PRISM_PLOTTING_DRIVE_FOLDER_ID,
-      by: user.email
+    const saved = prism_saveRollMapToDrive_({
+      rollId: String((payload && payload.rollId) || '').trim(),
+      imageDataUrl: String((payload && payload.imageDataUrl) || '').trim(),
+      userEmail: user.email
     });
 
     return {
       success: true,
       message: 'Roll map saved to Drive.',
-      fileBaseName: safeRollId,
-      pngUrl: pngFile.getUrl(),
-      pdfUrl: pdfFile.getUrl(),
-      folderUrl: folder.getUrl()
+      fileBaseName: saved.fileBaseName,
+      pngUrl: saved.pngUrl,
+      pdfUrl: saved.pdfUrl,
+      folderUrl: saved.folderUrl
     };
   } catch (e) {
     return { success: false, message: e.message };

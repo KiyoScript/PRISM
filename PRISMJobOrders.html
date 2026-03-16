@@ -14,6 +14,8 @@
   .jo3-btn-completed:hover { background: #e5e7eb; }
   .jo3-btn-plot { background: #f3e8ff; color: #6d28d9; }
   .jo3-btn-plot:hover { background: #e9d5ff; }
+  .jo3-btn-view { background: #e0f2fe; color: #075985; }
+  .jo3-btn-view:hover { background: #bae6fd; }
 </style>
 
 <div style="padding:20px 20px 40px;">
@@ -208,6 +210,12 @@ function jo3_renderTable(data) {
     } else if (r.status === 'PRINTING') {
       actionBtn = '<button class="jo3-action-btn jo3-btn-completed" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>';
     }
+    if (r.plottingLink) {
+      actionBtn = '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;">'
+        + '<button class="jo3-action-btn jo3-btn-view" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingLink) + '\')">🖼 View Plot</button>'
+        + (actionBtn || '')
+        + '</div>';
+    }
     h += '<tr class="jo3-row">'
       + '<td><span class="mono" style="font-weight:700;color:var(--p-indigo);">' + jo3_esc(r.joNumber) + '</span></td>'
       + '<td style="font-weight:600;">' + jo3_esc(r.customer) + '</td>'
@@ -233,6 +241,17 @@ function jo3_renderCards(data) {
   data.forEach(function(r) {
     var sc = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
     var size = (r.width && r.height) ? r.width + ' × ' + r.height + ' ft' : '';
+    var actionHtml = '';
+    if (r.plottingLink) {
+      actionHtml += '<button class="jo3-action-btn jo3-btn-view" style="width:100%;margin-top:8px;" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingLink) + '\')">🖼 View Plot</button>';
+    }
+    if (r.status === 'FOR_PLOTTING') {
+      actionHtml += '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_goToRecordUsage(\'' + jo3_esc(r.joNumber) + '\')">✏ Record Usage</button>';
+    } else if (r.status === 'READY_TO_PRINT') {
+      actionHtml += '<button class="jo3-action-btn jo3-btn-printing" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
+    } else if (r.status === 'PRINTING') {
+      actionHtml += '<button class="jo3-action-btn jo3-btn-completed" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>';
+    }
     h += '<div class="p-card" style="padding:14px;">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
       + '<span class="mono" style="font-weight:700;color:var(--p-indigo);font-size:13px;">' + jo3_esc(r.joNumber) + '</span>'
@@ -245,12 +264,15 @@ function jo3_renderCards(data) {
       + (size ? '<span style="font-size:11px;color:var(--p-muted);">' + size + '</span>' : '')
       + (r.rollId ? jo3_renderRollsInline(r.rollId) : '')
       + '</div>'
-      + (r.status === 'FOR_PLOTTING' ? '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;" onclick="jo3_goToRecordUsage(\'' + jo3_esc(r.joNumber) + '\')">✏ Record Usage</button>' : '')
-      + (r.status === 'READY_TO_PRINT' ? '<button class="jo3-action-btn jo3-btn-printing" style="width:100%;" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>' : '')
-      + (r.status === 'PRINTING' ? '<button class="jo3-action-btn jo3-btn-completed" style="width:100%;" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>' : '')
+      + actionHtml
       + '</div>';
   });
   el.innerHTML = h;
+}
+
+function jo3_viewPlot(url) {
+  if (!url) return;
+  window.open(url, '_blank');
 }
 
 /* ── Render Roll IDs — handles single or comma-separated multi-roll ── */
