@@ -1070,6 +1070,18 @@ function prism_confirmPlotLayout(payload) {
     if (!rollPlans.length)
       return { success: false, message: 'No valid roll plan found.' };
 
+    const rollJoNumbersById = {};
+    rollPlans.forEach(plan => {
+      const joSet = {};
+      (Array.isArray(plan.rows) ? plan.rows : []).forEach(row => {
+        (Array.isArray(row.pieces) ? row.pieces : []).forEach(piece => {
+          const jo = String(piece.joNumber || piece.jo || '').trim().toUpperCase();
+          if (jo) joSet[jo] = true;
+        });
+      });
+      rollJoNumbersById[plan.rollId] = Object.keys(joSet);
+    });
+
     const plotImages = Array.isArray(payload.plotImages) ? payload.plotImages : [];
     const savedPlotsByRollId = {};
     let effectivePlottingLink = String(payload.plottingLink || '').trim();
@@ -1081,7 +1093,8 @@ function prism_confirmPlotLayout(payload) {
         savedPlotsByRollId[rollId] = prism_saveRollMapToDrive_({
           rollId: rollId,
           imageDataUrl: imageDataUrl,
-          userEmail: user.email
+          userEmail: user.email,
+          joNumbers: rollJoNumbersById[rollId] || []
         });
       });
       const firstSaved = savedPlotsByRollId[rollPlans[0].rollId] || savedPlotsByRollId[Object.keys(savedPlotsByRollId)[0]];
@@ -1090,7 +1103,8 @@ function prism_confirmPlotLayout(payload) {
       const fallbackSavedPlot = prism_saveRollMapToDrive_({
         rollId: String(payload.plotRollId || rollPlans[0].rollId || '').trim(),
         imageDataUrl: payload.imageDataUrl,
-        userEmail: user.email
+        userEmail: user.email,
+        joNumbers: rollJoNumbersById[String(payload.plotRollId || rollPlans[0].rollId || '').trim()] || []
       });
       savedPlotsByRollId[String(payload.plotRollId || rollPlans[0].rollId || '').trim()] = fallbackSavedPlot;
       effectivePlottingLink = String(fallbackSavedPlot.pngUrl || '').trim();
@@ -1384,6 +1398,7 @@ function prism_saveRollMapToDrive_(payload) {
   const rollId = String((payload && payload.rollId) || '').trim();
   const imageDataUrl = String((payload && payload.imageDataUrl) || '').trim();
   const userEmail = String((payload && payload.userEmail) || '').trim();
+  const joNumbers = Array.isArray(payload && payload.joNumbers) ? payload.joNumbers : [];
   if (!rollId) throw new Error('Roll ID is required.');
   if (!imageDataUrl) throw new Error('Image data is required.');
 
@@ -1394,29 +1409,45 @@ function prism_saveRollMapToDrive_(payload) {
   const b64 = m[2];
   const bytes = Utilities.base64Decode(b64);
   const safeRollId = rollId.replace(/[\\/:*?"<>|]/g, '_').trim() || 'ROLL';
+  const rollMeta = prism_getRollDriveMeta_(rollId);
+  const sizeFolderName = prism_buildRollSizeFolderName_(rollMeta);
+  const safeJoNames = joNumbers
+    .map(jo => String(jo || '').trim().toUpperCase())
+    .filter(Boolean)
+    .filter((jo, idx, arr) => arr.indexOf(jo) === idx)
+    .map(jo => jo.replace(/[^A-Z0-9._-]+/g, '_'));
+  const joSuffix = safeJoNames.length
+    ? ' - ' + safeJoNames.slice(0, 3).join('_') + (safeJoNames.length > 3 ? '_and-' + (safeJoNames.length - 3) + '-more' : '')
+    : '';
+  const fileBaseName = (safeRollId + joSuffix).slice(0, 180);
 
-  const folder = DriveApp.getFolderById(PRISM_PLOTTING_DRIVE_FOLDER_ID);
-  const pngBlob = Utilities.newBlob(bytes, contentType, safeRollId + '.png');
+  const rootFolder = DriveApp.getFolderById(PRISM_PLOTTING_DRIVE_FOLDER_ID);
+  const sizeFolder = prism_getOrCreateDriveChildFolder_(rootFolder, sizeFolderName);
+  const folder = prism_getOrCreateDriveChildFolder_(sizeFolder, safeRollId);
+  const pngBlob = Utilities.newBlob(bytes, contentType, fileBaseName + '.png');
   const pngFile = folder.createFile(pngBlob);
 
-  const tempDoc = DocumentApp.create('PRISM Roll Map Temp - ' + safeRollId + ' - ' + new Date().getTime());
+  const tempDoc = DocumentApp.create('PRISM Roll Map Temp - ' + fileBaseName + ' - ' + new Date().getTime());
   const body = tempDoc.getBody();
   body.clear();
   body.setMarginTop(18);
   body.setMarginBottom(18);
   body.setMarginLeft(18);
   body.setMarginRight(18);
-  body.appendParagraph('PRISM Roll Map - ' + safeRollId).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph('PRISM Roll Map - ' + fileBaseName).setHeading(DocumentApp.ParagraphHeading.HEADING2);
   body.appendImage(pngBlob).setWidth(520);
   tempDoc.saveAndClose();
 
   const tempDocFile = DriveApp.getFileById(tempDoc.getId());
-  const pdfBlob = tempDocFile.getAs(MimeType.PDF).setName(safeRollId + '.pdf');
+  const pdfBlob = tempDocFile.getAs(MimeType.PDF).setName(fileBaseName + '.pdf');
   const pdfFile = folder.createFile(pdfBlob);
   tempDocFile.setTrashed(true);
 
   prism_audit_('PRISM_SAVE_ROLL_MAP_DRIVE', {
     rollId: rollId,
+    sizeFolderName: sizeFolderName,
+    sizeFolderId: sizeFolder.getId(),
+    rollFolderId: folder.getId(),
     pngFileId: pngFile.getId(),
     pdfFileId: pdfFile.getId(),
     folderId: PRISM_PLOTTING_DRIVE_FOLDER_ID,
@@ -1424,11 +1455,67 @@ function prism_saveRollMapToDrive_(payload) {
   });
 
   return {
-    fileBaseName: safeRollId,
+    fileBaseName: fileBaseName,
     pngUrl: pngFile.getUrl(),
     pdfUrl: pdfFile.getUrl(),
     folderUrl: folder.getUrl()
   };
+}
+
+function prism_getOrCreateDriveChildFolder_(parentFolder, folderName) {
+  const safeName = String(folderName || '').trim() || 'Uncategorized';
+  const existing = parentFolder.getFoldersByName(safeName);
+  return existing.hasNext() ? existing.next() : parentFolder.createFolder(safeName);
+}
+
+function prism_getRollDriveMeta_(rollId) {
+  const sh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+  const lr = sh.getLastRow();
+  if (lr < 2) return { materialCode: '', materialName: '', width: 0, originalLength: 0 };
+
+  const rows = sh.getRange(2, 1, lr - 1, 4).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][ROLL_COL.ROLL_ID] || '').trim() !== rollId) continue;
+    const materialCode = String(rows[i][ROLL_COL.MATERIAL_CODE] || '').trim();
+    const materialMeta = prism_getMaterialDriveMeta_(materialCode);
+    return {
+      materialCode: materialCode,
+      materialName: materialMeta.materialName || '',
+      width: parseFloat(rows[i][ROLL_COL.WIDTH]) || 0,
+      originalLength: parseFloat(rows[i][ROLL_COL.ORIGINAL_LENGTH]) || 0
+    };
+  }
+  return { materialCode: '', materialName: '', width: 0, originalLength: 0 };
+}
+
+function prism_buildRollSizeFolderName_(rollMeta) {
+  const materialCode = String(rollMeta && rollMeta.materialCode || '').trim();
+  const materialName = String(rollMeta && rollMeta.materialName || '').trim();
+  const width = parseFloat(rollMeta && rollMeta.width) || 0;
+  const originalLength = parseFloat(rollMeta && rollMeta.originalLength) || 0;
+  if (materialCode && materialName) return materialCode + ' - ' + materialName;
+  if (materialName) return materialName;
+  if (width > 0 && originalLength > 0) return width + 'ft x ' + originalLength + 'ft';
+  if (width > 0) return width + 'ft wide';
+  return 'Unknown Size';
+}
+
+function prism_getMaterialDriveMeta_(materialCode) {
+  const code = String(materialCode || '').trim();
+  if (!code) return { materialName: '' };
+
+  const sh = prism_sh_(PRISM_SHEETS.LFP_MATERIALS);
+  const lr = sh.getLastRow();
+  if (lr < 2) return { materialName: '' };
+
+  const rows = sh.getRange(2, 1, lr - 1, 2).getValues();
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][MAT_COL.MATERIAL_CODE] || '').trim() !== code) continue;
+    return {
+      materialName: String(rows[i][MAT_COL.MATERIAL_NAME] || '').trim()
+    };
+  }
+  return { materialName: '' };
 }
 
 function prism_saveRollMapToDrive(payload) {
@@ -1441,7 +1528,8 @@ function prism_saveRollMapToDrive(payload) {
     const saved = prism_saveRollMapToDrive_({
       rollId: String((payload && payload.rollId) || '').trim(),
       imageDataUrl: String((payload && payload.imageDataUrl) || '').trim(),
-      userEmail: user.email
+      userEmail: user.email,
+      joNumbers: Array.isArray(payload && payload.joNumbers) ? payload.joNumbers : []
     });
 
     return {

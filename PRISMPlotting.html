@@ -1041,6 +1041,58 @@ function pp_getActivePlan(L) {
   return plans[0];
 }
 
+function pp_colorForHistoryJO(joNumber) {
+  var jo = String(joNumber || '').trim().toUpperCase();
+  if (!jo) return '#64748b';
+  if (pp_colors[jo]) return pp_colors[jo];
+  var hash = 0;
+  for (var i = 0; i < jo.length; i++) hash = ((hash * 31) + jo.charCodeAt(i)) >>> 0;
+  return PP_PALETTE[hash % PP_PALETTE.length];
+}
+
+function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPerFtY, opts) {
+  var rows = Array.isArray(seg.rows) ? seg.rows : [];
+  var y = startY;
+  var opacity = (opts && opts.opacity) || '33';
+  var labelColor = (opts && opts.labelColor) || '#ffffff';
+
+  rows.forEach(function(r) {
+    var rh = Math.max(2, Math.round((parseFloat(r.rowH) || 0) * pxPerFtY));
+    var cx = x0;
+
+    (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
+      var pieceWidth = parseFloat(p.w) || 0;
+      var pw = Math.max(1, Math.round((pieceWidth / rollWidth) * bodyW));
+      var joNumber = String(p.joNumber || p.jo || '').trim().toUpperCase();
+      var color = pp_colorForHistoryJO(joNumber);
+      ctx.fillStyle = color + opacity;
+      ctx.fillRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
+
+      if (pw > 34 && rh > 14 && joNumber) {
+        ctx.fillStyle = labelColor;
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(joNumber.slice(-8), cx + pw / 2, y + rh / 2 + 3);
+      }
+      cx += pw;
+    });
+
+    var wasteW = parseFloat(r.wasteW) || 0;
+    if (wasteW > 0.02) {
+      var ww = Math.max(1, Math.round((wasteW / rollWidth) * bodyW));
+      ctx.fillStyle = 'rgba(245,158,11,0.20)';
+      ctx.fillRect(cx + 1, y + 1, Math.max(1, ww - 2), Math.max(1, rh - 2));
+      ctx.strokeStyle = 'rgba(245,158,11,0.35)';
+      ctx.strokeRect(cx + 1, y + 1, Math.max(1, ww - 2), Math.max(1, rh - 2));
+    }
+
+    y += rh;
+  });
+}
+
 function pp_renderHistoryMap(L) {
   var canvas = document.getElementById('pp-historyCanvas');
   var wrap = document.getElementById('pp-historyWrap');
@@ -1113,15 +1165,23 @@ function pp_renderHistoryMap(L) {
   ctx.lineWidth = 1.5;
   ctx.strokeRect(x0, y0, bodyW, bodyH);
 
-  // Prior plotted segments (full-width faded blocks)
+  // Prior plotted segments. Use exact saved row layout when available; otherwise
+  // fall back to the full-width legacy block for old records.
   prior.forEach(function(seg, i) {
     var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
     var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
     if (sy > y0 + bodyH) return;
-    ctx.fillStyle = i % 2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
-    ctx.fillRect(x0 + 1, sy, bodyW - 2, sh);
-    ctx.strokeStyle = 'rgba(71,85,105,0.25)';
-    ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
+    if (Array.isArray(seg.rows) && seg.rows.length) {
+      pp_drawHistorySegmentRows(ctx, seg, x0, sy, bodyW, rollWidth, pxPerFtY, { opacity: '55', labelColor: '#f8fafc' });
+      ctx.strokeStyle = i % 2 ? 'rgba(99,102,241,0.35)' : 'rgba(20,184,166,0.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
+    } else {
+      ctx.fillStyle = i % 2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
+      ctx.fillRect(x0 + 1, sy, bodyW - 2, sh);
+      ctx.strokeStyle = 'rgba(71,85,105,0.25)';
+      ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
+    }
     if (sh > 14) {
       ctx.fillStyle = '#334155';
       ctx.font = '10px DM Sans, sans-serif';
