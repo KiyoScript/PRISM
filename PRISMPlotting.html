@@ -156,6 +156,10 @@
       <button id="pp-arrangeBtn" onclick="pp_autoArrange()" class="p-btn p-btn-teal" style="width:100%;padding:13px;font-size:14px;margin-bottom:10px;" disabled>
         ✦ Auto-Arrange
       </button>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--p-muted);margin:0 0 8px;cursor:pointer;">
+        <input id="pp-allowRotate" type="checkbox" checked onchange="pp_onRotationToggle()" style="accent-color:var(--p-teal);width:14px;height:14px;">
+        Auto-rotate pieces (90°) during arrange
+      </label>
       <p style="font-size:11px;color:var(--p-faint);text-align:center;margin:0 0 14px;">Select at least 1 JO and 1 roll to arrange</p>
 
     </div>
@@ -293,6 +297,7 @@ var pp_rollPlans = [];  // multi-roll plan segments
 var pp_activeRollViewId = '';
 var pp_rollHistory = {}; // { rollId: [historySegments...] }
 var pp_colors   = {};   // joNumber → color
+var pp_allowRotation = true;
 var pp_resizeObserver = null;
 var pp_resizeTimer = null;
 var pp_resizeBound = false;
@@ -533,17 +538,24 @@ function pp_checkArrangeBtn() {
   document.getElementById('pp-arrangeBtn').disabled = !(hasSel && pp_selRoll);
 }
 
+function pp_onRotationToggle() {
+  var chk = document.getElementById('pp-allowRotate');
+  pp_allowRotation = !!(chk && chk.checked);
+  pp_refreshRollSuggestions();
+  if (pp_layout) pp_autoArrange();
+}
+
 function pp_orientationsForSpace(p, rollWidth, spaceLeft) {
   var out = [];
   if (p.origW <= rollWidth && p.origW <= spaceLeft) out.push({ w: p.origW, h: p.origH, rotated: false });
-  if (p.origH <= rollWidth && p.origH <= spaceLeft && p.origH !== p.origW) out.push({ w: p.origH, h: p.origW, rotated: true });
+  if (pp_allowRotation && p.origH <= rollWidth && p.origH <= spaceLeft && p.origH !== p.origW) out.push({ w: p.origH, h: p.origW, rotated: true });
   return out;
 }
 
 function pp_maxFitWidth(p, rollWidth) {
   var m = 0;
   if (p.origW <= rollWidth) m = p.origW;
-  if (p.origH <= rollWidth && p.origH > m) m = p.origH;
+  if (pp_allowRotation && p.origH <= rollWidth && p.origH > m) m = p.origH;
   return m;
 }
 
@@ -691,7 +703,7 @@ function pp_expandPieces(selJOList, withColors) {
 }
 
 function pp_canFitRollWidth(piece, rollWidth) {
-  return piece.origW <= rollWidth || piece.origH <= rollWidth;
+  return piece.origW <= rollWidth || (pp_allowRotation && piece.origH <= rollWidth);
 }
 
 function pp_packPiecesForRoll(pieces, rollWidth, rollAvail) {
