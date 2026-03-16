@@ -235,10 +235,6 @@
             <div id="pp-confirmPanel">
               <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-green);margin:0 0 10px;">✓ Confirm Plotting Layout</p>
               <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will set all plotted JOs to <strong>READY_TO_PRINT</strong> and record roll usage.</p>
-              <div style="margin-bottom:12px;">
-                <label class="p-label">Plotting Sheet Link (optional)</label>
-                <input type="url" id="pp-plotLink" class="p-input" placeholder="https://docs.google.com/spreadsheets/d/…" style="font-size:13px;">
-              </div>
               <button id="pp-confirmBtn" onclick="pp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
                 ✓ Confirm & Mark Ready to Print
               </button>
@@ -249,8 +245,8 @@
               ✓ Confirm Layout & Proceed
             </button>
 
-            <button id="pp-exportBtn" onclick="pp_exportSheet()" class="p-btn" style="width:100%;padding:11px;font-size:13px;margin-top:8px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">
-              Export Plotting Sheet
+            <button id="pp-exportBtn" onclick="pp_saveMapToDrive()" class="p-btn" style="width:100%;padding:11px;font-size:13px;margin-top:8px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">
+              Save PDF/IMG to Drive
             </button>
 
           </div><!-- /pp-results-left -->
@@ -1456,7 +1452,6 @@ function pp_showConfirmPanel() {
 
 function pp_confirm() {
   if (!pp_layout) { prism_toast('error', 'No layout to confirm.'); return; }
-  var link = document.getElementById('pp-plotLink').value.trim();
   var btn  = document.getElementById('pp-confirmBtn');
 
   // Build list of unique JO numbers in layout
@@ -1503,7 +1498,6 @@ function pp_confirm() {
     })
     .prism_confirmPlotLayout({
       joNumbers:    joList,
-      plottingLink: link,
       rollPlans:    plans.map(function(plan) {
         return {
           rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,
@@ -1523,42 +1517,34 @@ function pp_confirm() {
     });
 }
 
-function pp_exportSheet() {
-  if (!pp_layout) { prism_toast('error', 'No layout to export.'); return; }
-  var link = document.getElementById('pp-plotLink').value.trim();
-  var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
-  var payloadPlans = plans.map(function(plan) {
-    return {
-      rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,
-      rollWidth: plan.rollWidth || (plan.roll && plan.roll.width) || pp_layout.rollWidth,
-      rollAvail: plan.rollAvail || (plan.roll && plan.roll.remainingLength) || pp_layout.rollAvail,
-      lengthUsed: plan.totalLen || 0,
-      rows: (plan.rows || []).map(function(r) {
-        return {
-          rowH: r.rowH,
-          usedW: r.usedW,
-          wasteW: r.wasteW,
-          pieces: (r.pieces || []).map(function(p) {
-            return { joNumber: p.joNumber, w: p.w, h: p.h, rotated: !!p.rotated };
-          })
-        };
-      })
-    };
-  });
+function pp_saveMapToDrive() {
+  if (!pp_layout) { prism_toast('error', 'No layout to save.'); return; }
+  var canvas = document.getElementById('pp-historyCanvas');
+  if (!canvas || !canvas.width) { prism_toast('error', 'No full roll map to save.'); return; }
+
+  var plan = pp_getActivePlan(pp_layout) || (pp_layout.rollPlans && pp_layout.rollPlans[0]) || null;
+  var rollId = (plan && plan.rollId) || (pp_layout.roll && pp_layout.roll.rollId) || 'ROLL';
+  var btn = document.getElementById('pp-exportBtn');
+  var oldText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving to Drive…'; }
 
   google.script.run
     .withSuccessHandler(function(r) {
+      if (btn) { btn.disabled = false; btn.textContent = oldText || 'Save PDF/IMG to Drive'; }
       if (!r || !r.success) {
-        prism_toast('error', (r && r.message) ? r.message : 'Failed to export plotting sheet.');
+        prism_toast('error', (r && r.message) ? r.message : 'Failed to save files to Drive.');
         return;
       }
-      if (r.url) window.open(r.url, '_blank');
-      prism_toast('success', 'Plotting sheet exported.');
+      prism_toast('success', 'Saved to Drive: ' + (r.fileBaseName || rollId) + '.png and .pdf');
     })
     .withFailureHandler(function(e) {
-      prism_toast('error', e.message || 'Failed to export plotting sheet.');
+      if (btn) { btn.disabled = false; btn.textContent = oldText || 'Save PDF/IMG to Drive'; }
+      prism_toast('error', e.message || 'Failed to save files to Drive.');
     })
-    .prism_exportPlottingSheet({ rollPlans: payloadPlans, plottingLink: link });
+    .prism_saveRollMapToDrive({
+      rollId: rollId,
+      imageDataUrl: canvas.toDataURL('image/png')
+    });
 }
 
 function pp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

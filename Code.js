@@ -63,6 +63,7 @@ const JO_STATUS = {
   COMPLETED:      'COMPLETED'
 };
 const ROLL_STATUS = { UNOPENED: 'UNOPENED', OPEN: 'OPEN', CONSUMED: 'CONSUMED' };
+const PRISM_PLOTTING_DRIVE_FOLDER_ID = '1IFPphBZ3IjcbkBTMSazeqbge_ZJN4S12';
 
 // ============================================================
 //  WEB APP ENTRY POINT
@@ -1213,6 +1214,54 @@ function prism_exportPlottingSheet(payload) {
       url: ss.getUrl(),
       spreadsheetId: ss.getId(),
       message: 'Plot sheet exported.'
+    };
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function prism_saveRollMapToDrive(payload) {
+  try {
+    const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role)) {
+      return { success: false, message: 'Admin or Digital Operator access required.' };
+    }
+
+    const rollId = String((payload && payload.rollId) || '').trim();
+    const imageDataUrl = String((payload && payload.imageDataUrl) || '').trim();
+    if (!rollId) return { success: false, message: 'Roll ID is required.' };
+    if (!imageDataUrl) return { success: false, message: 'Image data is required.' };
+
+    const m = imageDataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!m) return { success: false, message: 'Invalid image format.' };
+
+    const contentType = m[1];
+    const b64 = m[2];
+    const bytes = Utilities.base64Decode(b64);
+    const safeRollId = rollId.replace(/[\\/:*?"<>|]/g, '_').trim() || 'ROLL';
+
+    const folder = DriveApp.getFolderById(PRISM_PLOTTING_DRIVE_FOLDER_ID);
+    const pngBlob = Utilities.newBlob(bytes, contentType, safeRollId + '.png');
+    const pngFile = folder.createFile(pngBlob);
+
+    const pdfBlob = pngBlob.getAs(MimeType.PDF).setName(safeRollId + '.pdf');
+    const pdfFile = folder.createFile(pdfBlob);
+
+    prism_audit_('PRISM_SAVE_ROLL_MAP_DRIVE', {
+      rollId: rollId,
+      pngFileId: pngFile.getId(),
+      pdfFileId: pdfFile.getId(),
+      folderId: PRISM_PLOTTING_DRIVE_FOLDER_ID,
+      by: user.email
+    });
+
+    return {
+      success: true,
+      message: 'Roll map saved to Drive.',
+      fileBaseName: safeRollId,
+      pngUrl: pngFile.getUrl(),
+      pdfUrl: pdfFile.getUrl(),
+      folderUrl: folder.getUrl()
     };
   } catch (e) {
     return { success: false, message: e.message };
