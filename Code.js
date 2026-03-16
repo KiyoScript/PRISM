@@ -57,8 +57,10 @@ const PLOT_COL = {
 //  STATUS CONSTANTS
 // ============================================================
 const JO_STATUS = {
-  FOR_PLOTTING: 'FOR_PLOTTING', PLOTTED: 'PLOTTED',
-  FOR_PRINTING: 'FOR_PRINTING', PRINTING: 'PRINTING', COMPLETED: 'COMPLETED'
+  FOR_PLOTTING:   'FOR_PLOTTING',
+  READY_TO_PRINT: 'READY_TO_PRINT',
+  PRINTING:       'PRINTING',
+  COMPLETED:      'COMPLETED'
 };
 const ROLL_STATUS = { UNOPENED: 'UNOPENED', OPEN: 'OPEN', CONSUMED: 'CONSUMED' };
 
@@ -525,11 +527,8 @@ function prism_recordUsage(payload) {
           joSh.getRange(i + 2, JO_COL.ROLL_ID + 1)
             .setValue(existingRolls.join(', '));
 
-          // ── Advance JO status to PRINTING ──
-          const cs = String(r[JO_COL.STATUS]).trim();
-          if (cs === JO_STATUS.FOR_PRINTING || cs === JO_STATUS.PLOTTED) {
-            joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.PRINTING);
-          }
+          // ── Advance JO status to READY_TO_PRINT ──
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
 
           // ── Keep PlottingLink updated (latest wins) ──
           if (payload.plottingLink) {
@@ -590,6 +589,12 @@ function prism_getJobOrdersPublic() {
   try { return { success:true, data:prism_getAllJobOrders_() }; }
   catch(e) { return { success:false, message:e.message }; }
 }
+function prism_getForPlottingJOs() {
+  try {
+    const all = prism_getAllJobOrders_();
+    return { success: true, data: all.filter(j => j.status === JO_STATUS.FOR_PLOTTING) };
+  } catch(e) { return { success: false, message: e.message }; }
+}
 function prism_submitJobOrder(payload) {
   try {
     const user = prism_getUserInfo_();
@@ -625,6 +630,8 @@ function prism_submitJobOrder(payload) {
 function prism_updateJOStatus(joNumber, newStatus) {
   try {
     const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role) && !prism_isSTL_(user.role))
+      return { success: false, message: 'Admin or Senior Team Leader only.' };
     const sh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
     const lr   = sh.getLastRow();
     if (lr<2) return { success:false, message:'No JOs found.' };

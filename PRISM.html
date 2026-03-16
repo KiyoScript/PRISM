@@ -210,7 +210,7 @@ function u4_loadData() {
   google.script.run
     .withSuccessHandler(function(r) { if (r && r.success) u4_allJOs = r.data || []; })
     .withFailureHandler(function() {})
-    .prism_getJobOrdersPublic();
+    .prism_getForPlottingJOs();
 }
 
 /* ── JO Combo ── */
@@ -379,6 +379,9 @@ function u4_submit() {
       btn.disabled = false; btn.textContent = 'Record Usage';
       if (r.success) {
         prism_toast('success', r.message);
+        // Remove recorded JO from dropdown list immediately
+        var recordedJO = jo;
+        u4_allJOs = u4_allJOs.filter(function(j) { return j.joNumber !== recordedJO; });
         if (r.newRollStatus !== 'OPEN') u4_rolls = u4_rolls.filter(function(x) { return x.rollId !== rid; });
         else { for (var i = 0; i < u4_rolls.length; i++) { if (u4_rolls[i].rollId === rid) { u4_rolls[i].remainingLength = r.newRemaining; break; } } }
         u4_joReset(); u4_selRollId = '';
