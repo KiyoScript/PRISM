@@ -228,6 +228,10 @@
           ✓ Confirm Layout & Proceed
         </button>
 
+        <button id="pp-exportBtn" onclick="pp_exportSheet()" class="p-btn" style="width:100%;padding:11px;font-size:13px;margin-top:8px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">
+          Export Plotting Sheet
+        </button>
+
       </div>
     </div>
   </div>
@@ -244,6 +248,7 @@ var pp_selJOs   = {};   // { joNumber: true }
 var pp_rolls    = [];   // open rolls
 var pp_selRoll  = null; // selected roll object
 var pp_layout   = null; // computed layout result
+var pp_rollPlans = [];  // multi-roll plan segments
 var pp_colors   = {};   // joNumber → color
 var PP_PALETTE  = [
   '#6366f1','#0d9488','#f59e0b','#ec4899','#10b981',
@@ -309,6 +314,16 @@ function pp_renderJOs() {
     var qty = j.quantity || 1;
     var size = (j.width && j.height) ? j.width + ' × ' + j.height + ' ft' : '?';
     var total = (j.width && j.height) ? (j.width * j.height * qty).toFixed(1) + ' ft²' : '';
+    var hist = '';
+    if (j.plottedBefore) {
+      var rolls = (j.usageRollIds || []).join(', ');
+      hist = '<div style="font-size:10px;color:var(--p-teal);margin-top:3px;font-weight:700;">'
+        + 'Previously plotted: ' + (j.usageCount || 0) + 'x'
+        + (j.usageLastRollId ? ' · last ' + pp_esc(j.usageLastRollId) : '')
+        + (j.usageLastDate ? ' · ' + pp_esc(j.usageLastDate) : '')
+        + (rolls ? '<div style="font-weight:600;color:var(--p-muted);margin-top:1px;">Rolls: ' + pp_esc(rolls) + '</div>' : '')
+        + '</div>';
+    }
     h += '<div class="pp-jo-item' + sel + '" onclick="pp_toggleJO(\'' + pp_esc(j.joNumber) + '\')">'
       + '<input type="checkbox" ' + chk + ' onclick="event.stopPropagation();pp_toggleJO(\'' + pp_esc(j.joNumber) + '\')">'
       + '<div style="flex:1;min-width:0;">'
@@ -319,6 +334,7 @@ function pp_renderJOs() {
       + '<div class="pp-jo-cust">' + pp_esc(j.customer || '—') + '</div>'
       + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
       + (total ? '<div style="font-size:10px;color:var(--p-faint);margin-top:2px;">Total area: ' + total + '</div>' : '')
+      + hist
       + '</div>'
       + '</div>';
   });
@@ -331,14 +347,15 @@ function pp_toggleJO(joNumber) {
   pp_updateRollSuggestions();
   pp_checkArrangeBtn();
   pp_layout = null;
+  pp_rollPlans = [];
 }
 
 function pp_selectAll() {
   pp_filtJOs.forEach(function(j) { pp_selJOs[j.joNumber] = true; });
-  pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn();
+  pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = [];
 }
 function pp_clearAll() {
-  pp_selJOs = {}; pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn();
+  pp_selJOs = {}; pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = [];
 }
 
 /* ── Roll List ── */
@@ -384,6 +401,7 @@ function pp_selRollFn(rollId) {
   pp_renderRolls();
   pp_checkArrangeBtn();
   pp_layout = null;
+  pp_rollPlans = [];
 }
 
 function pp_updateRollSuggestions() {
@@ -554,6 +572,176 @@ function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
   };
 }
 
+function pp_expandPieces(selJOList, withColors) {
+  var pieces = [];
+  var colorSeed = Object.keys(pp_colors).length;
+  selJOList.forEach(function(j) {
+    var qty = parseInt(j.quantity, 10) || 1;
+    var jw  = parseFloat(j.width)  || 0;
+    var jh  = parseFloat(j.height) || 0;
+    if (withColors && !pp_colors[j.joNumber]) {
+      pp_colors[j.joNumber] = PP_PALETTE[colorSeed % PP_PALETTE.length];
+      colorSeed++;
+    }
+    for (var q = 0; q < qty; q++) {
+      pieces.push({
+        joNumber: j.joNumber,
+        customer: j.customer,
+        idx: q + 1,
+        qty: qty,
+        origW: jw,
+        origH: jh,
+        color: withColors ? pp_colors[j.joNumber] : null
+      });
+    }
+  });
+  pieces.sort(function(a, b) { return pp_maxFitWidth(b, 9999) - pp_maxFitWidth(a, 9999); });
+  return pieces;
+}
+
+function pp_canFitRollWidth(piece, rollWidth) {
+  return piece.origW <= rollWidth || piece.origH <= rollWidth;
+}
+
+function pp_packPiecesForRoll(pieces, rollWidth, rollAvail) {
+  var remaining = pieces.slice();
+  var rows = [];
+  var totalLen = 0;
+
+  while (remaining.length > 0) {
+    var canFitAny = remaining.some(function(p) { return pp_canFitRollWidth(p, rollWidth); });
+    if (!canFitAny) break;
+
+    var row = [];
+    var usedW = 0;
+    var rowH = 0;
+
+    while (true) {
+      var spaceLeft = rollWidth - usedW;
+      var bestIdx = -1;
+      var bestOr = null;
+      var bestScore = -999999;
+
+      for (var i = 0; i < remaining.length; i++) {
+        var p = remaining[i];
+        var ors = pp_orientationsForSpace(p, rollWidth, spaceLeft);
+        for (var oi = 0; oi < ors.length; oi++) {
+          var o = ors[oi];
+          var nextH = row.length ? Math.max(rowH, o.h) : o.h;
+          var score = o.w - (row.length ? (nextH - rowH) * 0.25 : 0);
+          if (score > bestScore || (score === bestScore && (!bestOr || o.w > bestOr.w))) {
+            bestScore = score;
+            bestIdx = i;
+            bestOr = o;
+          }
+        }
+      }
+
+      if (bestIdx === -1) break;
+
+      var picked = remaining.splice(bestIdx, 1)[0];
+      picked.w = bestOr.w;
+      picked.h = bestOr.h;
+      picked.rotated = bestOr.rotated;
+      row.push(picked);
+      usedW += picked.w;
+      if (picked.h > rowH) rowH = picked.h;
+
+      if (rollWidth - usedW < 0.01) break;
+    }
+
+    if (!row.length) break;
+
+    if (totalLen + rowH > rollAvail + 0.0001) {
+      Array.prototype.push.apply(remaining, row);
+      break;
+    }
+
+    rows.push({ pieces: row, usedW: usedW, rowH: rowH, wasteW: Math.max(0, rollWidth - usedW) });
+    totalLen += rowH;
+  }
+
+  var totalArea = 0;
+  var wasteArea = 0;
+  var pieceCount = 0;
+  rows.forEach(function(r) {
+    totalArea += rollWidth * r.rowH;
+    wasteArea += r.wasteW * r.rowH;
+    pieceCount += (r.pieces || []).length;
+  });
+
+  return {
+    rows: rows,
+    totalLen: totalLen,
+    remainingPieces: remaining,
+    totalPieces: pieceCount,
+    wastePct: totalArea > 0 ? Math.round(wasteArea / totalArea * 100) : 0,
+    remainingLength: Math.max(0, rollAvail - totalLen)
+  };
+}
+
+function pp_planAcrossRolls(selJOList) {
+  var pieces = pp_expandPieces(selJOList, true);
+  var openRolls = pp_rolls.slice();
+  var ordered = openRolls.slice();
+
+  ordered.forEach(function(r) {
+    r._sim = pp_simulateRollPlan(selJOList, parseFloat(r.width) || 0, parseFloat(r.remainingLength) || 0, false);
+  });
+  ordered.sort(function(a, b) {
+    var A = a._sim || {};
+    var B = b._sim || {};
+    var aUnsupported = A.unsupportedPieces > 0 ? 1 : 0;
+    var bUnsupported = B.unsupportedPieces > 0 ? 1 : 0;
+    if (aUnsupported !== bUnsupported) return aUnsupported - bUnsupported;
+    if ((A.overflowFt || 0) !== (B.overflowFt || 0)) return (A.overflowFt || 0) - (B.overflowFt || 0);
+    if ((A.wastePct || 0) !== (B.wastePct || 0)) return (A.wastePct || 0) - (B.wastePct || 0);
+    return (A.totalLen || 0) - (B.totalLen || 0);
+  });
+
+  if (pp_selRoll) {
+    var idx = ordered.findIndex(function(r) { return r.rollId === pp_selRoll.rollId; });
+    if (idx > 0) {
+      var chosen = ordered.splice(idx, 1)[0];
+      ordered.unshift(chosen);
+    }
+  }
+
+  var plans = [];
+  var remaining = pieces.slice();
+
+  for (var i = 0; i < ordered.length; i++) {
+    if (!remaining.length) break;
+    var roll = ordered[i];
+    var pack = pp_packPiecesForRoll(remaining, parseFloat(roll.width) || 0, parseFloat(roll.remainingLength) || 0);
+    if (pack.rows.length > 0) {
+      plans.push({
+        roll: roll,
+        rollId: roll.rollId,
+        rollWidth: parseFloat(roll.width) || 0,
+        rollAvail: parseFloat(roll.remainingLength) || 0,
+        rows: pack.rows,
+        totalLen: pack.totalLen,
+        remaining: pack.remainingLength,
+        wastePct: pack.wastePct,
+        totalPieces: pack.totalPieces
+      });
+    }
+    remaining = pack.remainingPieces;
+  }
+
+  var unsupported = remaining.filter(function(p) {
+    return !openRolls.some(function(r) { return pp_canFitRollWidth(p, parseFloat(r.width) || 0); });
+  }).length;
+
+  return {
+    plans: plans,
+    totalPieces: pieces.length,
+    unplannedPieces: remaining.length,
+    unsupportedPieces: unsupported
+  };
+}
+
 /* ══════════════════════════════════════════════
    CORE AUTO-ARRANGE ALGORITHM
    2D strip packing with rotation support
@@ -565,28 +753,51 @@ function pp_autoArrange() {
   var selJOList = pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
   if (!selJOList.length) { prism_toast('error', 'Please select at least one JO.'); return; }
 
-  var rollWidth = parseFloat(pp_selRoll.width);
-  var rollAvail = parseFloat(pp_selRoll.remainingLength);
+  var plan = pp_planAcrossRolls(selJOList);
+  if (!plan.plans.length) {
+    prism_toast('error', 'No pieces can be placed on current open rolls.');
+    return;
+  }
 
-  var simulated = pp_simulateRollPlan(selJOList, rollWidth, rollAvail, true);
+  pp_rollPlans = plan.plans;
+  var primary = pp_rollPlans[0];
+  var totalLen = 0;
+  var totalRemain = 0;
+  var totalArea = 0;
+  var totalWasteArea = 0;
+  pp_rollPlans.forEach(function(p) {
+    totalLen += p.totalLen;
+    totalRemain += p.remaining;
+    p.rows.forEach(function(r) {
+      totalArea += p.rollWidth * r.rowH;
+      totalWasteArea += r.wasteW * r.rowH;
+    });
+  });
+
   pp_layout = {
-    rows: simulated.rows,
-    rollWidth: simulated.rollWidth,
-    rollAvail: simulated.rollAvail,
-    totalLen: simulated.totalLen,
-    remaining: simulated.remaining,
-    overflow: simulated.overflow,
-    wastePct: simulated.wastePct,
-    totalPieces: simulated.totalPieces,
-    unsupportedPieces: simulated.unsupportedPieces,
-    roll: pp_selRoll
+    rows: primary.rows,
+    rollWidth: primary.rollWidth,
+    rollAvail: primary.rollAvail,
+    totalLen: totalLen,
+    remaining: totalRemain,
+    overflow: plan.unplannedPieces > 0,
+    wastePct: totalArea > 0 ? Math.round(totalWasteArea / totalArea * 100) : 0,
+    totalPieces: plan.totalPieces,
+    unplannedPieces: plan.unplannedPieces,
+    unsupportedPieces: plan.unsupportedPieces,
+    roll: primary.roll,
+    rollPlans: pp_rollPlans
   };
 
   pp_renderResults();
-  if (simulated.unsupportedPieces > 0) {
-    prism_toast('error', 'Some pieces do not fit this roll width. Please pick a wider roll.');
+  if (plan.unplannedPieces > 0) {
+    if (plan.unsupportedPieces > 0) {
+      prism_toast('error', plan.unsupportedPieces + ' piece(s) do not fit any open roll width.');
+    } else {
+      prism_toast('error', plan.unplannedPieces + ' piece(s) still unplanned. Open/allocate more roll length.');
+    }
   } else {
-    prism_toast('success', 'Layout arranged — ' + simulated.rows.length + ' rows, ' + simulated.totalLen.toFixed(1) + 'ft used');
+    prism_toast('success', 'Layout arranged across ' + pp_rollPlans.length + ' roll(s), ' + totalLen.toFixed(1) + 'ft used');
   }
 }
 
@@ -611,11 +822,19 @@ function pp_renderResults() {
   var om = document.getElementById('pp-overflowMsg');
   if (L.overflow) {
     ow.style.display = 'flex';
-    om.textContent = '⚠ Layout needs ' + L.totalLen.toFixed(1) + 'ft but roll only has ' + L.rollAvail + 'ft left. Open another roll for the overflow.';
+    if (L.unsupportedPieces > 0) {
+      om.textContent = '⚠ ' + L.unsupportedPieces + ' piece(s) cannot fit any OPEN roll width. Add a wider roll.';
+    } else {
+      om.textContent = '⚠ ' + (L.unplannedPieces || 0) + ' piece(s) are still unplanned. Open another roll for continuation.';
+    }
   } else { ow.style.display = 'none'; }
 
   // Roll label
-  document.getElementById('pp-rollLabel').textContent = L.roll.rollId + ' · ' + L.rollWidth + 'ft × ' + L.rollAvail + 'ft';
+  if (L.rollPlans && L.rollPlans.length > 1) {
+    document.getElementById('pp-rollLabel').textContent = L.rollPlans.length + ' rolls planned · primary ' + L.roll.rollId;
+  } else {
+    document.getElementById('pp-rollLabel').textContent = L.roll.rollId + ' · ' + L.rollWidth + 'ft × ' + L.rollAvail + 'ft';
+  }
 
   // Canvas
   pp_drawCanvas(L);
@@ -799,20 +1018,28 @@ function pp_renderLegend() {
 
 function pp_renderRowList(L) {
   var el = document.getElementById('pp-rowList');
-  if (!L.rows.length) { el.innerHTML = '<p style="color:var(--p-faint);font-size:13px;">No rows.</p>'; return; }
+  if (!L.rows.length && !(L.rollPlans && L.rollPlans.length)) { el.innerHTML = '<p style="color:var(--p-faint);font-size:13px;">No rows.</p>'; return; }
   var html = '';
-  L.rows.forEach(function(row, i) {
-    html += '<div class="pp-row-item">'
-      + '<span class="pp-row-num">R' + (i+1) + '</span>'
-      + '<div style="display:flex;flex-wrap:wrap;gap:3px;flex:1;">';
-    row.pieces.forEach(function(p) {
-      var lbl = p.joNumber + (p.qty > 1 ? ' #' + p.idx : '') + ' (' + p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : '') + ')';
-      html += '<span class="pp-piece" style="background:' + p.color + '22;color:' + p.color + ';border:1px solid ' + p.color + '44;">' + pp_esc(lbl) + '</span>';
-    });
-    if (row.wasteW > 0.05) {
-      html += '<span class="pp-waste">waste ' + row.wasteW.toFixed(2) + 'ft</span>';
+  var plans = (L.rollPlans && L.rollPlans.length) ? L.rollPlans : [{ rollId: L.roll.rollId, rows: L.rows }];
+  plans.forEach(function(plan, pi) {
+    if (plans.length > 1) {
+      html += '<div style="font-size:11px;font-weight:800;color:var(--p-teal);margin:8px 0 6px;">'
+        + 'Roll ' + pp_esc(plan.rollId) + ' · ' + plan.totalLen.toFixed(1) + 'ft used'
+        + '</div>';
     }
-    html += '</div><span class="pp-row-len">' + row.rowH.toFixed(1) + 'ft</span></div>';
+    plan.rows.forEach(function(row, i) {
+      html += '<div class="pp-row-item">'
+        + '<span class="pp-row-num">R' + (i+1) + '</span>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:3px;flex:1;">';
+      row.pieces.forEach(function(p) {
+        var lbl = p.joNumber + (p.qty > 1 ? ' #' + p.idx : '') + ' (' + p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : '') + ')';
+        html += '<span class="pp-piece" style="background:' + p.color + '22;color:' + p.color + ';border:1px solid ' + p.color + '44;">' + pp_esc(lbl) + '</span>';
+      });
+      if (row.wasteW > 0.05) {
+        html += '<span class="pp-waste">waste ' + row.wasteW.toFixed(2) + 'ft</span>';
+      }
+      html += '</div><span class="pp-row-len">' + row.rowH.toFixed(1) + 'ft</span></div>';
+    });
   });
   el.innerHTML = html;
 }
@@ -831,7 +1058,10 @@ function pp_confirm() {
 
   // Build list of unique JO numbers in layout
   var joNums = {};
-  pp_layout.rows.forEach(function(r) { r.pieces.forEach(function(p) { joNums[p.joNumber] = true; }); });
+  var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
+  plans.forEach(function(plan) {
+    (plan.rows || []).forEach(function(r) { (r.pieces || []).forEach(function(p) { joNums[p.joNumber] = true; }); });
+  });
   var joList = Object.keys(joNums);
 
   if (!joList.length) { prism_toast('error', 'No JOs in layout.'); return; }
@@ -851,6 +1081,7 @@ function pp_confirm() {
         });
         pp_filtJOs = pp_allJOs.slice();
         pp_layout  = null;
+        pp_rollPlans = [];
         pp_selRoll = null;
         document.getElementById('pp-results').style.display    = 'none';
         document.getElementById('pp-rightEmpty').style.display = 'block';
@@ -868,13 +1099,62 @@ function pp_confirm() {
     })
     .prism_confirmPlotLayout({
       joNumbers:    joList,
-      rollId:       pp_layout.roll.rollId,
-      lengthUsed:   pp_layout.totalLen,
       plottingLink: link,
-      rows:         pp_layout.rows.map(function(r) {
-        return { rowH: r.rowH, pieces: r.pieces.map(function(p) { return { joNumber: p.joNumber, w: p.w, h: p.h, rotated: !!p.rotated }; }) };
+      rollPlans:    plans.map(function(plan) {
+        return {
+          rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,
+          lengthUsed: plan.totalLen || 0,
+          rows: (plan.rows || []).map(function(r) {
+            return {
+              rowH: r.rowH,
+              usedW: r.usedW,
+              wasteW: r.wasteW,
+              pieces: (r.pieces || []).map(function(p) {
+                return { joNumber: p.joNumber, w: p.w, h: p.h, rotated: !!p.rotated };
+              })
+            };
+          })
+        };
       })
     });
+}
+
+function pp_exportSheet() {
+  if (!pp_layout) { prism_toast('error', 'No layout to export.'); return; }
+  var link = document.getElementById('pp-plotLink').value.trim();
+  var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
+  var payloadPlans = plans.map(function(plan) {
+    return {
+      rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,
+      rollWidth: plan.rollWidth || (plan.roll && plan.roll.width) || pp_layout.rollWidth,
+      rollAvail: plan.rollAvail || (plan.roll && plan.roll.remainingLength) || pp_layout.rollAvail,
+      lengthUsed: plan.totalLen || 0,
+      rows: (plan.rows || []).map(function(r) {
+        return {
+          rowH: r.rowH,
+          usedW: r.usedW,
+          wasteW: r.wasteW,
+          pieces: (r.pieces || []).map(function(p) {
+            return { joNumber: p.joNumber, w: p.w, h: p.h, rotated: !!p.rotated };
+          })
+        };
+      })
+    };
+  });
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r || !r.success) {
+        prism_toast('error', (r && r.message) ? r.message : 'Failed to export plotting sheet.');
+        return;
+      }
+      if (r.url) window.open(r.url, '_blank');
+      prism_toast('success', 'Plotting sheet exported.');
+    })
+    .withFailureHandler(function(e) {
+      prism_toast('error', e.message || 'Failed to export plotting sheet.');
+    })
+    .prism_exportPlottingSheet({ rollPlans: payloadPlans, plottingLink: link });
 }
 
 function pp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
