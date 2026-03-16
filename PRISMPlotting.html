@@ -251,8 +251,7 @@
               <div class="pp-pane-head">
                 <p class="pp-pane-title">Full Roll Map</p>
                 <div class="pp-pane-actions">
-                  <button onclick="pp_exportHistoryImage()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Save Image</button>
-                  <button onclick="pp_exportHistoryPdf()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Print/PDF</button>
+                  <button onclick="pp_exportHistoryImage()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Save High-Quality Image</button>
                 </div>
               </div>
               <div id="pp-historyWrap">
@@ -1313,11 +1312,25 @@ function pp_renderHistoryMap(L) {
 
 function pp_getHighResHistoryDataUrl() {
   if (!pp_layout) return '';
-  var prevMode = pp_historyRenderMode;
-  pp_historyRenderMode = 'export';
-  pp_renderHistoryMap(pp_layout);
   var canvas = document.getElementById('pp-historyCanvas');
+  if (!canvas) return '';
+  var prevMode = pp_historyRenderMode;
+  var prevWidth = canvas.width;
+  var prevHeight = canvas.height;
+  // Set high-res size (e.g., 3x current size)
+  var scale = 3;
+  canvas.width = prevWidth * scale;
+  canvas.height = prevHeight * scale;
+  canvas.style.width = prevWidth + 'px';
+  canvas.style.height = prevHeight + 'px';
+  pp_historyRenderMode = 'export';
+  pp_renderHistoryMap(pp_layout, scale); // Pass scale if your renderer supports it
   var url = (canvas && canvas.width) ? canvas.toDataURL('image/png') : '';
+  // Restore canvas size
+  canvas.width = prevWidth;
+  canvas.height = prevHeight;
+  canvas.style.width = prevWidth + 'px';
+  canvas.style.height = prevHeight + 'px';
   pp_historyRenderMode = prevMode;
   pp_renderHistoryMap(pp_layout);
   return url;
@@ -1332,19 +1345,7 @@ function pp_exportHistoryImage() {
   a.click();
 }
 
-function pp_exportHistoryPdf() {
-  var url = pp_getHighResHistoryDataUrl();
-  if (!url) { prism_toast('error', 'No full roll map to print.'); return; }
-  var w = window.open('', '_blank');
-  if (!w) { prism_toast('error', 'Popup blocked. Allow popups to print.'); return; }
-  w.document.write('<html><head><title>PRISM Roll Map</title></head><body style="margin:16px;font-family:Arial,sans-serif;">'
-    + '<h3 style="margin:0 0 10px;">PRISM Roll Map - ' + pp_esc(pp_activeRollViewId || '') + '</h3>'
-    + '<img src="' + url + '" style="max-width:100%;height:auto;border:1px solid #d1d5db;border-radius:8px;"/>'
-    + '<p style="font-size:12px;color:#6b7280;">Use Print and select Save as PDF.</p>'
-    + '</body></html>');
-  w.document.close();
-  setTimeout(function(){ w.focus(); w.print(); }, 300);
-}
+
 
 function pp_drawCanvas(L) {
   var wrap   = document.getElementById('pp-canvas-wrap');
