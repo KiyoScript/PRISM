@@ -49,7 +49,7 @@
   /* ── Canvas ── */
   #pp-canvas-wrap {
     background: var(--p-bg); border: 1.5px solid var(--p-border);
-    border-radius: 12px; overflow: auto; padding: 12px;
+    border-radius: 12px; overflow-y: auto; overflow-x: hidden; padding: 12px;
     min-height: 200px; position: relative;
   }
   #pp-canvas { display: block; }
@@ -1062,7 +1062,7 @@ function pp_renderHistoryMap(L) {
   ctx.fillStyle = '#64748b';
   ctx.font = '10px DM Sans, sans-serif';
   ctx.textAlign = 'right';
-  var step = rollLen > 200 ? 20 : 10;
+  var step = 5;
   for (var ft = 0; ft <= rollLen; ft += step) {
     var yy = y0 + Math.round(ft * pxPerFtY);
     ctx.fillText(ft, x0 - 6, yy + 3);
@@ -1117,9 +1117,13 @@ function pp_drawCanvas(L) {
   var canvas = document.getElementById('pp-canvas');
   var ctx    = canvas.getContext('2d');
 
+  var LABEL_H    = 40; // space for bottom labels
+  var LABEL_W    = 36; // space for left length labels
+
   // True-to-size: scale so the roll width fills available space
   // and height is proportional to actual roll dimensions
-  var maxDispW   = Math.max(wrap.clientWidth - 24, 200);
+  // Subtract axis width so full canvas fits without horizontal scrolling
+  var maxDispW   = Math.max(wrap.clientWidth - 24 - LABEL_W - 4, 200);
   var scale      = maxDispW / L.rollWidth; // px per ft — true ratio
   var dispW      = Math.round(L.rollWidth * scale);
   var totalLen   = Math.min(L.totalLen, L.rollAvail);
@@ -1127,8 +1131,6 @@ function pp_drawCanvas(L) {
   // Cap height at 700px but keep ratio label accurate
   var maxH       = Math.min(totalDispH, 700);
   var heightScale = maxH / (totalDispH || 1); // compression factor if capped
-  var LABEL_H    = 40; // space for bottom labels
-  var LABEL_W    = 36; // space for left length labels
 
   canvas.width  = dispW + LABEL_W;
   canvas.height = maxH + LABEL_H;
