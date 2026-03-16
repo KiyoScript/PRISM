@@ -1314,8 +1314,22 @@ function prism_saveRollMapToDrive_(payload) {
   const folder = DriveApp.getFolderById(PRISM_PLOTTING_DRIVE_FOLDER_ID);
   const pngBlob = Utilities.newBlob(bytes, contentType, safeRollId + '.png');
   const pngFile = folder.createFile(pngBlob);
-  const pdfBlob = pngBlob.getAs(MimeType.PDF).setName(safeRollId + '.pdf');
+
+  const tempDoc = DocumentApp.create('PRISM Roll Map Temp - ' + safeRollId + ' - ' + new Date().getTime());
+  const body = tempDoc.getBody();
+  body.clear();
+  body.setMarginTop(18);
+  body.setMarginBottom(18);
+  body.setMarginLeft(18);
+  body.setMarginRight(18);
+  body.appendParagraph('PRISM Roll Map - ' + safeRollId).setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendImage(pngBlob).setWidth(520);
+  tempDoc.saveAndClose();
+
+  const tempDocFile = DriveApp.getFileById(tempDoc.getId());
+  const pdfBlob = tempDocFile.getAs(MimeType.PDF).setName(safeRollId + '.pdf');
   const pdfFile = folder.createFile(pdfBlob);
+  tempDocFile.setTrashed(true);
 
   prism_audit_('PRISM_SAVE_ROLL_MAP_DRIVE', {
     rollId: rollId,

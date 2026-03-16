@@ -240,11 +240,6 @@
               </button>
             </div>
 
-            <!-- Show confirm button -->
-            <button id="pp-showConfirm" onclick="pp_showConfirmPanel()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;margin-top:4px;">
-              ✓ Confirm Layout & Proceed
-            </button>
-
           </div><!-- /pp-results-left -->
 
           <!-- RIGHT column — Full Roll Map spanning both rows -->
@@ -962,8 +957,7 @@ function pp_renderResults() {
 
   document.getElementById('pp-rightEmpty').style.display = 'none';
   document.getElementById('pp-results').style.display    = 'block';
-  document.getElementById('pp-confirmPanel').style.display = 'none';
-  document.getElementById('pp-showConfirm').style.display  = 'block';
+  document.getElementById('pp-confirmPanel').style.display = 'block';
 
   // Stats
   document.getElementById('pp-statTotal').textContent   = L.totalLen.toFixed(1) + 'ft';
@@ -1477,7 +1471,6 @@ function pp_renderRowList(L) {
 /* ── Confirm ── */
 function pp_showConfirmPanel() {
   document.getElementById('pp-confirmPanel').style.display = 'block';
-  document.getElementById('pp-showConfirm').style.display  = 'none';
   document.getElementById('pp-confirmPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
