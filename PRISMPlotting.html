@@ -5,9 +5,12 @@
   /* ── Layout ── */
   .pp-grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
   @media (max-width: 900px) { .pp-grid { grid-template-columns: 1fr; } }
-  .pp-three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; align-items: start; }
-  @media (max-width: 1400px) { .pp-three-col { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 900px) { .pp-three-col { grid-template-columns: 1fr; } }
+  .pp-results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .pp-results-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .pp-results-right { display: flex; flex-direction: column; min-width: 0; }
+  .pp-results-right .p-card { flex: 1; }
+  #pp-historyWrap { overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px; min-height: 400px; }
+  @media (max-width: 1100px) { .pp-results-grid { grid-template-columns: 1fr; } }
 
   /* ── JO Checklist ── */
   .pp-jo-item {
@@ -41,11 +44,6 @@
   .pp-pane-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
   .pp-pane-actions { display:flex; gap:8px; justify-content:flex-end; }
 
-  /* ── Full roll history map ── */
-  #pp-historyWrap {
-    overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px;
-    height: 720px; max-height: 720px;
-  }
   #pp-historyCanvas { display: block; }
 
   /* ── Canvas ── */
@@ -205,46 +203,53 @@
           <span id="pp-overflowMsg"></span>
         </div>
 
-        <!-- Three-column: Visual Layout | Full Roll Map | Row Details -->
-        <div class="pp-three-col">
+        <!-- Two-column: left stack (Visual Layout + Row Details) | right (Full Roll Map) -->
+        <div class="pp-results-grid">
 
-        <!-- Visual layout -->
-        <div class="p-card" style="padding:14px;overflow:hidden;">
-          <div class="pp-pane-head">
-            <p class="pp-pane-title">Visual Layout</p>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <select id="pp-rollViewSelect" onchange="pp_onRollViewChange()" class="p-input" style="display:none;font-size:11px;height:30px;padding:4px 8px;"></select>
-              <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
+          <!-- LEFT column -->
+          <div class="pp-results-left">
+
+            <!-- Visual layout -->
+            <div class="p-card" style="padding:14px;overflow:hidden;">
+              <div class="pp-pane-head">
+                <p class="pp-pane-title">Visual Layout</p>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <select id="pp-rollViewSelect" onchange="pp_onRollViewChange()" class="p-input" style="display:none;font-size:11px;height:30px;padding:4px 8px;"></select>
+                  <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
+                </div>
+              </div>
+              <div id="pp-canvas-wrap">
+                <canvas id="pp-canvas"></canvas>
+              </div>
+              <div id="pp-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
             </div>
-          </div>
-          <div id="pp-canvas-wrap">
-            <canvas id="pp-canvas"></canvas>
-          </div>
-          <div id="pp-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
-        </div>
 
-        <!-- Full roll map -->
-        <div class="p-card" style="padding:14px;overflow:hidden;">
-          <div class="pp-pane-head">
-            <p class="pp-pane-title">Full Roll Map</p>
-            <div class="pp-pane-actions">
-              <button onclick="pp_exportHistoryImage()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Save Image</button>
-              <button onclick="pp_exportHistoryPdf()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Print/PDF</button>
+            <!-- Row-by-row table -->
+            <div class="p-card" style="padding:14px;">
+              <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Row Details</p>
+              <div id="pp-rowList"></div>
             </div>
-          </div>
-          <div id="pp-historyWrap">
-            <canvas id="pp-historyCanvas"></canvas>
-          </div>
-          <p id="pp-historyMeta" style="font-size:11px;color:var(--p-faint);margin:8px 0 0;"></p>
-        </div>
 
-        <!-- Row-by-row table -->
-        <div class="p-card" style="padding:14px;">
-          <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Row Details</p>
-          <div id="pp-rowList"></div>
-        </div>
+          </div><!-- /pp-results-left -->
 
-        </div><!-- /pp-three-col -->
+          <!-- RIGHT column — Full Roll Map spanning both rows -->
+          <div class="pp-results-right">
+            <div class="p-card" style="padding:14px;overflow:hidden;">
+              <div class="pp-pane-head">
+                <p class="pp-pane-title">Full Roll Map</p>
+                <div class="pp-pane-actions">
+                  <button onclick="pp_exportHistoryImage()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Save Image</button>
+                  <button onclick="pp_exportHistoryPdf()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Print/PDF</button>
+                </div>
+              </div>
+              <div id="pp-historyWrap">
+                <canvas id="pp-historyCanvas"></canvas>
+              </div>
+              <p id="pp-historyMeta" style="font-size:11px;color:var(--p-faint);margin:8px 0 0;"></p>
+            </div>
+          </div><!-- /pp-results-right -->
+
+        </div><!-- /pp-results-grid -->
 
         <!-- Confirm panel -->
         <div id="pp-confirmPanel">
