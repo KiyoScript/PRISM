@@ -151,6 +151,7 @@ function prism_getUserInfo_() {
       const role      = String(data[i][0] || '').trim();
       const emails    = String(data[i][1] || '').replace(/"/g,'').toLowerCase().split(',').map(e=>e.trim()).filter(Boolean);
       const abilities = String(data[i][2] || '').replace(/"/g,'').toLowerCase().split(',').map(a=>a.trim()).filter(Boolean);
+          const latestPlotAssets = prism_getLatestPlotAssetsByJO_();
       if (emails.includes(email)) return { email, role, abilities };
     }
     return { email, role: 'No Role', abilities: [] };
@@ -563,6 +564,7 @@ function prism_recordUsage(payload) {
 //  JOB ORDERS
 // ============================================================
 function prism_getAllJobOrders_() {
+  const latestPlotAssets = prism_getLatestPlotAssetsByJO_();
   const sh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
   const lr = sh.getLastRow();
   if (lr<2) return [];
@@ -586,6 +588,43 @@ function prism_getAllJobOrders_() {
     }))
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 }
+
+  function prism_getLatestPlotAssetsByJO_() {
+    const sh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const lr = sh.getLastRow();
+    const out = {};
+    if (lr < 2) return out;
+
+    const rows = sh.getRange(2, 1, lr - 1, 6).getValues();
+    rows.forEach(r => {
+      const rawRemarks = String(r[PLOT_COL.REMARKS] || '').trim();
+      if (!rawRemarks || rawRemarks.charAt(0) !== '{') return;
+
+      let parsed;
+      try { parsed = JSON.parse(rawRemarks); } catch (e) { return; }
+      if (!parsed || parsed.type !== 'ROLL_PLAN') return;
+
+      const joNumbers = Array.isArray(parsed.joNumbers) ? parsed.joNumbers : [];
+      if (!joNumbers.length) return;
+
+      const dateRaw = r[PLOT_COL.DATE_PLOTTED];
+      const dateMs = dateRaw ? new Date(dateRaw).getTime() : 0;
+      joNumbers.forEach(jo => {
+        const key = String(jo || '').trim().toUpperCase();
+        if (!key) return;
+        if (!out[key] || dateMs >= (out[key].dateMs || 0)) {
+          out[key] = {
+            dateMs: dateMs,
+            pngUrl: String(parsed.pngUrl || parsed.plottingLink || '').trim(),
+            pdfUrl: String(parsed.pdfUrl || '').trim(),
+            folderUrl: String(parsed.folderUrl || '').trim(),
+            rollId: String(parsed.rollId || '').trim()
+          };
+        }
+      });
+    });
+    return out;
+  }
 function prism_getJobOrdersPublic() {
   try { return { success:true, data:prism_getAllJobOrders_() }; }
   catch(e) { return { success:false, message:e.message }; }
@@ -947,15 +986,30 @@ function prism_confirmPlotLayout(payload) {
     if (!rollPlans.length)
       return { success: false, message: 'No valid roll plan found.' };
 
-    let savedPlot = null;
+    const plotImages = Array.isArray(payload.plotImages) ? payload.plotImages : [];
+    const savedPlotsByRollId = {};
     let effectivePlottingLink = String(payload.plottingLink || '').trim();
-    if (payload.imageDataUrl) {
-      savedPlot = prism_saveRollMapToDrive_({
+    if (plotImages.length) {
+      plotImages.forEach(img => {
+        const rollId = String((img && img.rollId) || '').trim();
+        const imageDataUrl = String((img && img.imageDataUrl) || '').trim();
+        if (!rollId || !imageDataUrl) return;
+        savedPlotsByRollId[rollId] = prism_saveRollMapToDrive_({
+          rollId: rollId,
+          imageDataUrl: imageDataUrl,
+          userEmail: user.email
+        });
+      });
+      const firstSaved = savedPlotsByRollId[rollPlans[0].rollId] || savedPlotsByRollId[Object.keys(savedPlotsByRollId)[0]];
+      if (firstSaved) effectivePlottingLink = String(firstSaved.pngUrl || '').trim();
+    } else if (payload.imageDataUrl) {
+      const fallbackSavedPlot = prism_saveRollMapToDrive_({
         rollId: String(payload.plotRollId || rollPlans[0].rollId || '').trim(),
         imageDataUrl: payload.imageDataUrl,
         userEmail: user.email
       });
-      effectivePlottingLink = String(savedPlot.pngUrl || '').trim();
+      savedPlotsByRollId[String(payload.plotRollId || rollPlans[0].rollId || '').trim()] = fallbackSavedPlot;
+      effectivePlottingLink = String(fallbackSavedPlot.pngUrl || '').trim();
     }
 
     // ── Validate + deduct from each roll ──
@@ -1102,7 +1156,10 @@ function prism_confirmPlotLayout(payload) {
         endAtFt: snap.endAtFt || 0,
         lengthUsed: parseFloat(plan.lengthUsed) || 0,
         joNumbers: Object.keys(joSet),
-        plottingLink: effectivePlottingLink || '',
+        plottingLink: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '',
+        pngUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || '',
+        pdfUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pdfUrl) || '',
+        folderUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].folderUrl) || '',
         createdBy: user.email,
         rows: prism_compactRollRows_(plan.rows)
       };
@@ -1110,7 +1167,7 @@ function prism_confirmPlotLayout(payload) {
       plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
         'PLN-' + today.getTime() + '-' + rollId,
         Object.keys(joSet).slice(0, 8).join(', '),
-        effectivePlottingLink || '',
+        (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '',
         user.email,
         today,
         JSON.stringify(remarksObj)
@@ -1135,12 +1192,13 @@ function prism_confirmPlotLayout(payload) {
         + rollPlans.length + ' roll plan(s).'
         + (consumedRolls.length ? (' Consumed: ' + consumedRolls.join(', ') + '.') : ''),
       plottingLink: effectivePlottingLink || '',
-      savedPlot: savedPlot ? {
-        fileBaseName: savedPlot.fileBaseName,
-        pngUrl: savedPlot.pngUrl,
-        pdfUrl: savedPlot.pdfUrl,
-        folderUrl: savedPlot.folderUrl
-      } : null
+      savedPlots: Object.keys(savedPlotsByRollId).map(rollId => ({
+        rollId: rollId,
+        fileBaseName: savedPlotsByRollId[rollId].fileBaseName,
+        pngUrl: savedPlotsByRollId[rollId].pngUrl,
+        pdfUrl: savedPlotsByRollId[rollId].pdfUrl,
+        folderUrl: savedPlotsByRollId[rollId].folderUrl
+      }))
     };
 
   } catch(e) { return { success: false, message: e.message }; }

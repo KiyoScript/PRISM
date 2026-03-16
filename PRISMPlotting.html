@@ -1450,13 +1450,36 @@ function pp_showConfirmPanel() {
   document.getElementById('pp-confirmPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+function pp_captureRollMapImages() {
+  if (!pp_layout) return [];
+  var originalRollViewId = pp_activeRollViewId;
+  var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
+  var canvas = document.getElementById('pp-historyCanvas');
+  var out = [];
+
+  plans.forEach(function(plan, idx) {
+    var rollId = plan.rollId || (plan.roll && plan.roll.rollId) || '';
+    if (!rollId) return;
+    pp_activeRollViewId = rollId;
+    pp_renderHistoryMap(pp_layout);
+    if (canvas && canvas.width) {
+      out.push({
+        rollId: rollId,
+        imageDataUrl: canvas.toDataURL('image/png'),
+        isPrimary: idx === 0
+      });
+    }
+  });
+
+  pp_activeRollViewId = originalRollViewId || (plans[0] && plans[0].rollId) || '';
+  pp_renderResults();
+  return out;
+}
+
 function pp_confirm() {
   if (!pp_layout) { prism_toast('error', 'No layout to confirm.'); return; }
   var btn  = document.getElementById('pp-confirmBtn');
-  var canvas = document.getElementById('pp-historyCanvas');
-  var activePlan = pp_getActivePlan(pp_layout) || (pp_layout.rollPlans && pp_layout.rollPlans[0]) || null;
-  var imageDataUrl = (canvas && canvas.width) ? canvas.toDataURL('image/png') : '';
-  var plotRollId = (activePlan && activePlan.rollId) || (pp_layout.roll && pp_layout.roll.rollId) || '';
+  var plotImages = pp_captureRollMapImages();
 
   // Build list of unique JO numbers in layout
   var joNums = {};
@@ -1502,8 +1525,7 @@ function pp_confirm() {
     })
     .prism_confirmPlotLayout({
       joNumbers:    joList,
-      plotRollId: plotRollId,
-      imageDataUrl: imageDataUrl,
+      plotImages: plotImages,
       rollPlans:    plans.map(function(plan) {
         return {
           rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,
