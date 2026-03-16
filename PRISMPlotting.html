@@ -9,7 +9,7 @@
   .pp-results-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .pp-results-right { display: flex; flex-direction: column; min-width: 0; }
   .pp-results-right .p-card { flex: 1; }
-  #pp-historyWrap { overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px; min-height: 400px; }
+  #pp-historyWrap { overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px; height: 720px; max-height: 720px; }
   @media (max-width: 1100px) { .pp-results-grid { grid-template-columns: 1fr; } }
 
   /* ── JO Checklist ── */
@@ -1064,17 +1064,24 @@ function pp_renderHistoryMap(L) {
   prior.sort(function(a,b){ return (a.startAtFt||0) - (b.startAtFt||0); });
   var priorUsedFt = 0;
   prior.forEach(function(seg) { priorUsedFt += parseFloat(seg.lengthUsed || 0) || 0; });
+  var lastHistoryEnd = 0;
+  prior.forEach(function(seg) {
+    var e = parseFloat(seg.endAtFt);
+    if (isFinite(e) && e > lastHistoryEnd) lastHistoryEnd = e;
+  });
 
   // plan.rollAvail is the remaining length BEFORE applying this current plan.
   // So the current plan must start at (originalLength - rollAvail), then extend by totalLen.
   var currentStart = Math.max(0, rollLen - (parseFloat(plan.rollAvail) || 0));
+  // If history exists, enforce continuation below the latest plotted segment.
+  currentStart = Math.max(currentStart, lastHistoryEnd);
   var currentEnd = Math.min(rollLen, currentStart + (parseFloat(plan.totalLen) || 0));
 
   var AX_L = 46;
   var AX_B = 36;
   var innerW = Math.max((wrap.clientWidth || 420) - AX_L - 28, 220);
   var bodyW = innerW;
-  var bodyH = Math.max(820, Math.round(rollLen * 10));
+  var bodyH = Math.max(980, Math.round(rollLen * 14));
 
   canvas.width = bodyW + AX_L + 8;
   canvas.height = bodyH + AX_B + 8;
