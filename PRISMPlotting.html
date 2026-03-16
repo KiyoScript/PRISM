@@ -34,15 +34,13 @@
   .pp-roll-id { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--p-green); }
   .pp-roll-meta { font-size: 11px; color: var(--p-muted); margin-top: 2px; }
 
-  .pp-visual-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 440px); gap: 14px; align-items: start; }
-  @media (max-width: 1180px) { .pp-visual-grid { grid-template-columns: 1fr; } }
   .pp-pane-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--p-muted); margin: 0 0 10px; }
   .pp-pane-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
   .pp-pane-actions { display:flex; gap:8px; justify-content:flex-end; }
 
   /* ── Full roll history map ── */
   #pp-historyWrap {
-    overflow: auto; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px;
+    overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px;
     height: 720px; max-height: 720px;
   }
   #pp-historyCanvas { display: block; }
@@ -204,37 +202,34 @@
           <span id="pp-overflowMsg"></span>
         </div>
 
-        <!-- Visual + full roll map -->
+        <!-- Visual layout -->
         <div class="p-card" style="padding:14px;margin-bottom:12px;overflow:hidden;">
-          <div class="pp-visual-grid">
-            <div>
-              <div class="pp-pane-head">
-                <p class="pp-pane-title">Visual Layout</p>
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <select id="pp-rollViewSelect" onchange="pp_onRollViewChange()" class="p-input" style="display:none;font-size:11px;height:30px;padding:4px 8px;"></select>
-                  <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
-                </div>
-              </div>
-              <div id="pp-canvas-wrap">
-                <canvas id="pp-canvas"></canvas>
-              </div>
-              <div id="pp-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
-            </div>
-
-            <div>
-              <div class="pp-pane-head">
-                <p class="pp-pane-title">Full Roll Map</p>
-                <div class="pp-pane-actions">
-                  <button onclick="pp_exportHistoryImage()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Save Image</button>
-                  <button onclick="pp_exportHistoryPdf()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Print/PDF</button>
-                </div>
-              </div>
-              <div id="pp-historyWrap">
-                <canvas id="pp-historyCanvas"></canvas>
-              </div>
-              <p id="pp-historyMeta" style="font-size:11px;color:var(--p-faint);margin:8px 0 0;"></p>
+          <div class="pp-pane-head">
+            <p class="pp-pane-title">Visual Layout</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <select id="pp-rollViewSelect" onchange="pp_onRollViewChange()" class="p-input" style="display:none;font-size:11px;height:30px;padding:4px 8px;"></select>
+              <span id="pp-rollLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-green);"></span>
             </div>
           </div>
+          <div id="pp-canvas-wrap">
+            <canvas id="pp-canvas"></canvas>
+          </div>
+          <div id="pp-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
+        </div>
+
+        <!-- Full roll map -->
+        <div class="p-card" style="padding:14px;margin-bottom:12px;overflow:hidden;">
+          <div class="pp-pane-head">
+            <p class="pp-pane-title">Full Roll Map</p>
+            <div class="pp-pane-actions">
+              <button onclick="pp_exportHistoryImage()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Save Image</button>
+              <button onclick="pp_exportHistoryPdf()" class="p-btn" style="padding:8px 10px;font-size:12px;border:1.5px solid var(--p-border);background:var(--p-surface);color:var(--p-muted);">Print/PDF</button>
+            </div>
+          </div>
+          <div id="pp-historyWrap">
+            <canvas id="pp-historyCanvas"></canvas>
+          </div>
+          <p id="pp-historyMeta" style="font-size:11px;color:var(--p-faint);margin:8px 0 0;"></p>
         </div>
 
         <!-- Row-by-row table -->
@@ -969,12 +964,11 @@ function pp_renderHistoryMap(L) {
   var currentStart = Math.max(0, rollLen - (parseFloat(plan.rollAvail) || 0) - (parseFloat(plan.totalLen) || 0));
   var currentEnd = Math.min(rollLen, currentStart + (parseFloat(plan.totalLen) || 0));
 
-  var maxW = Math.max(wrap.clientWidth - 16, 260);
-  var scale = maxW / Math.max(rollWidth, 0.1);
-  var bodyW = Math.round(rollWidth * scale);
-  var bodyH = Math.max(720, Math.round(rollLen * 8));
   var AX_L = 46;
   var AX_B = 36;
+  var innerW = Math.max((wrap.clientWidth || 420) - AX_L - 28, 220);
+  var bodyW = innerW;
+  var bodyH = Math.max(720, Math.round(rollLen * 8));
 
   canvas.width = bodyW + AX_L + 8;
   canvas.height = bodyH + AX_B + 8;
