@@ -466,15 +466,14 @@ function pp_renderRolls() {
     var matName = '';
     for (var mi = 0; mi < pp_materials.length; mi++) {
       if (pp_materials[mi].materialCode === r.materialCode) {
-        matName = pp_materials[mi].materialName
-          .replace(/\s*[\d.]+\s*(?:ft|FT)[^a-zA-Z]*[\d.]+\s*(?:ft|FT)[^\n]*/i, '')
-          .trim();
+        matName = pp_materials[mi].materialName;
         break;
       }
-    }    h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
+    }    var matNameClean = matName.replace(/\s+\d[\d.]*\s*(?:ft|FT|Ft).*$/i, '').trim();
+    h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
       + '<div>'
-      + '<div class="pp-roll-id">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">✦ Best Fit</span>' : '') + '</div>'
-      + (matName ? '<div style="font-size:11px;font-weight:700;color:var(--p-amber);margin:2px 0 3px;">' + pp_esc(matName) + '</div>' : '')
+      + (matNameClean ? '<div style="font-size:12px;font-weight:700;color:var(--p-text);margin-bottom:2px;">' + pp_esc(matNameClean) + '</div>' : '')
+      + '<div class="pp-roll-id" style="margin-bottom:2px;">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">✦ Best Fit</span>' : '') + '</div>'
       + '<div class="pp-roll-meta">' + r.width + 'ft wide · ' + r.remainingLength + 'ft left</div>'
       + simMeta
       + '</div>'
