@@ -277,6 +277,7 @@ var pp_allJOs   = [];   // all FOR_PLOTTING JOs from backend
 var pp_filtJOs  = [];   // filtered for display
 var pp_selJOs   = {};   // { joNumber: true }
 var pp_rolls    = [];   // open rolls
+var pp_materials = [];  // all materials (for name lookup)
 var pp_selRoll  = null; // selected roll object
 var pp_layout   = null; // computed layout result
 var pp_rollPlans = [];  // multi-roll plan segments
@@ -336,8 +337,8 @@ function pp_loadData() {
         document.getElementById('pp-access').style.display = 'flex';
         return;
       }
-      pp_rolls = (r.rolls || []).filter(function(x) { return x.status === 'OPEN'; });
-      pp_loadRollHistory();
+      pp_rolls     = (r.rolls || []).filter(function(x) { return x.status === 'OPEN'; });
+      pp_materials = r.materials || [];      pp_loadRollHistory();
       pp_renderRolls();
     })
     .withFailureHandler(function() { prism_setReloading('pp-reloadBtn', false); })
