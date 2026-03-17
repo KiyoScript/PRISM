@@ -465,12 +465,16 @@ function pp_renderRolls() {
     }
     var matName = '';
     for (var mi = 0; mi < pp_materials.length; mi++) {
-      if (pp_materials[mi].materialCode === r.materialCode) { matName = pp_materials[mi].materialName; break; }
-    }
-    h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
+      if (pp_materials[mi].materialCode === r.materialCode) {
+        matName = pp_materials[mi].materialName
+          .replace(/\s*[\d.]+\s*(?:ft|FT)[^a-zA-Z]*[\d.]+\s*(?:ft|FT)[^\n]*/i, '')
+          .trim();
+        break;
+      }
+    }    h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
       + '<div>'
       + '<div class="pp-roll-id">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">✦ Best Fit</span>' : '') + '</div>'
-      + (matName ? '<div style="font-size:11px;font-weight:600;color:var(--p-muted);margin-bottom:1px;">' + pp_esc(matName) + '</div>' : '')
+      + (matName ? '<div style="font-size:11px;font-weight:700;color:var(--p-amber);margin:2px 0 3px;">' + pp_esc(matName) + '</div>' : '')
       + '<div class="pp-roll-meta">' + r.width + 'ft wide · ' + r.remainingLength + 'ft left</div>'
       + simMeta
       + '</div>'
