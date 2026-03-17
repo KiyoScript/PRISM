@@ -1073,7 +1073,8 @@ function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPer
         ctx.fillStyle = labelColor;
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(joNumber.slice(-8), cx + pw / 2, y + rh / 2 + 3);
+        var customerLabel = String(p.customer || joNumber || '').slice(0, 14);
+        ctx.fillText(customerLabel, cx + pw / 2, y + rh / 2 + 3);
       }
       cx += pw;
     });
@@ -1221,7 +1222,7 @@ function pp_renderHistoryMap(L) {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(String(p.joNumber || '').slice(-8), cx + pw / 2, cy + rh / 2 + 3);
+        ctx.fillText(String(p.customer || p.joNumber || '').slice(0, 14), cx + pw / 2, cy + rh / 2 + 3);
       }
       cx += pw;
     });
@@ -1406,8 +1407,8 @@ function pp_drawCanvas(L) {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        var joLabel = p.joNumber.slice(-8);
-        ctx.fillText(joLabel, x + pw/2, y + ph/2 - 3);
+        var customerLabel = String(p.customer || p.joNumber || '').slice(0, 14);
+        ctx.fillText(customerLabel, x + pw/2, y + ph/2 - 3);
         ctx.font = '8px DM Sans, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.fillText(p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : ''), x + pw/2, y + ph/2 + 8);
