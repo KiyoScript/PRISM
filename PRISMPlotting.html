@@ -462,9 +462,14 @@ function pp_renderRolls() {
         simMeta = '<div class="pp-roll-meta" style="color:var(--p-teal);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft · waste ' + r._sim.wastePct + '%</div>';
       }
     }
+    var matName = '';
+    for (var mi = 0; mi < pp_materials.length; mi++) {
+      if (pp_materials[mi].materialCode === r.materialCode) { matName = pp_materials[mi].materialName; break; }
+    }
     h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
       + '<div>'
       + '<div class="pp-roll-id">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">✦ Best Fit</span>' : '') + '</div>'
+      + (matName ? '<div style="font-size:11px;font-weight:600;color:var(--p-muted);margin-bottom:1px;">' + pp_esc(matName) + '</div>' : '')
       + '<div class="pp-roll-meta">' + r.width + 'ft wide · ' + r.remainingLength + 'ft left</div>'
       + simMeta
       + '</div>'
