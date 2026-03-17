@@ -415,7 +415,6 @@ function pp_renderJOs() {
       + '</div>'
       + '<div class="pp-jo-cust">' + pp_esc(j.customer || '—') + '</div>'
       + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
-      + (total ? '<div style="font-size:10px;color:var(--p-faint);margin-top:2px;">Total area: ' + total + '</div>' : '')
       + hist
       + '</div>'
       + '</div>';
