@@ -142,15 +142,15 @@
 
       <!-- Step 1: Select JOs -->
       <div class="p-card" style="padding:16px;margin-bottom:14px;">
-        <p class="p-section-title" style="margin-bottom:10px;">Step 1 — Select Job Orders</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p class="p-section-title" style="margin:0;">Step 1 — Select Job Orders</p>
+          <button onclick="pp_clearAll()" style="padding:4px 10px;border-radius:7px;border:1.5px solid var(--p-border);background:var(--p-surface);font-size:11px;font-weight:700;cursor:pointer;color:var(--p-muted);">Clear All</button>
+        </div>
+        <p style="font-size:11px;color:var(--p-muted);margin:0 0 10px;">Only FOR_PLOTTING jobs are shown.</p>
+
         <div class="p-search-wrap" style="margin-bottom:10px;">
           <span class="icon"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg></span>
           <input type="text" id="pp-joSearch" class="p-input" placeholder="Search JO or customer…" oninput="pp_filterJOs()" style="font-size:12px;">
-        </div>
-
-        <div style="display:flex;gap:6px;margin-bottom:10px;">
-          <button onclick="pp_selectAll()" style="flex:1;padding:5px;border-radius:7px;border:1.5px solid var(--p-border);background:var(--p-surface);font-size:11px;font-weight:700;cursor:pointer;color:var(--p-muted);">Select All</button>
-          <button onclick="pp_clearAll()" style="flex:1;padding:5px;border-radius:7px;border:1.5px solid var(--p-border);background:var(--p-surface);font-size:11px;font-weight:700;cursor:pointer;color:var(--p-muted);">Clear All</button>
         </div>
 
         <div id="pp-joList" style="max-height:300px;overflow-y:auto;">
