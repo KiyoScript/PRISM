@@ -25,7 +25,7 @@ const PRISM_SHEETS = {
 // JobOrders  A-M
 const JO_COL = {
   JO_NUMBER: 0, CUSTOMER: 1, JOB_DESCRIPTION: 2, CATEGORY: 3,
-  WIDTH: 4, HEIGHT: 5, QUANTITY: 6, PRODUCTION_TYPE: 7,
+  WIDTH: 4, HEIGHT: 5, QUANTITY: 6, UNIT: 7,
   PLOTTING_LINK: 8, STATUS: 9, ROLL_ID: 10, CREATED_BY: 11, DATE_CREATED: 12
 };
 
@@ -66,6 +66,21 @@ const ROLL_STATUS = { UNOPENED: 'UNOPENED', OPEN: 'OPEN', CONSUMED: 'CONSUMED' }
 const PRISM_PLOTTING_DRIVE_FOLDER_ID = '1IFPphBZ3IjcbkBTMSazeqbge_ZJN4S12';
 
 // ============================================================
+//  UNIT CONVERSION UTILITY
+// ============================================================
+function prism_toFt_(value, unit) {
+  const v = parseFloat(value) || 0;
+  if (v === 0) return 0;
+  switch ((unit || 'ft').toString().trim().toLowerCase()) {
+    case 'ft': return Math.round(v * 10000) / 10000;
+    case 'in': return Math.round((v / 12) * 10000) / 10000;
+    case 'cm': return Math.round((v / 30.48) * 10000) / 10000;
+    case 'm':  return Math.round((v * 3.28084) * 10000) / 10000;
+    default:   return Math.round(v * 10000) / 10000;
+  }
+}
+
+// ============================================================
 //  WEB APP ENTRY POINT
 // ============================================================
 function doGet(e) {
@@ -85,7 +100,7 @@ function include(filename) {
 function prism_bootstrap() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const schemas = [
-    { name: PRISM_SHEETS.JOB_ORDERS,    headers: ['JO_Number','Customer','JobDescription','Category','Width','Height','Quantity','ProductionType','PlottingLink','Status','RollID','CreatedBy','DateCreated'] },
+    { name: PRISM_SHEETS.JOB_ORDERS,    headers: ['JO_Number','Customer','JobDescription','Category','Width','Height','Quantity','Unit','PlottingLink','Status','RollID','CreatedBy','DateCreated'] },
     { name: PRISM_SHEETS.LFP_MATERIALS, headers: ['MaterialCode','MaterialName','Width','StandardLength','Supplier','CostPerRoll'] },
     { name: PRISM_SHEETS.LFP_ROLLS,     headers: ['RollID','MaterialCode','Width','OriginalLength','RemainingLength','Status','DateReceived','DateOpened','OpenedBy'] },
     { name: PRISM_SHEETS.LFP_USAGE,     headers: ['UsageID','JO_Number','RollID','WidthUsed','LengthUsed','Operator','PlottingLink','DateUsed'] },
@@ -582,7 +597,9 @@ function prism_getAllJobOrders_() {
       width:          parseFloat(r[JO_COL.WIDTH])||0,
       height:         parseFloat(r[JO_COL.HEIGHT])||0,
       quantity:       parseInt(r[JO_COL.QUANTITY])||0,
-      productionType: String(r[JO_COL.PRODUCTION_TYPE]||'').trim(),
+      unit:           (String(r[JO_COL.UNIT]||'ft').trim().toLowerCase()) || 'ft',
+      widthFt:        prism_toFt_(parseFloat(r[JO_COL.WIDTH])||0, String(r[JO_COL.UNIT]||'ft').trim()),
+      heightFt:       prism_toFt_(parseFloat(r[JO_COL.HEIGHT])||0, String(r[JO_COL.UNIT]||'ft').trim()),
       plottingLink:   String(r[JO_COL.PLOTTING_LINK]||'').trim(),
       plottingImageUrl: String(plotAsset.pngUrl || r[JO_COL.PLOTTING_LINK] || '').trim(),
       plottingPdfUrl: String(plotAsset.pdfUrl || '').trim(),
@@ -719,18 +736,18 @@ function prism_submitJobOrder(payload) {
     const sh    = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
     const today = new Date();
 
-    const LFP_CATEGORIES = ['banner', 'sticker', 'signage', 'canvas'];
+    const LFP_CATEGORIES = ['banner', 'sticker', 'signage', 'canvas', 'tarpaulin', 'standees/display'];
     const isLFP = LFP_CATEGORIES.includes((payload.category || '').toLowerCase());
-    const productionType = isLFP ? 'LFP' : (payload.productionType || '');
+    const unit = (payload.unit || 'ft').toString().trim().toLowerCase();
     const status = isLFP ? 'FOR_PLOTTING' : (payload.status || JO_STATUS.FOR_PLOTTING);
-
+ 
     sh.getRange(sh.getLastRow()+1,1,1,13).setValues([[
       payload.joNumber.trim().toUpperCase(), payload.customer.trim(),
       payload.jobDescription||'', payload.category,
       parseFloat(payload.width)||0, parseFloat(payload.height)||0, parseInt(payload.quantity)||1,
-      productionType,              // ← computed, not payload.productionType
+      unit,                        // column H = Unit (replaced ProductionType)
       payload.plottingLink||'',
-      status,                      // ← computed, not payload.status
+      status,
       '', user.email, today
     ]]);
 

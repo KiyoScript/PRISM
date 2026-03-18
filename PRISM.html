@@ -157,12 +157,15 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
       <div>
         <label class="p-label">Width Used (ft)</label>
-        <input type="number" id="u4-widthUsed" class="p-input" placeholder="e.g. 6" min="0.1" step="0.1" oninput="u4_calcPreview()">
-        <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Auto-filled from JO width.</p>
+        <input type="number" id="u4-widthUsed" class="p-input" placeholder="e.g. 6" min="0.1" step="0.01" oninput="u4_calcPreview()">
+        <p id="u4-widthHint" style="display:none;font-size:11px;color:var(--p-purple);font-weight:600;margin:4px 0 0;"></p>
+        <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Auto-converted from JO width to ft.</p>
       </div>
       <div>
         <label class="p-label">Length Used (ft) <span style="color:var(--p-red);">*</span></label>
-        <input type="number" id="u4-lengthUsed" class="p-input" placeholder="e.g. 15" min="0.1" step="0.1" oninput="u4_calcPreview()">
+        <input type="number" id="u4-lengthUsed" class="p-input" placeholder="e.g. 15" min="0.1" step="0.01" oninput="u4_calcPreview()">
+        <p id="u4-lengthHint" style="display:none;font-size:11px;color:var(--p-purple);font-weight:600;margin:4px 0 0;"></p>
+        <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Auto-suggested from JO height. Adjust if needed.</p>
       </div>
     </div>
     <div>
@@ -182,6 +185,18 @@
 <script>
 var u4_rolls = [], u4_settings = {}, u4_selRollId = '';
 var u4_joData = null, u4_allJOs = [], u4_joActiveIdx = -1;
+ 
+function prism_toFt(value, unit) {
+  var v = parseFloat(value) || 0;
+  if (v === 0) return 0;
+  switch ((unit || 'ft').toString().trim().toLowerCase()) {
+    case 'ft': return Math.round(v * 10000) / 10000;
+    case 'in': return Math.round((v / 12) * 10000) / 10000;
+    case 'cm': return Math.round((v / 30.48) * 10000) / 10000;
+    case 'm':  return Math.round((v * 3.28084) * 10000) / 10000;
+    default:   return Math.round(v * 10000) / 10000;
+  }
+}
 
 function prism_init_usage() {
   u4_loadData();
@@ -249,8 +264,15 @@ function u4_selectJO(joNumber) {
   document.getElementById('u4-infoJO').textContent   = jo.joNumber;
   document.getElementById('u4-infoCust').textContent  = jo.customer   || '—';
   document.getElementById('u4-infoCat').textContent   = jo.category   || '—';
-  document.getElementById('u4-infoProd').textContent  = jo.productionType || '—';
-  document.getElementById('u4-infoSize').textContent  = (jo.width && jo.height) ? jo.width + ' × ' + jo.height + ' ft' : '—';
+  var joUnit = (jo.unit || 'ft').toLowerCase();
+  var joWidthFt  = jo.widthFt  || prism_toFt(jo.width,  joUnit);
+  var joHeightFt = jo.heightFt || prism_toFt(jo.height, joUnit);
+  var sizeLabel  = (jo.width && jo.height)
+    ? jo.width + ' × ' + jo.height + ' ' + joUnit.toUpperCase()
+      + (joUnit !== 'ft' ? ' (' + joWidthFt + ' × ' + joHeightFt + ' ft)' : '')
+    : '—';
+  document.getElementById('u4-infoProd').textContent  = joUnit.toUpperCase();
+  document.getElementById('u4-infoSize').textContent  = sizeLabel;
   document.getElementById('u4-infoQty').textContent   = jo.quantity   || '—';
   document.getElementById('u4-infoDesc').textContent  = jo.jobDescription || '—';
   var plotRow = document.getElementById('u4-infoPlotRow');
@@ -270,7 +292,24 @@ function u4_selectJO(joNumber) {
     rollRow.style.display = 'block';
   } else { rollRow.style.display = 'none'; }
   document.getElementById('u4-joInfoCard').style.display = 'block';
-  if (jo.width && !document.getElementById('u4-widthUsed').value) document.getElementById('u4-widthUsed').value = jo.width;
+  var wEl = document.getElementById('u4-widthUsed');
+  var lEl = document.getElementById('u4-lengthUsed');
+  if (jo.width  && !wEl.value) wEl.value = joWidthFt;
+  if (jo.height && !lEl.value) lEl.value = joHeightFt;
+  var wHint = document.getElementById('u4-widthHint');
+  var lHint = document.getElementById('u4-lengthHint');
+  if (wHint) {
+    if (joUnit !== 'ft' && jo.width) {
+      wHint.style.display = 'block';
+      wHint.textContent = 'Converted: ' + jo.width + ' ' + joUnit + ' = ' + joWidthFt + ' ft';
+    } else { wHint.style.display = 'none'; }
+  }
+  if (lHint) {
+    if (joUnit !== 'ft' && jo.height) {
+      lHint.style.display = 'block';
+      lHint.textContent = 'Converted: ' + jo.height + ' ' + joUnit + ' = ' + joHeightFt + ' ft';
+    } else { lHint.style.display = 'none'; }
+  }
   u4_calcPreview();
 }
 function u4_joReset() {
@@ -281,9 +320,14 @@ function u4_joReset() {
   document.getElementById('u4-joDropdown').classList.remove('open');
   document.getElementById('u4-joRow').classList.remove('focused');
   document.getElementById('u4-widthUsed').value = '';
+  document.getElementById('u4-lengthUsed').value = '';
   document.getElementById('u4-plottingLink').value = '';
   document.getElementById('u4-calcPrev').style.display = 'none';
   document.getElementById('u4-widthWarn').style.display = 'none';
+  var wHint = document.getElementById('u4-widthHint');
+  var lHint = document.getElementById('u4-lengthHint');
+  if (wHint) { wHint.style.display = 'none'; wHint.textContent = ''; }
+  if (lHint) { lHint.style.display = 'none'; lHint.textContent = ''; }
   u4_joActiveIdx = -1;
 }
 document.addEventListener('keydown', function(e) {

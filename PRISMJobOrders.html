@@ -203,7 +203,11 @@ function jo3_renderTable(data) {
   var h = '';
   data.forEach(function(r) {
     var sc = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
-    var size = (r.width && r.height) ? r.width + ' × ' + r.height + ' ft' : '—';
+    var joUnit = (r.unit || 'ft').toUpperCase();
+    var size = (r.width && r.height)
+      ? r.width + ' × ' + r.height + ' ' + joUnit
+        + (r.unit && r.unit.toLowerCase() !== 'ft' && r.widthFt ? ' (' + r.widthFt + ' × ' + r.heightFt + ' ft)' : '')
+      : '—';
     var actionBtn = '';
     if (r.status === 'FOR_PLOTTING') {
       actionBtn = '<button class="jo3-action-btn jo3-btn-plot" onclick="jo3_goToPlottingPlanner(\'' + jo3_esc(r.joNumber) + '\')">✦ Plot in Planner</button>';
@@ -243,7 +247,11 @@ function jo3_renderCards(data) {
   var h = '';
   data.forEach(function(r) {
     var sc = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
-    var size = (r.width && r.height) ? r.width + ' × ' + r.height + ' ft' : '';
+    var joUnit = (r.unit || 'ft').toUpperCase();
+    var size = (r.width && r.height)
+      ? r.width + ' × ' + r.height + ' ' + joUnit
+        + (r.unit && r.unit.toLowerCase() !== 'ft' && r.widthFt ? ' (' + r.widthFt + ' × ' + r.heightFt + ' ft)' : '')
+      : '';
     var actionHtml = '';
     if (r.plottingImageUrl) {
       actionHtml += '<button class="jo3-action-btn jo3-btn-view" style="width:100%;margin-top:8px;" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingImageUrl) + '\')">🖼 View Image</button>';
