@@ -1,29 +1,87 @@
-<!-- PRISMTestPrint.html — Test Print tab -->
+<!-- PRISMTestPrint.html — Test Print Tab (Plotting Planner style) -->
 <style>
   #tab-test-print, #tab-test-print * { color: var(--p-text); }
-  .tp-roll-row {
-    border: 1.5px solid var(--p-border); border-radius: 11px; padding: 12px 14px;
-    cursor: pointer; transition: all .15s; margin-bottom: 8px; background: var(--p-surface);
+
+  .tp-grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .tp-grid { grid-template-columns: 1fr; } }
+
+  .tp-topbar {
+    display: grid;
+    grid-template-columns: minmax(220px,auto) minmax(0,1fr) auto;
+    align-items: start; gap: 12px; margin-bottom: 10px;
   }
-  .tp-roll-row:hover   { border-color: var(--p-amber-bd); background: var(--p-amber-lt); }
-  .tp-roll-row.selected { border-color: var(--p-amber); background: var(--p-amber-lt); }
-  #tp-calcPrev {
-    display: none; background: var(--p-amber-lt); border: 1px solid var(--p-amber-bd);
-    border-radius: 11px; padding: 14px; margin-bottom: 12px;
+  .tp-topstats { display: grid; grid-template-columns: repeat(4, minmax(80px,1fr)); gap: 8px; }
+  @media (max-width: 980px) { .tp-topbar { grid-template-columns: 1fr auto; } .tp-topstats { grid-column: 1/-1; } }
+
+  .tp-stat {
+    background: var(--p-surface); border: 1px solid var(--p-border);
+    border-radius: 12px; padding: 12px 14px; text-align: center;
   }
-  .tp-log-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--p-border); }
+  .tp-stat-val { font-size: 22px; font-weight: 800; letter-spacing: -.03em; margin-bottom: 2px; }
+  .tp-stat-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--p-faint); }
+
+  .tp-roll-item {
+    border: 1.5px solid var(--p-border); border-radius: 11px;
+    padding: 12px 14px; cursor: pointer; transition: all .15s;
+    margin-bottom: 7px; background: var(--p-surface);
+  }
+  .tp-roll-item:hover   { border-color: var(--p-amber-bd); background: var(--p-amber-lt); }
+  .tp-roll-item.selected { border-color: var(--p-amber); background: var(--p-amber-lt); }
+
+  #tp-results-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-bottom: 12px; align-items: start;
+  }
+  .tp-results-left  { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .tp-results-right { display: flex; flex-direction: column; min-width: 0; align-self: start; }
+  #tp-historyWrap {
+    overflow-y: auto; overflow-x: hidden;
+    border: 1.5px solid var(--p-border); border-radius: 12px;
+    background: #f8fafc; padding: 10px; height: 600px; max-height: 600px;
+  }
+  @media (max-width: 1100px) { #tp-results-grid { grid-template-columns: 1fr; } }
+
+  #tp-confirmPanel {
+    background: var(--p-green-lt); border: 1px solid var(--p-green-bd);
+    border-radius: 12px; padding: 16px;
+  }
+
+  .tp-log-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--p-border);
+  }
   .tp-log-row:last-child { border-bottom: none; }
-  .tp-badge-test { background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 800;
-    padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: .06em; }
+  .tp-badge-test {
+    background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 800;
+    padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: .06em;
+  }
 </style>
 
-<div style="padding:20px 20px 40px;max-width:640px;">
+<div style="padding:20px 20px 40px;">
 
-  <!-- Header -->
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
+  <!-- Top bar -->
+  <div class="tp-topbar">
     <div>
       <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Test Print</h2>
-      <p style="font-size:13px;color:var(--p-muted);margin:0;">Log material consumed during test printing — deducted from roll immediately</p>
+      <p style="font-size:13px;color:var(--p-muted);margin:0;">Log material consumed during test printing</p>
+    </div>
+    <div class="tp-topstats">
+      <div class="tp-stat">
+        <div class="tp-stat-val" id="tp-statLen" style="color:var(--p-amber);">—</div>
+        <div class="tp-stat-lbl">Test Length</div>
+      </div>
+      <div class="tp-stat">
+        <div class="tp-stat-val" id="tp-statRemain" style="color:var(--p-green);">—</div>
+        <div class="tp-stat-lbl">Remaining</div>
+      </div>
+      <div class="tp-stat">
+        <div class="tp-stat-val" id="tp-statWidth" style="color:var(--p-teal);">—</div>
+        <div class="tp-stat-lbl">Roll Width</div>
+      </div>
+      <div class="tp-stat">
+        <div class="tp-stat-val" id="tp-statStatus" style="font-size:13px;color:var(--p-muted);">—</div>
+        <div class="tp-stat-lbl">Status After</div>
+      </div>
     </div>
     <button id="tp-reloadBtn" class="p-btn-reload" onclick="tp_reload()">
       <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,52 +100,103 @@
     Only Digital Operators can log test prints.
   </div>
 
-  <!-- Info banner -->
-  <div class="p-alert p-alert-info" style="margin-bottom:16px;">
-    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px;">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    Test print consumption is recorded separately from job orders and appears as an amber strip in the Full Roll Map.
-  </div>
+  <!-- Main grid: left panel + right canvas -->
+  <div class="tp-grid">
 
-  <!-- Step 1 — Select Roll -->
-  <div class="p-card" style="padding:18px;margin-bottom:12px;">
-    <p class="p-section-title">Step 1 — Select Open Roll</p>
-    <div class="p-search-wrap" style="margin-bottom:10px;">
-      <span class="icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></span>
-      <input type="text" id="tp-rollSearch" class="p-input" placeholder="Search Roll ID or material…" oninput="tp_filterRolls()">
-    </div>
-    <div id="tp-rollList" style="max-height:240px;overflow-y:auto;">
-      <div style="text-align:center;padding:24px;font-size:13px;color:var(--p-faint);">Loading open rolls…</div>
-    </div>
-  </div>
-
-  <!-- Step 2 — Usage Details -->
-  <div class="p-card" style="padding:18px;margin-bottom:12px;">
-    <p class="p-section-title">Step 2 — Test Print Details</p>
-    <div style="margin-bottom:12px;">
-      <label class="p-label">Length Used (ft) <span style="color:var(--p-red);">*</span></label>
-      <input type="number" id="tp-lengthUsed" class="p-input" placeholder="e.g. 0.5" min="0.01" step="0.01" oninput="tp_calcPreview()">
-      <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Enter how much roll length was consumed for this test print.</p>
-    </div>
+    <!-- LEFT PANEL -->
     <div>
-      <label class="p-label">Notes (optional)</label>
-      <input type="text" id="tp-notes" class="p-input" placeholder="e.g. color calibration, head alignment check…" maxlength="120">
-    </div>
-  </div>
 
-  <!-- Calc preview -->
-  <div id="tp-calcPrev">
-    <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 10px;">🖨 Test Print Preview</p>
-    <div id="tp-calcBody" style="font-size:13px;display:flex;flex-direction:column;gap:5px;"></div>
-  </div>
+      <!-- Step 1: Roll -->
+      <div class="p-card" style="padding:16px;margin-bottom:12px;">
+        <p class="p-section-title">Step 1 — Select Roll</p>
+        <div class="p-search-wrap" style="margin-bottom:10px;">
+          <span class="icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></span>
+          <input type="text" id="tp-rollSearch" class="p-input" placeholder="Search Roll ID or material…" oninput="tp_filterRolls()">
+        </div>
+        <div id="tp-rollList" style="max-height:220px;overflow-y:auto;">
+          <div style="text-align:center;padding:24px;font-size:13px;color:var(--p-faint);">Loading open rolls…</div>
+        </div>
+      </div>
 
-  <button id="tp-btn" onclick="tp_submit()" class="p-btn" style="width:100%;padding:14px;font-size:14px;background:var(--p-amber);color:#fff;border-radius:11px;border:none;font-weight:700;cursor:pointer;margin-bottom:24px;">
-    🖨 Record Test Print
-  </button>
+      <!-- Step 2: Length -->
+      <div class="p-card" style="padding:16px;margin-bottom:12px;">
+        <p class="p-section-title">Step 2 — Test Length</p>
+        <div style="margin-bottom:12px;">
+          <label class="p-label">Feet to test print <span style="color:var(--p-red);">*</span></label>
+          <input type="number" id="tp-lengthInput" class="p-input" placeholder="e.g. 0.5" min="0.01" step="0.01" oninput="tp_onLengthChange()">
+          <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Full roll width will be used. Length deducted immediately on confirm.</p>
+        </div>
+        <div>
+          <label class="p-label">Notes (optional)</label>
+          <input type="text" id="tp-notes" class="p-input" placeholder="e.g. color calibration, head alignment…" maxlength="120">
+        </div>
+      </div>
+
+      <!-- Preview button -->
+      <button onclick="tp_preview()" class="p-btn" style="width:100%;padding:13px;font-size:13px;background:var(--p-amber-lt);color:var(--p-amber);border:1.5px solid var(--p-amber-bd);border-radius:11px;margin-bottom:12px;">
+        ✦ Preview Test Print
+      </button>
+
+      <!-- Confirm panel (hidden until preview) -->
+      <div id="tp-confirmPanel" style="display:none;">
+        <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">🖨 Confirm Test Print</p>
+        <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll immediately.</p>
+        <button id="tp-confirmBtn" onclick="tp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
+          ✓ Confirm & Deduct from Roll
+        </button>
+      </div>
+
+    </div><!-- /left panel -->
+
+    <!-- RIGHT PANEL -->
+    <div>
+
+      <!-- Empty state -->
+      <div id="tp-emptyState" class="p-card" style="padding:48px 20px;text-align:center;">
+        <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin:0 auto 14px;display:block;color:var(--p-faint);">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+        </svg>
+        <p style="font-size:15px;font-weight:700;color:var(--p-muted);margin:0 0 6px;">No preview yet</p>
+        <p style="font-size:13px;color:var(--p-faint);margin:0;">Select a roll, enter test length, then click Preview</p>
+      </div>
+
+      <!-- Results (hidden until preview) -->
+      <div id="tp-results" style="display:none;">
+
+        <!-- Two-column: visual left | full map right -->
+        <div id="tp-results-grid">
+
+          <!-- Visual canvas -->
+          <div class="tp-results-left">
+            <div class="p-card" style="padding:14px;overflow:hidden;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Visual Preview</p>
+                <span id="tp-canvasLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-amber);"></span>
+              </div>
+              <div id="tp-canvasWrap">
+                <canvas id="tp-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Full Roll Map -->
+          <div class="tp-results-right">
+            <div class="p-card" style="padding:14px;overflow:hidden;">
+              <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Full Roll Map</p>
+              <div id="tp-historyWrap">
+                <canvas id="tp-historyCanvas"></canvas>
+              </div>
+              <p id="tp-historyMeta" style="font-size:11px;color:var(--p-faint);margin:8px 0 0;"></p>
+            </div>
+          </div>
+
+        </div><!-- /tp-results-grid -->
+      </div><!-- /tp-results -->
+    </div><!-- /right panel -->
+  </div><!-- /tp-grid -->
 
   <!-- History log -->
-  <div class="p-card" style="padding:18px;">
+  <div class="p-card" style="padding:18px;margin-top:20px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
       <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Test Print History</p>
       <span id="tp-logCount" style="font-size:11px;color:var(--p-faint);font-weight:600;"></span>
@@ -97,18 +206,31 @@
     </div>
   </div>
 
-</div>
+</div><!-- /padding wrapper -->
 
 <script>
-var tp_rolls = [], tp_settings = {}, tp_selRollId = '';
-var tp_allLogs = [];
+/* ══════════════════════════════════════════
+   TEST PRINT STATE
+══════════════════════════════════════════ */
+var tp_rolls       = [];
+var tp_settings    = {};
+var tp_selRoll     = null;
+var tp_allLogs     = [];
+var tp_rollHistory = {};
+var tp_layout      = null; // { roll, lengthUsed, currentStart, currentEnd }
 
+/* ── Init ── */
 function prism_init_test_print() {
   tp_loadData();
 }
 
 function tp_reload() {
   prism_setReloading('tp-reloadBtn', true);
+  tp_layout = null;
+  document.getElementById('tp-emptyState').style.display = 'block';
+  document.getElementById('tp-results').style.display    = 'none';
+  document.getElementById('tp-confirmPanel').style.display = 'none';
+  tp_resetStats();
   tp_loadData();
 }
 
@@ -123,22 +245,36 @@ function tp_loadData() {
       var role = ((r.user && r.user.role) || '').toLowerCase();
       var ok = role.includes('admin') || role.includes('digital operator') || role.includes('operator');
       if (!ok) document.getElementById('tp-access').style.display = 'flex';
+      tp_loadRollHistory();
     })
     .withFailureHandler(function() { prism_setReloading('tp-reloadBtn', false); })
     .prism_getInitData();
 
   google.script.run
     .withSuccessHandler(function(r) {
-      if (r && r.success) {
-        tp_allLogs = r.data || [];
-        tp_renderLog();
-      }
+      if (r && r.success) { tp_allLogs = r.data || []; tp_renderLog(); }
     })
     .withFailureHandler(function() {})
     .prism_getTestPrintLog();
 }
 
-/* ── Roll Picker ── */
+function tp_loadRollHistory() {
+  var rollIds = tp_rolls.map(function(r) { return r.rollId; });
+  if (!rollIds.length) { tp_rollHistory = {}; return; }
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r && r.success) {
+        tp_rollHistory = r.data || {};
+        if (tp_layout) tp_renderPreview();
+      }
+    })
+    .withFailureHandler(function() {})
+    .prism_getRollPlotHistoryMap(rollIds);
+}
+
+/* ══════════════════════════════════════════
+   ROLL PICKER
+══════════════════════════════════════════ */
 function tp_filterRolls() {
   var q = (document.getElementById('tp-rollSearch').value || '').trim().toLowerCase();
   tp_renderRolls(tp_rolls.filter(function(r) {
@@ -161,10 +297,10 @@ function tp_renderRolls(rolls) {
   }
   var h = '';
   rolls.forEach(function(r) {
-    var hl = tp_getHealth(r);
-    var bc = hl === 'green' ? 'badge-green' : hl === 'yellow' ? 'badge-amber' : 'badge-red';
-    var sel = tp_selRollId === r.rollId ? ' selected' : '';
-    h += '<div class="tp-roll-row' + sel + '" onclick="tp_selRoll(\'' + tp_esc(r.rollId).replace(/'/g,"\\'") + '\')">'
+    var hl  = tp_getHealth(r);
+    var bc  = hl === 'green' ? 'badge-green' : hl === 'yellow' ? 'badge-amber' : 'badge-red';
+    var sel = (tp_selRoll && tp_selRoll.rollId === r.rollId) ? ' selected' : '';
+    h += '<div class="tp-roll-item' + sel + '" onclick="tp_selectRoll(\'' + tp_esc(r.rollId).replace(/'/g,"\\'") + '\')">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;">'
       + '<span class="mono" style="font-weight:700;font-size:13px;">' + tp_esc(r.rollId) + '</span>'
       + '<span class="p-badge ' + bc + '">' + r.remainingLength + ' ft left</span>'
@@ -175,48 +311,325 @@ function tp_renderRolls(rolls) {
   el.innerHTML = h;
 }
 
-function tp_selRoll(id) {
-  tp_selRollId = id;
-  tp_filterRolls();
-  tp_calcPreview();
-}
-
-/* ── Calc Preview ── */
-function tp_calcPreview() {
-  if (!tp_selRollId) return;
-  var roll = null;
+function tp_selectRoll(rollId) {
+  tp_selRoll = null;
   for (var i = 0; i < tp_rolls.length; i++) {
-    if (tp_rolls[i].rollId === tp_selRollId) { roll = tp_rolls[i]; break; }
+    if (tp_rolls[i].rollId === rollId) { tp_selRoll = tp_rolls[i]; break; }
   }
-  if (!roll) return;
-  var lu = parseFloat(document.getElementById('tp-lengthUsed').value) || 0;
-  var prev = document.getElementById('tp-calcPrev');
-  if (!lu) { prev.style.display = 'none'; return; }
-  var t = parseFloat(tp_settings.near_empty_threshold_ft) || 30;
-  var nr = Math.max(0, roll.remainingLength - lu);
-  var rc = nr <= 0 ? 'var(--p-red)' : nr <= t ? 'var(--p-amber)' : 'var(--p-green)';
-  var rs = nr <= 0 ? 'Will be CONSUMED' : nr <= t ? 'Near Empty' : 'Still Healthy';
-  prev.style.display = 'block';
-  document.getElementById('tp-calcBody').innerHTML =
-    '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Roll:</span><strong class="mono" style="font-size:12px;">' + tp_esc(tp_selRollId) + '</strong></div>'
-    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Test length:</span><strong style="color:var(--p-amber);">' + lu + ' ft</strong></div>'
-    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Current remaining:</span><strong>' + roll.remainingLength + ' ft</strong></div>'
-    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">After test print:</span><strong style="color:' + rc + ';">' + nr + ' ft</strong></div>'
-    + '<div style="display:flex;justify-content:space-between;"><span style="color:var(--p-muted);">Status after:</span><strong style="color:' + rc + ';">' + rs + '</strong></div>';
+  tp_filterRolls();
+  tp_onLengthChange();
 }
 
-/* ── Submit ── */
-function tp_submit() {
-  var rid = tp_selRollId;
-  var lu  = parseFloat(document.getElementById('tp-lengthUsed').value) || 0;
+function tp_onLengthChange() {
+  // Live-update stats if both roll and length are set
+  if (!tp_selRoll) return;
+  var lu = parseFloat(document.getElementById('tp-lengthInput').value) || 0;
+  if (!lu) { tp_resetStats(); return; }
+  var t = parseFloat(tp_settings.near_empty_threshold_ft) || 30;
+  var nr = Math.max(0, tp_selRoll.remainingLength - lu);
+  var rs = nr <= 0 ? 'CONSUMED' : nr <= t ? 'Near Empty' : 'Healthy';
+  var rc = nr <= 0 ? 'var(--p-red)' : nr <= t ? 'var(--p-amber)' : 'var(--p-green)';
+  document.getElementById('tp-statLen').textContent    = lu + 'ft';
+  document.getElementById('tp-statRemain').textContent = nr + 'ft';
+  document.getElementById('tp-statWidth').textContent  = tp_selRoll.width + 'ft';
+  document.getElementById('tp-statStatus').textContent = rs;
+  document.getElementById('tp-statStatus').style.color = rc;
+}
+
+function tp_resetStats() {
+  document.getElementById('tp-statLen').textContent    = '—';
+  document.getElementById('tp-statRemain').textContent = '—';
+  document.getElementById('tp-statWidth').textContent  = '—';
+  document.getElementById('tp-statStatus').textContent = '—';
+  document.getElementById('tp-statStatus').style.color = 'var(--p-muted)';
+}
+
+/* ══════════════════════════════════════════
+   PREVIEW
+══════════════════════════════════════════ */
+function tp_preview() {
+  if (!tp_selRoll) { prism_toast('error', 'Please select a roll.'); return; }
+  var lu = parseFloat(document.getElementById('tp-lengthInput').value) || 0;
+  if (!lu || lu <= 0) { prism_toast('error', 'Please enter a test length greater than 0.'); return; }
+  if (lu > tp_selRoll.remainingLength) {
+    prism_toast('error', 'Test length (' + lu + ' ft) exceeds remaining (' + tp_selRoll.remainingLength + ' ft).');
+    return;
+  }
+
+  // Compute position on roll
+  var rollOrigLen  = parseFloat(tp_selRoll.originalLength) || 0;
+  if (!rollOrigLen) rollOrigLen = tp_selRoll.remainingLength + lu; // fallback
+  var history      = tp_rollHistory[tp_selRoll.rollId] || [];
+  var lastHistEnd  = 0;
+  history.forEach(function(seg) {
+    var e = parseFloat(seg.endAtFt) || 0;
+    if (e > lastHistEnd) lastHistEnd = e;
+  });
+  var currentStart = Math.max(0, rollOrigLen - tp_selRoll.remainingLength);
+  currentStart     = Math.max(currentStart, lastHistEnd);
+  var currentEnd   = Math.min(rollOrigLen, currentStart + lu);
+
+  tp_layout = {
+    roll:         tp_selRoll,
+    rollOrigLen:  rollOrigLen,
+    lengthUsed:   lu,
+    currentStart: currentStart,
+    currentEnd:   currentEnd,
+    history:      history
+  };
+
+  document.getElementById('tp-emptyState').style.display = 'none';
+  document.getElementById('tp-results').style.display    = 'block';
+  document.getElementById('tp-confirmPanel').style.display = 'block';
+  document.getElementById('tp-canvasLabel').textContent =
+    tp_selRoll.rollId + ' · ' + tp_selRoll.width + 'ft × ' + tp_selRoll.remainingLength + 'ft';
+
+  tp_onLengthChange();
+  tp_drawCanvas();
+  tp_drawHistoryMap();
+}
+
+/* ══════════════════════════════════════════
+   VISUAL CANVAS — shows test strip at correct position
+══════════════════════════════════════════ */
+function tp_drawCanvas() {
+  if (!tp_layout) return;
+  var L      = tp_layout;
+  var wrap   = document.getElementById('tp-canvasWrap');
+  var canvas = document.getElementById('tp-canvas');
+  var ctx    = canvas.getContext('2d');
+
+  var LABEL_H = 40;
+  var LABEL_W = 36;
+  var maxDispW = Math.max((wrap.clientWidth || 400) - 24 - LABEL_W - 4, 180);
+  var scale    = maxDispW / L.roll.width;
+  var dispW    = Math.round(L.roll.width * scale);
+  var totalDispH = Math.round(L.lengthUsed * scale);
+  var maxH     = Math.min(Math.max(totalDispH, 60), 400);
+  var hScale   = maxH / (totalDispH || 1);
+
+  canvas.width  = dispW + LABEL_W;
+  canvas.height = maxH + LABEL_H;
+  canvas.style.width  = (dispW + LABEL_W) + 'px';
+  canvas.style.height = (maxH + LABEL_H) + 'px';
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Prior used block at top (gray)
+  var priorDispH = L.currentStart > 0.05 && L.rollOrigLen > 0
+    ? Math.round((L.currentStart / L.rollOrigLen) * totalDispH * hScale)
+    : 0;
+
+  if (priorDispH > 0) {
+    ctx.fillStyle = 'rgba(148,163,184,0.18)';
+    ctx.fillRect(LABEL_W, 0, dispW, Math.min(priorDispH, maxH));
+    if (priorDispH > 16) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px DM Sans, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Previously used (' + L.currentStart.toFixed(1) + 'ft)', LABEL_W + 6, 14);
+    }
+  }
+
+  // Test strip — full width, amber
+  var testY = Math.min(priorDispH, maxH - 2);
+  var testH = Math.min(maxH - testY, Math.round(L.lengthUsed * scale * hScale));
+  if (testH < 4) testH = 4;
+
+  ctx.fillStyle = 'rgba(245,158,11,0.28)';
+  ctx.fillRect(LABEL_W + 1, testY, dispW - 2, testH);
+  ctx.strokeStyle = 'rgba(217,119,6,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 3]);
+  ctx.strokeRect(LABEL_W + 1, testY, dispW - 2, testH);
+  ctx.setLineDash([]);
+
+  // Label inside strip
+  if (testH > 18) {
+    ctx.fillStyle = '#92400e';
+    ctx.font = 'bold 11px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🖨 TEST PRINT · ' + L.lengthUsed + ' ft', LABEL_W + dispW / 2, testY + testH / 2 + 4);
+  }
+
+  // Bottom axis labels
+  var by = maxH + 18;
+  ctx.strokeStyle = '#9db5ae'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(LABEL_W, by); ctx.lineTo(LABEL_W + dispW, by); ctx.stroke();
+  ctx.fillStyle = '#374151'; ctx.font = 'bold 10px DM Sans, sans-serif';
+  ctx.textAlign = 'left';   ctx.fillText('0', LABEL_W, by + 12);
+  ctx.textAlign = 'center'; ctx.fillText(L.roll.width + 'ft wide', LABEL_W + dispW / 2, by + 12);
+  ctx.textAlign = 'right';  ctx.fillText(L.roll.width + 'ft', LABEL_W + dispW, by + 12);
+
+  // Left length labels
+  ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText(L.currentStart.toFixed(1), LABEL_W - 4, testY + 4);
+  ctx.fillText(L.currentEnd.toFixed(1),   LABEL_W - 4, testY + testH);
+}
+
+/* ══════════════════════════════════════════
+   FULL ROLL MAP — mirrors pp_renderHistoryMap
+══════════════════════════════════════════ */
+function tp_drawHistoryMap() {
+  if (!tp_layout) return;
+  var L       = tp_layout;
+  var canvas  = document.getElementById('tp-historyCanvas');
+  var wrap    = document.getElementById('tp-historyWrap');
+  var meta    = document.getElementById('tp-historyMeta');
+  if (!canvas || !wrap) return;
+
+  var rollLen  = L.rollOrigLen || 164;
+  var rollWidth = parseFloat(L.roll.width) || 0;
+  var history  = (L.history || []).slice().sort(function(a, b) { return (a.startAtFt||0) - (b.startAtFt||0); });
+
+  var AX_L = 46, AX_B = 36;
+  var bodyW  = Math.max((wrap.clientWidth || 380) - AX_L - 28, 180);
+  var bodyH  = Math.max(980, Math.round(rollLen * 14));
+
+  canvas.width  = bodyW + AX_L + 8;
+  canvas.height = bodyH + AX_B + 8;
+  canvas.style.width  = (bodyW + AX_L + 8) + 'px';
+  canvas.style.height = (bodyH + AX_B + 8) + 'px';
+
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  var x0 = AX_L, y0 = 6;
+  var pxPerFtY = bodyH / rollLen;
+
+  // Roll background
+  ctx.fillStyle = '#eef2f7';
+  ctx.fillRect(x0, y0, bodyW, bodyH);
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(x0, y0, bodyW, bodyH);
+
+  // Prior segments
+  history.forEach(function(seg, i) {
+    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
+    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
+    if (sy > y0 + bodyH) return;
+
+    if (seg.isTestPrint) {
+      // Amber dashed — prior test prints
+      ctx.fillStyle = 'rgba(245,158,11,0.22)';
+      ctx.fillRect(x0 + 1, sy, bodyW - 2, sh);
+      ctx.strokeStyle = 'rgba(217,119,6,0.5)'; ctx.lineWidth = 1;
+      ctx.setLineDash([5, 3]);
+      ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
+      ctx.setLineDash([]);
+      if (sh > 12) {
+        ctx.fillStyle = '#92400e'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('TEST PRINT · ' + (seg.lengthUsed||0).toFixed(2) + 'ft', x0 + 6, sy + 12);
+      }
+    } else if (Array.isArray(seg.rows) && seg.rows.length) {
+      // JO segment with row detail
+      var rows = seg.rows;
+      var ry = sy;
+      rows.forEach(function(r) {
+        var rh = Math.max(2, Math.round((parseFloat(r.rowH)||0) * pxPerFtY));
+        var cx = x0;
+        (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
+          var pw = Math.max(1, Math.round(((parseFloat(p.w||p.width)||0) / rollWidth) * bodyW));
+          var jo = String(p.joNumber || p.jo || '').trim().toUpperCase();
+          var hash = 0;
+          for (var ci = 0; ci < jo.length; ci++) hash = ((hash * 31) + jo.charCodeAt(ci)) >>> 0;
+          var color = ['#6366f1','#0d9488','#f59e0b','#ec4899','#10b981','#8b5cf6','#ef4444','#3b82f6'][hash % 8];
+          ctx.fillStyle = color + '55';
+          ctx.fillRect(cx+1, ry+1, Math.max(1,pw-2), Math.max(1,rh-2));
+          cx += pw;
+        });
+        ry += rh;
+      });
+      ctx.strokeStyle = i%2 ? 'rgba(99,102,241,0.35)' : 'rgba(20,184,166,0.35)'; ctx.lineWidth = 1;
+      ctx.strokeRect(x0+1, sy, bodyW-2, sh);
+    } else {
+      ctx.fillStyle = i%2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
+      ctx.fillRect(x0+1, sy, bodyW-2, sh);
+      ctx.strokeStyle = 'rgba(71,85,105,0.25)';
+      ctx.strokeRect(x0+1, sy, bodyW-2, sh);
+    }
+    if (!seg.isTestPrint && sh > 14) {
+      ctx.fillStyle = '#334155'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('prev · ' + ((seg.joNumbers||[]).slice(0,2).join(', ')), x0+6, sy+12);
+    }
+  });
+
+  // Legacy used gap at top
+  if (!history.length && L.currentStart > 0.05) {
+    var legH = Math.max(2, Math.round(L.currentStart * pxPerFtY));
+    ctx.fillStyle = 'rgba(148,163,184,0.16)';
+    ctx.fillRect(x0+1, y0+1, bodyW-2, legH-2);
+    ctx.strokeStyle = 'rgba(100,116,139,0.28)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]); ctx.strokeRect(x0+1, y0+1, bodyW-2, legH-2); ctx.setLineDash([]);
+    if (legH > 14) {
+      ctx.fillStyle = '#475569'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('PREVIOUSLY USED (' + L.currentStart.toFixed(1) + 'ft)', x0+6, y0+14);
+    }
+  }
+
+  // Current test strip — amber with green border
+  var curY = y0 + Math.round(L.currentStart * pxPerFtY);
+  var curH = Math.max(4, Math.round((L.currentEnd - L.currentStart) * pxPerFtY));
+
+  ctx.fillStyle = 'rgba(245,158,11,0.30)';
+  ctx.fillRect(x0+1, curY, bodyW-2, curH);
+  ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2;
+  ctx.strokeRect(x0+1, curY+1, bodyW-2, Math.max(1, curH-2));
+
+  if (curH > 14) {
+    ctx.fillStyle = '#065f46'; ctx.font = 'bold 10px DM Sans, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('🖨 TEST PRINT · ' + L.lengthUsed + 'ft', x0+6, Math.max(y0+12, curY+12));
+  }
+
+  // Continuation dashed line
+  if (L.currentStart > 0.05) {
+    ctx.strokeStyle = 'rgba(245,158,11,0.65)'; ctx.lineWidth = 1;
+    ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(x0, curY); ctx.lineTo(x0+bodyW, curY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px DM Sans, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('Starts @ ' + L.currentStart.toFixed(1) + 'ft', x0+bodyW-6, Math.max(14, curY-4));
+  }
+
+  // Left scale marks
+  ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
+  for (var ft = 0; ft <= rollLen; ft += 5) {
+    var yy = y0 + Math.round(ft * pxPerFtY);
+    ctx.fillText(ft, x0-4, yy+3);
+    ctx.strokeStyle = 'rgba(148,163,184,0.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+bodyW, yy); ctx.stroke();
+  }
+
+  // Bottom axis
+  var by = y0 + bodyH + 18;
+  ctx.strokeStyle = '#9db5ae'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x0, by); ctx.lineTo(x0+bodyW, by); ctx.stroke();
+  ctx.fillStyle = '#374151'; ctx.font = 'bold 10px DM Sans, sans-serif';
+  ctx.textAlign = 'left';   ctx.fillText('0', x0, by+12);
+  ctx.textAlign = 'center'; ctx.fillText(rollWidth+'ft wide', x0+bodyW/2, by+12);
+  ctx.textAlign = 'right';  ctx.fillText(rollWidth+'ft', x0+bodyW, by+12);
+
+  if (meta) meta.textContent = 'Roll ' + L.roll.rollId + ' · ' + rollLen + 'ft total · '
+    + L.currentStart.toFixed(1) + 'ft used · test: ' + L.lengthUsed + 'ft';
+
+  // Scroll to test strip
+  wrap.scrollTop = Math.max(0, Math.round(L.currentStart * pxPerFtY) - 100);
+}
+
+/* ══════════════════════════════════════════
+   CONFIRM & DEDUCT
+══════════════════════════════════════════ */
+function tp_confirm() {
+  if (!tp_layout) { prism_toast('error', 'Please preview first.'); return; }
+  var rid   = tp_layout.roll.rollId;
+  var lu    = tp_layout.lengthUsed;
   var notes = document.getElementById('tp-notes').value.trim();
-  if (!rid)  { prism_toast('error', 'Please select a roll.'); return; }
-  if (!lu || lu <= 0) { prism_toast('error', 'Length Used is required.'); return; }
-  var btn = document.getElementById('tp-btn');
+  var btn   = document.getElementById('tp-confirmBtn');
   btn.disabled = true; btn.textContent = 'Recording…';
+
   google.script.run
     .withSuccessHandler(function(r) {
-      btn.disabled = false; btn.textContent = '🖨 Record Test Print';
+      btn.disabled = false; btn.textContent = '✓ Confirm & Deduct from Roll';
       if (r.success) {
         prism_toast('success', r.message);
         // Update roll remaining locally
@@ -227,34 +640,39 @@ function tp_submit() {
             if (tp_rolls[i].rollId === rid) { tp_rolls[i].remainingLength = r.newRemaining; break; }
           }
         }
-        // Reset form
-        tp_selRollId = '';
-        document.getElementById('tp-rollSearch').value = '';
-        document.getElementById('tp-lengthUsed').value = '';
+        // Reset UI
+        tp_layout  = null;
+        tp_selRoll = null;
+        document.getElementById('tp-lengthInput').value = '';
         document.getElementById('tp-notes').value = '';
-        document.getElementById('tp-calcPrev').style.display = 'none';
+        document.getElementById('tp-rollSearch').value = '';
+        document.getElementById('tp-emptyState').style.display = 'block';
+        document.getElementById('tp-results').style.display    = 'none';
+        document.getElementById('tp-confirmPanel').style.display = 'none';
+        tp_resetStats();
         tp_renderRolls(tp_rolls);
-        // Reload log
+        // Reload log + history
+        tp_loadRollHistory();
         google.script.run
           .withSuccessHandler(function(r2) {
             if (r2 && r2.success) { tp_allLogs = r2.data || []; tp_renderLog(); }
           })
           .withFailureHandler(function() {})
           .prism_getTestPrintLog();
-      } else {
-        prism_toast('error', r.message);
-      }
+      } else { prism_toast('error', r.message); }
     })
     .withFailureHandler(function(e) {
-      btn.disabled = false; btn.textContent = '🖨 Record Test Print';
+      btn.disabled = false; btn.textContent = '✓ Confirm & Deduct from Roll';
       prism_toast('error', e.message);
     })
     .prism_recordTestPrint({ rollId: rid, lengthUsed: lu, notes: notes });
 }
 
-/* ── Log ── */
+/* ══════════════════════════════════════════
+   HISTORY LOG
+══════════════════════════════════════════ */
 function tp_renderLog() {
-  var el = document.getElementById('tp-logList');
+  var el    = document.getElementById('tp-logList');
   var count = document.getElementById('tp-logCount');
   count.textContent = tp_allLogs.length + ' record' + (tp_allLogs.length !== 1 ? 's' : '');
   if (!tp_allLogs.length) {
