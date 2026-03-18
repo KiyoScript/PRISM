@@ -403,7 +403,11 @@ function pp_renderJOs() {
     var sel = pp_selJOs[j.joNumber] ? ' selected' : '';
     var chk = pp_selJOs[j.joNumber] ? 'checked' : '';
     var qty = j.quantity || 1;
-    var size = (j.width && j.height) ? j.width + ' × ' + j.height + ' ft' : '?';
+    var joUnit = (j.unit || 'ft').toUpperCase();
+    var size = (j.width && j.height)
+      ? j.width + ' × ' + j.height + ' ' + joUnit
+        + (j.unit && j.unit.toLowerCase() !== 'ft' && j.widthFt ? ' (' + j.widthFt + ' × ' + j.heightFt + ' ft)' : '')
+      : '?';
     var total = (j.width && j.height) ? (j.width * j.height * qty).toFixed(1) + ' ft²' : '';
     var hist = '';
     if (j.plottedBefore) {
@@ -1396,9 +1400,47 @@ function pp_drawCanvas(L) {
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(LABEL_W, 0, dispW, maxH);
 
+  // Show previously used portion at top if this roll has prior history
+  var rollId = L.rollId || (L.roll && L.roll.rollId) || '';
+  var history = pp_rollHistory[rollId] || [];
+  var currentStart = 0;
+  if (history.length) {
+    history.forEach(function(seg) {
+      var e = parseFloat(seg.endAtFt) || 0;
+      if (e > currentStart) currentStart = e;
+    });
+  }
+  var rollOrigLen = parseFloat(L.roll && L.roll.originalLength) || 0;
+  if (!rollOrigLen) rollOrigLen = parseFloat(L.rollAvail || 0) + parseFloat(L.totalLen || 0);
+  if (!currentStart && rollOrigLen > 0) {
+    currentStart = Math.max(0, rollOrigLen - parseFloat(L.rollAvail || 0));
+  }
+  if (currentStart > 0.05 && rollOrigLen > 0) {
+    var prevDispH = Math.round((currentStart / rollOrigLen) * (totalDispH || maxH));
+    prevDispH = Math.min(prevDispH, maxH - 4);
+    if (prevDispH > 0) {
+      ctx.fillStyle = 'rgba(148,163,184,0.18)';
+      ctx.fillRect(LABEL_W + 1, 0, dispW - 2, prevDispH);
+      ctx.strokeStyle = 'rgba(100,116,139,0.25)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(LABEL_W + 1, 0, dispW - 2, prevDispH);
+      ctx.setLineDash([]);
+      if (prevDispH > 16) {
+        ctx.fillStyle = '#64748b';
+        ctx.font = '10px DM Sans, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Previously used (' + currentStart.toFixed(1) + 'ft)', LABEL_W + 6, 14);
+      }
+    }
+  }
+
   // Draw rows
-  var y = 0;
-  var cumLen = 0;
+  var y = currentStart > 0.05 && rollOrigLen > 0
+    ? Math.round((currentStart / rollOrigLen) * (totalDispH || maxH)) * heightScale
+    : 0;
+  y = Math.min(y, maxH - 2);
+  var cumLen = currentStart > 0 ? currentStart : 0;
   L.rows.forEach(function(row, ri) {
     var rowDispH = Math.round(row.rowH * scale * heightScale);
     if (y + rowDispH > maxH) rowDispH = maxH - y;
