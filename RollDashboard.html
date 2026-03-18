@@ -303,8 +303,11 @@ function d4_renderGroups(groups, threshold, lowFt) {
 
       h += '<div class="roll-card"' + (consumed ? ' style="opacity:.55;"' : '') + '>';
       h += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">';
-      h += '<div><span class="mono" style="font-weight:700;font-size:13px;">' + d4_esc(r.rollId) + '</span><br>'
-        + '<span style="font-size:11px;color:var(--p-faint);">' + d4_esc(r.materialCode) + '</span></div>';
+      h += '<div>'
+        + '<span style="font-size:12px;font-weight:700;color:var(--p-text);">' + d4_esc(r.materialName || r.materialCode) + '</span><br>'
+        + '<span class="mono" style="font-weight:700;font-size:13px;">' + d4_esc(r.rollId) + '</span><br>'
+        + '<span style="font-size:11px;color:var(--p-faint);">' + d4_esc(r.materialCode) + '</span>'
+        + '</div>';
       h += '<span class="p-badge ' + stBadgeClass + '">' + r.status + '</span></div>';
 
       h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:' + (consumed ? '0' : '10px') + ';">';

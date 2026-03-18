@@ -374,20 +374,26 @@ function prism_getAllRolls_() {
   const sh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
   const lr = sh.getLastRow();
   if (lr < 2) return [];
+  const matMap = {};
+  try { prism_getAllMaterials_().forEach(m => { matMap[m.materialCode] = m.materialName || ''; }); } catch(_) {}
   return sh.getRange(2,1,lr-1,9).getValues()
     .filter(r => r[ROLL_COL.ROLL_ID] && String(r[ROLL_COL.ROLL_ID]).trim())
-    .map((r,i) => ({
-      rowIndex:        i+2,
-      rollId:          String(r[ROLL_COL.ROLL_ID]).trim(),
-      materialCode:    String(r[ROLL_COL.MATERIAL_CODE]).trim(),
-      width:           parseFloat(r[ROLL_COL.WIDTH])||0,
-      originalLength:  parseFloat(r[ROLL_COL.ORIGINAL_LENGTH])||0,
-      remainingLength: parseFloat(r[ROLL_COL.REMAINING_LENGTH])||0,
-      status:          String(r[ROLL_COL.STATUS]||'UNOPENED').trim().toUpperCase(),
-      dateReceived:    prism_fmtShort_(r[ROLL_COL.DATE_RECEIVED]),
-      dateOpened:      prism_fmtShort_(r[ROLL_COL.DATE_OPENED]),
-      openedBy:        String(r[ROLL_COL.OPENED_BY]||'').trim()
-    }));
+    .map((r,i) => {
+      const matCode = String(r[ROLL_COL.MATERIAL_CODE]).trim();
+      return {
+        rowIndex:        i+2,
+        rollId:          String(r[ROLL_COL.ROLL_ID]).trim(),
+        materialCode:    matCode,
+        materialName:    matMap[matCode] || '',
+        width:           parseFloat(r[ROLL_COL.WIDTH])||0,
+        originalLength:  parseFloat(r[ROLL_COL.ORIGINAL_LENGTH])||0,
+        remainingLength: parseFloat(r[ROLL_COL.REMAINING_LENGTH])||0,
+        status:          String(r[ROLL_COL.STATUS]||'UNOPENED').trim().toUpperCase(),
+        dateReceived:    prism_fmtShort_(r[ROLL_COL.DATE_RECEIVED]),
+        dateOpened:      prism_fmtShort_(r[ROLL_COL.DATE_OPENED]),
+        openedBy:        String(r[ROLL_COL.OPENED_BY]||'').trim()
+      };
+    });
 }
 function prism_getAllRollsPublic() {
   try { return { success:true, rolls:prism_getAllRolls_(), settings:prism_getSettings_() }; }

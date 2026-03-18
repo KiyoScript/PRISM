@@ -301,11 +301,12 @@ function tp_renderRolls(rolls) {
     var bc  = hl === 'green' ? 'badge-green' : hl === 'yellow' ? 'badge-amber' : 'badge-red';
     var sel = (tp_selRoll && tp_selRoll.rollId === r.rollId) ? ' selected' : '';
     h += '<div class="tp-roll-item' + sel + '" onclick="tp_selectRoll(\'' + tp_esc(r.rollId).replace(/'/g,"\\'") + '\')">'
+      + '<p style="font-size:12px;font-weight:700;color:var(--p-text);margin:0 0 4px;">' + tp_esc(r.materialName || r.materialCode) + '</p>'
       + '<div style="display:flex;align-items:center;justify-content:space-between;">'
       + '<span class="mono" style="font-weight:700;font-size:13px;">' + tp_esc(r.rollId) + '</span>'
       + '<span class="p-badge ' + bc + '">' + r.remainingLength + ' ft left</span>'
       + '</div>'
-      + '<p style="font-size:11px;color:var(--p-muted);margin:3px 0 0;">' + tp_esc(r.materialCode) + ' · ' + r.width + ' ft wide</p>'
+      + '<p style="font-size:11px;color:var(--p-faint);margin:3px 0 0;">' + tp_esc(r.materialCode) + ' · ' + r.width + ' ft wide</p>'
       + '</div>';
   });
   el.innerHTML = h;
