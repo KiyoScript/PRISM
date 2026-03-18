@@ -270,6 +270,18 @@
    PRISM PLOTTING PLANNER
    State vars
 ═══════════════════════════════════════════════════════════ */
+function pp_toFt(value, unit) {
+  var v = parseFloat(value) || 0;
+  if (v === 0) return 0;
+  switch ((unit || 'ft').toString().trim().toLowerCase()) {
+    case 'ft': return Math.round(v * 10000) / 10000;
+    case 'in': return Math.round((v / 12) * 10000) / 10000;
+    case 'cm': return Math.round((v / 30.48) * 10000) / 10000;
+    case 'm':  return Math.round((v * 3.28084) * 10000) / 10000;
+    default:   return Math.round(v * 10000) / 10000;
+  }
+}
+
 var pp_allJOs   = [];   // all FOR_PLOTTING JOs from backend
 var pp_filtJOs  = [];   // filtered for display
 var pp_selJOs   = {};   // { joNumber: true }
@@ -618,8 +630,8 @@ function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
 
   selJOList.forEach(function(j) {
     var qty = parseInt(j.quantity, 10) || 1;
-    var jw  = parseFloat(j.width)  || 0;
-    var jh  = parseFloat(j.height) || 0;
+    var jw  = j.widthFt  || pp_toFt(parseFloat(j.width)  || 0, j.unit);
+    var jh  = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
 
     if (withColors && !pp_colors[j.joNumber]) {
       pp_colors[j.joNumber] = PP_PALETTE[colorSeed % PP_PALETTE.length];
@@ -733,8 +745,8 @@ function pp_expandPieces(selJOList, withColors) {
   var colorSeed = Object.keys(pp_colors).length;
   selJOList.forEach(function(j) {
     var qty = parseInt(j.quantity, 10) || 1;
-    var jw  = parseFloat(j.width)  || 0;
-    var jh  = parseFloat(j.height) || 0;
+    var jw  = j.widthFt  || pp_toFt(parseFloat(j.width)  || 0, j.unit);
+    var jh  = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
     if (withColors && !pp_colors[j.joNumber]) {
       pp_colors[j.joNumber] = PP_PALETTE[colorSeed % PP_PALETTE.length];
       colorSeed++;
