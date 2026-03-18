@@ -63,6 +63,7 @@ const JO_STATUS = {
   COMPLETED:      'COMPLETED'
 };
 const ROLL_STATUS = { UNOPENED: 'UNOPENED', OPEN: 'OPEN', CONSUMED: 'CONSUMED' };
+const TEST_PRINT_MARKER = 'TEST-PRINT';
 const PRISM_PLOTTING_DRIVE_FOLDER_ID = '1IFPphBZ3IjcbkBTMSazeqbge_ZJN4S12';
 
 // ============================================================
@@ -575,6 +576,103 @@ function prism_recordUsage(payload) {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+function prism_recordTestPrint(payload) {
+  try {
+    const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
+      return { success: false, message: 'Digital Operators only.' };
+ 
+    if (!payload.rollId)
+      return { success: false, message: 'Roll ID required.' };
+    if (!payload.lengthUsed || payload.lengthUsed <= 0)
+      return { success: false, message: 'Length used must be > 0.' };
+ 
+    // ── Fetch roll row ──
+    const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollLr   = rollSh.getLastRow();
+    const rollData = rollSh.getRange(2, 1, rollLr - 1, 9).getValues();
+    let rollIdx = -1, rollRow = null;
+    rollData.forEach((r, i) => {
+      if (String(r[ROLL_COL.ROLL_ID]).trim() === payload.rollId) {
+        rollIdx = i + 2; rollRow = r;
+      }
+    });
+    if (rollIdx === -1)
+      return { success: false, message: `Roll "${payload.rollId}" not found.` };
+    if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase() !== ROLL_STATUS.OPEN)
+      return { success: false, message: 'Roll must be OPEN.' };
+ 
+    // ── Length validation ──
+    const remaining  = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
+    const lengthUsed = parseFloat(payload.lengthUsed);
+    if (lengthUsed > remaining)
+      return { success: false, message: `Length used (${lengthUsed} ft) exceeds remaining (${remaining} ft).` };
+ 
+    // ── Deduct from roll ──
+    const settings     = prism_getSettings_();
+    const newRemaining = Math.max(0, remaining - lengthUsed);
+    const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
+      ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
+ 
+    rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
+    rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
+ 
+    // ── Write to LFP_Usage with TEST-PRINT marker ──
+    // notes stored in the PlottingLink column (col G / index 6)
+    const today   = new Date();
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const rollWidth = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
+    usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+      'TEST-' + today.getTime(),
+      TEST_PRINT_MARKER,           // JO_Number = 'TEST-PRINT'
+      payload.rollId,
+      rollWidth,                   // widthUsed = full roll width
+      lengthUsed,
+      user.email,
+      payload.notes || '',         // notes in PlottingLink column
+      today
+    ]]);
+ 
+    prism_audit_('PRISM_TEST_PRINT', {
+      rollId:       payload.rollId,
+      lengthUsed,
+      newRemaining,
+      newRollStatus,
+      notes:        payload.notes || '',
+      by:           user.email
+    });
+ 
+    return {
+      success:      true,
+      message:      `Test print recorded. ${payload.rollId}: ${newRemaining} ft remaining.`
+                    + (newRollStatus === ROLL_STATUS.CONSUMED ? ' Roll CONSUMED.' : ''),
+      newRemaining,
+      newRollStatus
+    };
+ 
+  } catch(e) { return { success: false, message: e.message }; }
+}
+ 
+function prism_getTestPrintLog() {
+  try {
+    const sh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const lr = sh.getLastRow();
+    if (lr < 2) return { success: true, data: [] };
+    const data = sh.getRange(2, 1, lr - 1, 8).getValues()
+      .filter(r => String(r[USAGE_COL.JO_NUMBER] || '').trim().toUpperCase() === TEST_PRINT_MARKER)
+      .map(r => ({
+        usageId:    String(r[USAGE_COL.USAGE_ID]).trim(),
+        rollId:     String(r[USAGE_COL.ROLL_ID]).trim(),
+        lengthUsed: parseFloat(r[USAGE_COL.LENGTH_USED]) || 0,
+        operator:   String(r[USAGE_COL.OPERATOR]).trim(),
+        notes:      String(r[USAGE_COL.PLOTTING_LINK] || '').trim(), // notes in PlottingLink col
+        dateUsed:   prism_fmtShort_(r[USAGE_COL.DATE_USED])
+      }))
+      .reverse(); // newest first
+    return { success: true, data };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
 // ============================================================
 //  JOB ORDERS
 // ============================================================
@@ -960,6 +1058,8 @@ function prism_getRollPlotHistoryMap(rollIds) {
                 joNumbers: [item.joNumber],
                 createdBy: item.operator,
                 datePlotted: item.dateLabel,
+                notes: item.notes || '',
+                isTestPrint: item.joNumber === TEST_PRINT_MARKER,
                 rows: [],
                 source: 'USAGE_FALLBACK'
               });

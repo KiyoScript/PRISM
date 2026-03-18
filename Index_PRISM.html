@@ -381,6 +381,22 @@
       <span class="sb-label">Plotting Planner</span>
     </a>
 
+        <a href="#" class="nav-link" data-tab="usage" id="nav-usage">
+      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+      <span class="sb-label">Record Usage</span>
+    </a>
+ 
+    <a href="#" class="nav-link" data-tab="test-print" id="nav-test-print">
+      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+      </svg>
+      <span class="sb-label">Test Print</span>
+    </a>
+
     <div class="nav-divider"></div>
     <p class="sb-label nav-section">Inventory</p>
 
@@ -433,6 +449,8 @@
 <main id="mainContent">
   <div id="tab-job-orders" class="tab-pane active"><?!= include('PRISMJobOrders') ?></div>
   <div id="tab-plotting"   class="tab-pane"><?!= include('PRISMPlotting') ?></div>
+  <div id="tab-usage"      class="tab-pane"><?!= include('PRISM') ?></div>
+  <div id="tab-test-print" class="tab-pane"><?!= include('PRISMTestPrint') ?></div>
   <div id="tab-dashboard"  class="tab-pane"><?!= include('RollDashboard') ?></div>
   <div id="tab-stock-in"   class="tab-pane"><?!= include('RollStockIn') ?></div>
   <div id="tab-materials"  class="tab-pane"><?!= include('PRISMMaterials') ?></div>
@@ -522,6 +540,16 @@ google.script.run
     if (!isAdmin) {
       document.getElementById('nav-settings').style.display  = 'none';
       document.getElementById('nav-plotting').style.display  = 'none';
+    }
+    // Test Print: visible to Digital Operators and Admins only
+    var isOperator = role.includes('digital operator') || role.includes('operator');
+    if (!isAdmin && !isOperator) {
+      document.getElementById('nav-test-print').style.display = 'none';
+    }
+    // Record Usage: same access as test print
+    var navUsage = document.getElementById('nav-usage');
+    if (navUsage && !isAdmin && !isOperator) {
+      navUsage.style.display = 'none';
     }
     switchTab('dashboard');
     prism_init_dashboard();
