@@ -1249,20 +1249,24 @@ function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPer
       var pw = Math.max(1, Math.round((pieceWidth / rollWidth) * bodyW));
       var joNumber = String(p.joNumber || p.jo || '').trim().toUpperCase();
       
+      var pieceHeight = parseFloat(p.h) || parseFloat(r.rowH) || 0;
+      var p_rh = Math.max(2, Math.round(pieceHeight * pxPerFtY));
+      if (p_rh > rh) p_rh = rh;
+
       // Use standard gray tones for historical pieces
       ctx.fillStyle = boxColor + opacity;
-      ctx.fillRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
+      ctx.fillRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
       
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 1;
-      ctx.strokeRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
+      ctx.strokeRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
 
-      if (pw > 34 && rh > 14 && joNumber) {
+      if (pw > 34 && p_rh > 14 && joNumber) {
         ctx.fillStyle = labelColor;
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         var customerLabel = String(p.customer || joNumber || '').slice(0, 14);
-        ctx.fillText(customerLabel, cx + pw / 2, y + rh / 2 + 3);
+        ctx.fillText(customerLabel, cx + pw / 2, y + p_rh / 2 + 3);
       }
       cx += pw;
     });
@@ -1418,16 +1422,20 @@ function pp_renderHistoryMap(L) {
     var cx = x0;
     (r.pieces || []).forEach(function(p) {
       var pw = Math.max(1, Math.round(((parseFloat(p.w)||0) / rollWidth) * bodyW));
+      var pieceHeight = parseFloat(p.h) || parseFloat(r.rowH) || 0;
+      var p_rh = Math.max(2, Math.round(pieceHeight * pxPerFtY));
+      if (p_rh > rh) p_rh = rh;
+
       ctx.fillStyle = (p.color || '#4f46e5') + 'cc';
-      ctx.fillRect(cx + 1, cy + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
+      ctx.fillRect(cx + 1, cy + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
       ctx.strokeStyle = p.color || '#4f46e5';
       ctx.lineWidth = 1;
-      ctx.strokeRect(cx + 1, cy + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
-      if (pw > 30 && rh > 12) {
+      ctx.strokeRect(cx + 1, cy + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+      if (pw > 30 && p_rh > 12) {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(String(p.customer || p.joNumber || '').slice(0, 14), cx + pw / 2, cy + rh / 2 + 3);
+        ctx.fillText(String(p.customer || p.joNumber || '').slice(0, 14), cx + pw / 2, cy + p_rh / 2 + 3);
       }
       cx += pw;
     });
@@ -1616,12 +1624,31 @@ function pp_drawCanvas(L) {
     var x = LABEL_W;
     row.pieces.forEach(function(p) {
       var pw = Math.round(p.w * scale);
-      var ph = rowDispH;
+      var ph = Math.round((parseFloat(p.h) || row.rowH) * scale * heightScale);
+      if (ph > rowDispH) ph = rowDispH;
+
       ctx.fillStyle = p.color + 'bb';
       ctx.fillRect(x + 1, y + 1, pw - 2, ph - 2);
       ctx.strokeStyle = p.color;
       ctx.lineWidth = 1.5;
       ctx.strokeRect(x + 1, y + 1, pw - 2, ph - 2);
+
+      // Waste hatching for vertical gap
+      if (ph < rowDispH - 2) {
+        var vWasteY = y + ph;
+        var vWasteH = rowDispH - ph;
+        ctx.fillStyle = 'rgba(251,191,36,0.1)';
+        ctx.fillRect(x + 1, vWasteY, pw - 2, vWasteH);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(251,191,36,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (var xi = x; xi < x + pw + vWasteH; xi += 6) {
+          ctx.moveTo(xi, vWasteY); ctx.lineTo(xi - vWasteH, vWasteY + vWasteH);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Size label inside piece
       if (pw > 40 && ph > 22) {
