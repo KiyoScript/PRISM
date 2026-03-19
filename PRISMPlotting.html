@@ -237,10 +237,15 @@
               <div id="pp-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;"></div>
             </div>
 
+          </div><!-- /pp-results-left -->
+
+          <!-- RIGHT column -->
+          <div class="pp-results-right">
+
             <!-- Row-by-row table -->
-            <div class="p-card" style="padding:14px;">
+            <div class="p-card" style="padding:14px;display:flex;flex-direction:column;max-height:380px;">
               <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Row Details</p>
-              <div id="pp-rowList"></div>
+              <div id="pp-rowList" style="flex:1;overflow-y:auto;padding-right:6px;"></div>
             </div>
 
             <!-- Confirm panel -->
@@ -252,11 +257,7 @@
               </button>
             </div>
 
-          </div><!-- /pp-results-left -->
-
-          <!-- RIGHT column — Full Roll Map spanning both rows -->
-          <div class="pp-results-right" style="display:none;">
-            <div class="p-card" style="padding:14px;overflow:hidden;">
+            <div class="p-card" style="display:none;padding:14px;overflow:hidden;">
               <div class="pp-pane-head">
                 <p class="pp-pane-title" style="margin-bottom:0;">Layout Preview <span class="p-badge badge-gray" style="font-weight:600;margin-left:6px;">2D Canvas</span></p>
                 <div class="pp-pane-actions">
