@@ -856,7 +856,6 @@ function prism_getAllJobOrders_() {
       heightFt:       prism_toFt_(parseFloat(r[JO_COL.HEIGHT])||0, String(r[JO_COL.UNIT]||'ft').trim()),
       plottingLink:   String(r[JO_COL.PLOTTING_LINK]||'').trim(),
       plottingImageUrl: String(plotAsset.pngUrl || r[JO_COL.PLOTTING_LINK] || '').trim(),
-      plottingPdfUrl: String(plotAsset.pdfUrl || '').trim(),
       plottingFolderUrl: String(plotAsset.folderUrl || '').trim(),
       plotDateMs:     parseInt(plotAsset.dateMs) || 0,
       status:         String(r[JO_COL.STATUS]||JO_STATUS.FOR_PLOTTING).trim(),
@@ -894,7 +893,6 @@ function prism_getAllJobOrders_() {
           out[key] = {
             dateMs: dateMs,
             pngUrl: String(parsed.pngUrl || parsed.plottingLink || '').trim(),
-            pdfUrl: String(parsed.pdfUrl || '').trim(),
             folderUrl: String(parsed.folderUrl || '').trim(),
             rollId: String(parsed.rollId || '').trim()
           };
@@ -1545,7 +1543,6 @@ function prism_confirmPlotLayout(payload) {
         joNumbers: Object.keys(joSet),
         plottingLink: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '',
         pngUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || '',
-        pdfUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pdfUrl) || '',
         folderUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].folderUrl) || '',
         createdBy: user.email,
         rows: prism_compactRollRows_(plan.rows)
@@ -1583,7 +1580,6 @@ function prism_confirmPlotLayout(payload) {
         rollId: rollId,
         fileBaseName: savedPlotsByRollId[rollId].fileBaseName,
         pngUrl: savedPlotsByRollId[rollId].pngUrl,
-        pdfUrl: savedPlotsByRollId[rollId].pdfUrl,
         folderUrl: savedPlotsByRollId[rollId].folderUrl
       }))
     };
@@ -1716,29 +1712,12 @@ function prism_saveRollMapToDrive_(payload) {
   const pngBlob = Utilities.newBlob(bytes, contentType, fileBaseName + '.png');
   const pngFile = folder.createFile(pngBlob);
 
-  const tempDoc = DocumentApp.create('PRISM Roll Map Temp - ' + fileBaseName + ' - ' + new Date().getTime());
-  const body = tempDoc.getBody();
-  body.clear();
-  body.setMarginTop(18);
-  body.setMarginBottom(18);
-  body.setMarginLeft(18);
-  body.setMarginRight(18);
-  body.appendParagraph('PRISM Roll Map - ' + fileBaseName).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-  body.appendImage(pngBlob).setWidth(520);
-  tempDoc.saveAndClose();
-
-  const tempDocFile = DriveApp.getFileById(tempDoc.getId());
-  const pdfBlob = tempDocFile.getAs(MimeType.PDF).setName(fileBaseName + '.pdf');
-  const pdfFile = folder.createFile(pdfBlob);
-  tempDocFile.setTrashed(true);
-
   prism_audit_('PRISM_SAVE_ROLL_MAP_DRIVE', {
     rollId: rollId,
     sizeFolderName: sizeFolderName,
     sizeFolderId: sizeFolder.getId(),
     rollFolderId: folder.getId(),
     pngFileId: pngFile.getId(),
-    pdfFileId: pdfFile.getId(),
     folderId: PRISM_PLOTTING_DRIVE_FOLDER_ID,
     by: userEmail
   });
@@ -1746,7 +1725,6 @@ function prism_saveRollMapToDrive_(payload) {
   return {
     fileBaseName: fileBaseName,
     pngUrl: pngFile.getUrl(),
-    pdfUrl: pdfFile.getUrl(),
     folderUrl: folder.getUrl()
   };
 }
@@ -1826,7 +1804,6 @@ function prism_saveRollMapToDrive(payload) {
       message: 'Roll map saved to Drive.',
       fileBaseName: saved.fileBaseName,
       pngUrl: saved.pngUrl,
-      pdfUrl: saved.pdfUrl,
       folderUrl: saved.folderUrl
     };
   } catch (e) {

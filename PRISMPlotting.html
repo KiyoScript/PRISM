@@ -1807,7 +1807,7 @@ function pp_confirm() {
         var savedCount = (r.savedPlots && r.savedPlots.length) ? r.savedPlots.length : 0;
         var successMsg = r.message;
         if (savedCount > 0) {
-          successMsg += ' Saved PDF/IMG to Drive for ' + savedCount + ' roll(s).';
+          successMsg += ' Saved IMG to Drive for ' + savedCount + ' roll(s).';
         }
         prism_toast('success', successMsg);
         // Remove confirmed JOs from local list
@@ -1870,15 +1870,15 @@ function pp_saveMapToDrive() {
 
   google.script.run
     .withSuccessHandler(function(r) {
-      if (btn) { btn.disabled = false; btn.textContent = oldText || 'Save PDF/IMG to Drive'; }
+      if (btn) { btn.disabled = false; btn.textContent = oldText || 'Save IMG to Drive'; }
       if (!r || !r.success) {
         prism_toast('error', (r && r.message) ? r.message : 'Failed to save files to Drive.');
         return;
       }
-      prism_toast('success', 'Saved to Drive: ' + (r.fileBaseName || rollId) + '.png and .pdf');
+      prism_toast('success', 'Saved to Drive: ' + (r.fileBaseName || rollId) + '.png');
     })
     .withFailureHandler(function(e) {
-      if (btn) { btn.disabled = false; btn.textContent = oldText || 'Save PDF/IMG to Drive'; }
+      if (btn) { btn.disabled = false; btn.textContent = oldText || 'Save IMG to Drive'; }
       prism_toast('error', e.message || 'Failed to save files to Drive.');
     })
     .prism_saveRollMapToDrive({

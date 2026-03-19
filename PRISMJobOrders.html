@@ -16,8 +16,6 @@
   .jo3-btn-plot:hover { background: #e9d5ff; }
   .jo3-btn-view { background: #e0f2fe; color: #075985; }
   .jo3-btn-view:hover { background: #bae6fd; }
-  .jo3-btn-pdf { background: #fee2e2; color: #991b1b; }
-  .jo3-btn-pdf:hover { background: #fecaca; }
   .jo3-btn-amber { background: #fef3c7; color: #b45309; }
   .jo3-btn-amber:hover { background: #fde68a; }
 </style>
@@ -238,10 +236,9 @@ function jo3_renderTable(data) {
         + '<button class="jo3-action-btn jo3-btn-amber" onclick="jo3_goToPlottingPlannerReprint(\'' + jo3_esc(r.joNumber) + '\')">⚠ Declare Damage</button>'
         + '</div>';
     }
-    if (r.plottingImageUrl || r.plottingPdfUrl) {
+    if (r.plottingImageUrl) {
       actionBtn = '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;">'
-        + (r.plottingImageUrl ? '<button class="jo3-action-btn jo3-btn-view" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingImageUrl) + '\')">🖼 View Image</button>' : '')
-        + (r.plottingPdfUrl ? '<button class="jo3-action-btn jo3-btn-pdf" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingPdfUrl) + '\')">📄 View PDF</button>' : '')
+        + '<button class="jo3-action-btn jo3-btn-view" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingImageUrl) + '\')">🖼 View Image</button>'
         + (actionBtn || '')
         + '</div>';
     }
@@ -277,9 +274,6 @@ function jo3_renderCards(data) {
     var actionHtml = '';
     if (r.plottingImageUrl) {
       actionHtml += '<button class="jo3-action-btn jo3-btn-view" style="width:100%;margin-top:8px;" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingImageUrl) + '\')">🖼 View Image</button>';
-    }
-    if (r.plottingPdfUrl) {
-      actionHtml += '<button class="jo3-action-btn jo3-btn-pdf" style="width:100%;margin-top:8px;" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingPdfUrl) + '\')">📄 View PDF</button>';
     }
     if (r.status === 'FOR_PLOTTING') {
       actionHtml += '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_goToPlottingPlanner(\'' + jo3_esc(r.joNumber) + '\')">✦ Plot in Planner</button>';
