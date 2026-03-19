@@ -1,0 +1,284 @@
+<!-- PRISMPrintQueue.html -->
+<style>
+  #tab-print-queue, #tab-print-queue * { color: var(--p-text); }
+  #tab-print-queue .text-white * { color: #fff; }
+
+  .pq-layout-body {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 20px;
+  }
+  @media (max-width: 900px) {
+    .pq-layout-body { grid-template-columns: 1fr; }
+  }
+
+  .pq-queue-card {
+    background: var(--p-surface);
+    border: 1px solid var(--p-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .pq-queue-card:hover { border-color: var(--p-purple-bd); background: var(--p-purple-lt); }
+  .pq-queue-card.active { border-color: var(--p-purple); background: var(--p-purple-lt); box-shadow: 0 0 0 3px rgba(124,58,237,0.1); }
+
+</style>
+
+<div style="padding:24px 28px 40px;max-width:1400px;margin:0 auto;width:100%;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px;">
+    <div>
+      <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 4px;color:var(--p-text);">Print Queue</h2>
+      <p style="font-size:13px;color:var(--p-muted);margin:0;">Physical queue management and permanent roll mapping.</p>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="p-btn-reload" id="pq-reloadBtn" onclick="pq_load()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload Queue
+      </button>
+    </div>
+  </div>
+
+  <div class="pq-layout-body">
+    
+    <!-- LEFT PANEL: Planned Layouts Queue -->
+    <div>
+      <div class="p-card" style="padding:20px;min-height:75vh;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <p class="p-section-title" style="margin:0;">Waiting in Queue (<span id="pq-count">0</span>)</p>
+        </div>
+        
+        <div id="pq-list">
+          <!-- Queue cards plotted here -->
+          <div style="text-align:center;padding:40px 20px;color:var(--p-faint);font-size:13px;">Loading print queue...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Full Roll Map Timeline -->
+    <div>
+      <div class="p-card" style="padding:20px;min-height:75vh;display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <p class="p-section-title" style="margin:0 0 4px;">Physical Roll Map</p>
+            <p style="font-size:12px;color:var(--p-muted);margin:0;" id="pq-rollMeta">Select a layout from the queue to view its destination roll.</p>
+          </div>
+          <button id="pq-printBtn" class="p-btn p-btn-purple" style="background:var(--p-purple);display:none;font-size:14px;padding:10px 20px;" onclick="pq_startPrinting()">
+            ▶ Start Printing
+          </button>
+        </div>
+
+        <div id="pq-historyWrap" style="flex:1;background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;overflow:auto;position:relative;padding:16px;text-align:center;min-height:500px;">
+          <canvas id="pq-historyCanvas" style="max-width:100%;display:block;margin:0 auto;box-shadow:var(--p-shadow);border-radius:4px;"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var pq_planned = [];
+var pq_rollsHistory = {};
+var pq_selectedLayout = null;
+
+function prism_init_print_queue() {
+  pq_load();
+}
+
+function pq_load() {
+  prism_setReloading('pq-reloadBtn', true);
+  document.getElementById('pq-list').innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--p-faint);font-size:13px;"><div class="p-skel" style="width:120px;height:20px;margin-bottom:10px;"></div><br>Fetching layouts...</div>';
+  pq_selectedLayout = null;
+  document.getElementById('pq-printBtn').style.display = 'none';
+  document.getElementById('pq-rollMeta').textContent = 'Select a layout from the queue to view its destination roll.';
+  
+  var cvs = document.getElementById('pq-historyCanvas');
+  var ctx = cvs.getContext('2d');
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  cvs.width = 300; cvs.height = 80;
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      prism_setReloading('pq-reloadBtn', false);
+      if(r.success) {
+        pq_planned = r.planned || [];
+        pq_rollsHistory = r.rollsHistory || {};
+        pq_renderQueue();
+      } else {
+        prism_toast('error', r.message);
+        document.getElementById('pq-list').innerHTML = '<div style="color:var(--p-red);text-align:center;padding:20px;font-size:13px;">Error loading queue.</div>';
+      }
+    })
+    .withFailureHandler(function(e) {
+      prism_setReloading('pq-reloadBtn', false);
+      prism_toast('error', e.message);
+    })
+    .prism_getPrintQueueData();
+}
+
+function pq_renderQueue() {
+  var list = document.getElementById('pq-list');
+  document.getElementById('pq-count').textContent = pq_planned.length;
+
+  if (!pq_planned.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--p-faint);font-size:13px;">No layouts waiting in queue.</div>';
+    return;
+  }
+
+  var html = '';
+  pq_planned.forEach(function(p) {
+    var act = (pq_selectedLayout && pq_selectedLayout.plotId === p.plotId) ? ' active' : '';
+    html += '<div class="pq-queue-card' + act + '" onclick="pq_selectLayout(\'' + pq_esc(p.plotId) + '\')">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">';
+    html += '<span class="mono" style="font-weight:800;font-size:13px;color:var(--p-purple);">' + pq_esc(p.rollId) + '</span>';
+    html += '<span class="p-badge badge-purple">' + (p.lengthUsed||0).toFixed(1) + ' ft</span>';
+    html += '</div>';
+    html += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 8px;">Created: ' + pq_esc(p.date) + '</p>';
+    if (p.pngUrl) {
+      html += '<a href="' + p.pngUrl + '" target="_blank" onclick="event.stopPropagation();" style="display:inline-block;font-size:11px;font-weight:700;color:var(--p-purple);text-decoration:none;background:var(--p-purple-lt);padding:4px 8px;border-radius:6px;border:1px solid var(--p-purple-bd);margin-bottom:8px;">View Image ↗</a>';
+    }
+    html += '<div style="font-size:11px;color:var(--p-faint);line-height:1.4;">JOs: <span style="color:var(--p-text);font-weight:500;">' + pq_esc((p.joNumbers||[]).join(', ')) + '</span></div>';
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function pq_selectLayout(plotId) {
+  pq_selectedLayout = null;
+  for(var i=0; i<pq_planned.length; i++) {
+    if(pq_planned[i].plotId === plotId) { pq_selectedLayout = pq_planned[i]; break; }
+  }
+  pq_renderQueue(); // update active state
+  if(!pq_selectedLayout) return;
+
+  document.getElementById('pq-rollMeta').innerHTML = 'Roll: <strong class="mono" style="color:var(--p-purple);">' + pq_esc(pq_selectedLayout.rollId) + '</strong> &mdash; This layout will be appended exactly where the map currently ends.';
+  document.getElementById('pq-printBtn').style.display = 'block';
+
+  pq_renderMap(pq_selectedLayout);
+}
+
+function pq_renderMap(plan) {
+  var canvas = document.getElementById('pq-historyCanvas');
+  var wrap = document.getElementById('pq-historyWrap');
+  if(!canvas || !wrap) return;
+
+  var rollId = plan.rollId;
+  // Fallbacks since we don\'t have roll.originalLength in PrintQueue yet, let\'s assume 164ft for visualization or dynamic height
+  var history = pq_rollsHistory[rollId] || [];
+  
+  var lastHistoryEnd = 0;
+  history.forEach(function(seg) {
+    var e = parseFloat(seg.endAtFt);
+    if(isFinite(e) && e > lastHistoryEnd) lastHistoryEnd = e;
+  });
+
+  var planLen = parseFloat(plan.lengthUsed) || 0;
+  // The map only needs to show from 0 to lastHistoryEnd + planLen + 10ft buffer
+  var rollLen = Math.max(164, lastHistoryEnd + planLen + 20);
+  
+  var AX_L = 46;
+  var AX_B = 36;
+  var innerW = Math.max((wrap.clientWidth || 420) - AX_L - 28, 220);
+  var bodyW = innerW;
+  var bodyH = Math.max(800, Math.round(rollLen * 14));
+  var pxScale = 1;
+
+  canvas.width = Math.round((bodyW + AX_L + 8) * pxScale);
+  canvas.height = Math.round((bodyH + AX_B + 8) * pxScale);
+  canvas.style.width = (bodyW + AX_L + 8) + 'px';
+  canvas.style.height = (bodyH + AX_B + 8) + 'px';
+
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(pxScale, 0, 0, pxScale, 0, 0);
+
+  var x0 = AX_L;
+  var y0 = 6;
+  var pxPerFtY = bodyH / rollLen;
+
+  // Base background
+  ctx.fillStyle = '#eef2f7'; ctx.fillRect(x0, y0, bodyW, bodyH);
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, bodyW, bodyH);
+
+  // Draw History
+  history.forEach(function(seg, i) {
+    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
+    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
+    if(sy > y0 + bodyH) return;
+
+    if(seg.isDamage) {
+      ctx.fillStyle = 'rgba(245,158,11,0.3)';
+      ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
+      ctx.save(); ctx.strokeStyle='rgba(245,158,11,0.6)'; ctx.lineWidth=1.5; ctx.beginPath();
+      for(var xi=x0; xi<x0+bodyW+sh; xi+=10) { ctx.moveTo(xi,sy); ctx.lineTo(xi-sh, sy+sh); }
+      ctx.stroke(); ctx.restore();
+    } else {
+      ctx.fillStyle = 'rgba(99,102,241,0.18)';
+      ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
+      ctx.strokeStyle = 'rgba(71,85,105,0.25)'; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
+    }
+    if(sh > 14) {
+      ctx.fillStyle = '#334155'; ctx.font = '10px DM Sans, sans-serif';
+      var tag = seg.isDamage ? 'WASTE ('+(seg.lengthUsed||0).toFixed(1)+'ft)' : 'PRINTED ' + (seg.joNumbers||[]).slice(0,2).join(', ');
+      ctx.fillText(tag, x0+6, sy+12);
+    }
+  });
+
+  // Draw the Plannned Plan appended at the end
+  var curY = y0 + Math.round(lastHistoryEnd * pxPerFtY);
+  var curH = Math.max(2, Math.round(planLen * pxPerFtY));
+  
+  ctx.fillStyle = 'rgba(124,58,237,0.2)';
+  ctx.fillRect(x0+1, curY, bodyW-2, curH);
+  ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.strokeRect(x0+1, curY, bodyW-2, curH);
+  
+  ctx.fillStyle = '#4c1d95'; ctx.font = 'bold 11px DM Sans, sans-serif';
+  ctx.fillText('⚡ WILL PRINT HERE', x0+6, curY+14);
+  ctx.font = '10px DM Sans, sans-serif';
+  ctx.fillText('JOs: ' + (plan.joNumbers||[]).slice(0,3).join(', '), x0+6, curY+26);
+
+  // Axis
+  ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
+  for(var ft=0; ft<=rollLen; ft+=5) {
+    var yy = y0 + Math.round(ft * pxPerFtY);
+    ctx.fillText(ft, x0-6, yy+3);
+    ctx.strokeStyle = 'rgba(148,163,184,0.18)';
+    ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+bodyW, yy); ctx.stroke();
+  }
+}
+
+function pq_startPrinting() {
+  if(!pq_selectedLayout) return;
+  if(!confirm('Start printing ' + pq_selectedLayout.plotId + ' on roll ' + pq_selectedLayout.rollId + '?\n\nThis will append the layout to the Roll Map permanently and mark the JOs as PRINTING.')) return;
+
+  var btn = document.getElementById('pq-printBtn');
+  btn.disabled = true; btn.textContent = 'Recording Print...';
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = '▶ Start Printing';
+      if(r.success) {
+        prism_toast('success', r.message);
+        pq_load(); // reload queue entirely to get updated history
+      } else {
+        prism_toast('error', r.message);
+      }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = '▶ Start Printing';
+      prism_toast('error', e.message);
+    })
+    .prism_startPrintingLayout({ plotId: pq_selectedLayout.plotId });
+}
+
+function pq_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>

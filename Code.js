@@ -1502,22 +1502,6 @@ function prism_confirmPlotLayout(payload) {
       if (!joNumber) return;
 
       // Write one usage row per JO per roll where this JO consumed length.
-      const byRoll = joRollLengths[joNumber] || {};
-      Object.keys(byRoll).forEach(rollId => {
-        const len = parseFloat(byRoll[rollId]) || 0;
-        if (len <= 0) return;
-        usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
-          'USE-' + today.getTime() + '-' + joNumber + '-' + rollId,
-          joNumber,
-          rollId,
-          (rollSnapshots[rollId] && rollSnapshots[rollId].width) || 0,
-          len,
-          user.email,
-          effectivePlottingLink || '',
-          today
-        ]]);
-      });
-
       // Update JO: append all rollIds + set READY_TO_PRINT.
       joData.forEach((r, i) => {
         if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() === joNumber) {
@@ -1550,11 +1534,12 @@ function prism_confirmPlotLayout(payload) {
 
       const remarksObj = {
         type: 'ROLL_PLAN',
+        status: 'PLANNED',
         rollId: rollId,
         rollWidth: snap.width || 0,
         originalLength: snap.originalLength || 0,
-        startAtFt: snap.startAtFt || 0,
-        endAtFt: snap.endAtFt || 0,
+        startAtFt: 0,
+        endAtFt: parseFloat(plan.lengthUsed) || 0,
         lengthUsed: parseFloat(plan.lengthUsed) || 0,
         joNumbers: Object.keys(joSet),
         plottingLink: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '',
@@ -1823,6 +1808,156 @@ function prism_saveRollMapToDrive(payload) {
       folderUrl: saved.folderUrl
     };
   } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function prism_startPrintingLayout(payload) {
+  try {
+    const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
+      return { success: false, message: 'Access denied.' };
+
+    const plotId = String(payload.plotId || '').trim();
+    if (!plotId) return { success: false, message: 'No plot ID provided.' };
+
+    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotLr = plotSh.getLastRow();
+    if (plotLr < 2) return { success: false, message: 'Plot log empty.' };
+    const plotData = plotSh.getRange(2, 1, plotLr - 1, 6).getValues();
+
+    let targetRowIdx = -1;
+    let targetJson = null;
+    let targetRollId = '';
+    let targetLength = 0;
+
+    for (let i = 0; i < plotData.length; i++) {
+      if (String(plotData[i][0]).trim() === plotId) {
+        targetRowIdx = i + 2;
+        try { targetJson = JSON.parse(String(plotData[i][5] || '{}')); } catch(e){}
+        if (!targetJson || targetJson.status !== 'PLANNED') {
+          return { success: false, message: 'Layout is not currently PLANNED.' };
+        }
+        targetRollId = targetJson.rollId;
+        targetLength = parseFloat(targetJson.lengthUsed) || 0;
+        break;
+      }
+    }
+    if (targetRowIdx === -1) return { success: false, message: 'Plot layout not found.' };
+
+    let maxEnd = 0;
+    plotData.forEach(r => {
+      try {
+        const j = JSON.parse(String(r[5] || '{}'));
+        if (j.rollId === targetRollId && (j.status === 'PRINTED' || j.isDamage)) {
+          const e = parseFloat(j.endAtFt) || 0;
+          if (e > maxEnd) maxEnd = e;
+        }
+      } catch(e){}
+    });
+
+    targetJson.status = 'PRINTED';
+    targetJson.startAtFt = maxEnd;
+    targetJson.endAtFt = maxEnd + targetLength;
+
+    plotSh.getRange(targetRowIdx, 6).setValue(JSON.stringify(targetJson));
+
+    const joNumbers = Array.isArray(targetJson.joNumbers) ? targetJson.joNumbers : [];
+    if (joNumbers.length) {
+      const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+      const joData = joSh.getRange(2, 1, joSh.getLastRow() - 1, 13).getValues();
+      joData.forEach((r, i) => {
+        const jo = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
+        if (joNumbers.includes(jo) && String(r[JO_COL.STATUS]).trim() === JO_STATUS.READY_TO_PRINT) {
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.PRINTING);
+        }
+      });
+    }
+
+    const today = new Date();
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const planRows = Array.isArray(targetJson.rows) ? targetJson.rows : [];
+    const joLengths = {};
+    planRows.forEach(row => {
+      const rowJOs = {};
+      (row.pieces || []).forEach(p => { rowJOs[String(p.joNumber || '').trim().toUpperCase()] = true; });
+      Object.keys(rowJOs).forEach(jo => {
+        if (!jo) return;
+        const rowH = parseFloat(row.rowH || 0) || 0;
+        joLengths[jo] = (joLengths[jo] || 0) + rowH;
+      });
+    });
+
+    if (!Object.keys(joLengths).length && joNumbers.length) {
+      const perJO = targetLength / joNumbers.length;
+      joNumbers.forEach(jo => { joLengths[jo] = perJO; });
+    }
+
+    Object.keys(joLengths).forEach(jo => {
+      const len = joLengths[jo];
+      if (len <= 0) return;
+      usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+        'USE-' + today.getTime() + '-' + jo + '-' + targetRollId,
+        jo,
+        targetRollId,
+        targetJson.rollWidth || 0,
+        len,
+        user.email,
+        targetJson.plottingLink || '',
+        today
+      ]]);
+    });
+
+    prism_audit_('PRISM_START_PRINTING_LAYOUT', { plotId: plotId, rollId: targetRollId, by: user.email });
+
+    return { success: true, message: 'Layout sent to printer!', startAtFt: maxEnd, endAtFt: maxEnd + targetLength };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function prism_getPrintQueueData() {
+  try {
+    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotLr = plotSh.getLastRow();
+    const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
+
+    const planned = [];
+    const rollsHistory = {};
+
+    plotData.forEach(r => {
+      const id = String(r[0]).trim();
+      let j = {};
+      try { j = JSON.parse(String(r[5] || '{}')); } catch(e){}
+      if (!j.rollId) return;
+
+      if (j.status === 'PLANNED') {
+        planned.push({
+          plotId: id,
+          joNumbers: j.joNumbers || [],
+          rollId: j.rollId,
+          lengthUsed: j.lengthUsed || 0,
+          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
+          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
+          rows: j.rows || []
+        });
+      } else if (j.status === 'PRINTED' || j.isDamage) {
+        if (!rollsHistory[j.rollId]) rollsHistory[j.rollId] = [];
+        rollsHistory[j.rollId].push({
+          plotId: id,
+          rollId: j.rollId,
+          startAtFt: j.startAtFt || 0,
+          endAtFt: j.endAtFt || 0,
+          lengthUsed: j.lengthUsed || 0,
+          joNumbers: j.joNumbers || [],
+          isDamage: !!j.isDamage,
+          pngUrl: r[2] || j.plottingLink || j.pngUrl || ''
+        });
+      }
+    });
+
+    return { success: true, planned: planned, rollsHistory: rollsHistory };
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
