@@ -476,6 +476,26 @@ function pp_toggleJO(joNumber) {
   pp_layout = null;
   pp_rollPlans = [];
   pp_activeRollViewId = '';
+  document.getElementById('pp-results').style.display    = 'none';
+  document.getElementById('pp-rightEmpty').style.display = 'block';
+  document.getElementById('pp-confirmPanel').style.display = 'none';
+}
+
+function pp_clearAll() {
+  pp_selJOs = {};
+  pp_colors = {};
+  pp_selRoll = null;
+  pp_layout = null;
+  pp_rollPlans = [];
+  pp_activeRollViewId = '';
+  pp_pendingDamages = [];
+  document.getElementById('pp-results').style.display    = 'none';
+  document.getElementById('pp-rightEmpty').style.display = 'block';
+  document.getElementById('pp-confirmPanel').style.display = 'none';
+  if (document.getElementById('pp-damageInput')) document.getElementById('pp-damageInput').value = '';
+  pp_filterJOs();
+  pp_renderRolls();
+  pp_checkArrangeBtn();
 }
 
 function pp_selectAll() {
@@ -556,6 +576,9 @@ function pp_selRollFn(rollId) {
   pp_layout = null;
   pp_rollPlans = [];
   pp_activeRollViewId = '';
+  document.getElementById('pp-results').style.display    = 'none';
+  document.getElementById('pp-rightEmpty').style.display = 'block';
+  document.getElementById('pp-confirmPanel').style.display = 'none';
 }
 
 function pp_updateRollSuggestions() {
@@ -1833,6 +1856,7 @@ function pp_confirm() {
         pp_rollPlans = [];
         pp_activeRollViewId = '';
         pp_selRoll = null;
+        pp_pendingDamages = [];
         document.getElementById('pp-results').style.display    = 'none';
         document.getElementById('pp-rightEmpty').style.display = 'block';
         document.getElementById('pp-confirmPanel').style.display = 'none';
