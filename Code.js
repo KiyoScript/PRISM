@@ -1331,6 +1331,22 @@ function prism_confirmPlotLayout(payload) {
     if (!prism_isAdmin_(user.role))
       return { success: false, message: 'Admin access required.' };
 
+    if (payload.pendingDamages && payload.pendingDamages.length) {
+      for (let i = 0; i < payload.pendingDamages.length; i++) {
+        const d = payload.pendingDamages[i];
+        const res = prism_declareDamage({
+          rollId: d.rollId,
+          lengthUsed: parseFloat(d.lengthUsed),
+          joNumbers: d.joNumbers || [],
+          remarks: 'Auto-Declared and Replotted from Planner'
+        });
+        if (!res.success) {
+          throw new Error('Failed to process damage for roll ' + d.rollId + ': ' + res.message);
+        }
+      }
+      SpreadsheetApp.flush();
+    }
+
     if (!payload.joNumbers || !payload.joNumbers.length)
       return { success: false, message: 'No JOs provided.' };
 
