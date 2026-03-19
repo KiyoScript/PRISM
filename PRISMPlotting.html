@@ -407,6 +407,7 @@ function pp_setMode(mode) {
   }
   document.getElementById('pp-damageInputWrap').style.display = (mode === 'REPRINT') ? 'block' : 'none';
   pp_clearAll(); // resets selection and filters
+  if (mode === 'REPRINT') pp_reload();
 }
 
 function pp_filterJOs() {
