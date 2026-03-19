@@ -18,6 +18,8 @@
   .jo3-btn-view:hover { background: #bae6fd; }
   .jo3-btn-pdf { background: #fee2e2; color: #991b1b; }
   .jo3-btn-pdf:hover { background: #fecaca; }
+  .jo3-btn-amber { background: #fef3c7; color: #b45309; }
+  .jo3-btn-amber:hover { background: #fde68a; }
 </style>
 
 <div style="padding:20px 20px 40px;">
@@ -231,7 +233,10 @@ function jo3_renderTable(data) {
     } else if (r.status === 'READY_TO_PRINT') {
       actionBtn = '<button class="jo3-action-btn jo3-btn-printing" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
     } else if (r.status === 'PRINTING') {
-      actionBtn = '<button class="jo3-action-btn jo3-btn-completed" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>';
+      actionBtn = '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;">'
+        + '<button class="jo3-action-btn jo3-btn-completed" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>'
+        + '<button class="jo3-action-btn jo3-btn-amber" onclick="jo3_goToPlottingPlannerReprint(\'' + jo3_esc(r.joNumber) + '\')">⚠ Declare Damage</button>'
+        + '</div>';
     }
     if (r.plottingImageUrl || r.plottingPdfUrl) {
       actionBtn = '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;">'
@@ -282,6 +287,7 @@ function jo3_renderCards(data) {
       actionHtml += '<button class="jo3-action-btn jo3-btn-printing" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
     } else if (r.status === 'PRINTING') {
       actionHtml += '<button class="jo3-action-btn jo3-btn-completed" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>';
+      actionHtml += '<button class="jo3-action-btn jo3-btn-amber" style="width:100%;margin-top:8px;" onclick="jo3_goToPlottingPlannerReprint(\'' + jo3_esc(r.joNumber) + '\')">⚠ Declare Damage</button>';
     }
     h += '<div class="p-card" style="padding:14px;">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
@@ -352,6 +358,15 @@ function jo3_updateStatus(joNumber, newStatus, btn) {
 
 function jo3_goToPlottingPlanner(joNumber) {
   switchTab('plotting');
+}
+
+function jo3_goToPlottingPlannerReprint(joNumber) {
+  if (typeof switchTab === 'function') switchTab('plotting');
+  setTimeout(function() {
+    if (typeof window.pp_selectForReprint === 'function') {
+      window.pp_selectForReprint(joNumber);
+    }
+  }, 300);
 }
 
 function jo3_error(msg) {

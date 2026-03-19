@@ -478,6 +478,20 @@ function pp_clearAll() {
   pp_selJOs = {}; pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
 }
 
+window.pp_selectForReprint = function(joNumber) {
+  pp_setMode('REPRINT');
+  pp_clearAll();
+  var searchInput = document.getElementById('pp-joSearch');
+  if (searchInput) searchInput.value = joNumber;
+  pp_filterJOs();
+  setTimeout(function() {
+    pp_selJOs[joNumber] = true;
+    pp_renderJOs();
+    pp_updateRollSuggestions();
+    pp_checkArrangeBtn();
+  }, 100);
+};
+
 /* ── Roll List ── */
 function pp_renderRolls() {
   var el = document.getElementById('pp-rollList');
