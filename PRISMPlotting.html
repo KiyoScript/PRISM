@@ -1549,31 +1549,9 @@ function pp_drawCanvas(L) {
   if (!currentStart && rollOrigLen > 0) {
     currentStart = Math.max(0, rollOrigLen - parseFloat(L.rollAvail || 0));
   }
-  if (currentStart > 0.05 && rollOrigLen > 0) {
-    var prevDispH = Math.round((currentStart / rollOrigLen) * (totalDispH || maxH));
-    prevDispH = Math.min(prevDispH, maxH - 4);
-    if (prevDispH > 0) {
-      ctx.fillStyle = 'rgba(148,163,184,0.18)';
-      ctx.fillRect(LABEL_W + 1, 0, dispW - 2, prevDispH);
-      ctx.strokeStyle = 'rgba(100,116,139,0.25)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.strokeRect(LABEL_W + 1, 0, dispW - 2, prevDispH);
-      ctx.setLineDash([]);
-      if (prevDispH > 16) {
-        ctx.fillStyle = '#64748b';
-        ctx.font = '10px DM Sans, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Previously used (' + currentStart.toFixed(1) + 'ft)', LABEL_W + 6, 14);
-      }
-    }
-  }
 
   // Draw rows
-  var y = currentStart > 0.05 && rollOrigLen > 0
-    ? Math.round((currentStart / rollOrigLen) * (totalDispH || maxH)) * heightScale
-    : 0;
-  y = Math.min(y, maxH - 2);
+  var y = 0;
   var cumLen = currentStart > 0 ? currentStart : 0;
   L.rows.forEach(function(row, ri) {
     var rowDispH = Math.round(row.rowH * scale * heightScale);
