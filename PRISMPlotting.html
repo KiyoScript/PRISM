@@ -405,8 +405,8 @@ function pp_setMode(mode) {
 function pp_filterJOs() {
   var q = (document.getElementById('pp-joSearch').value || '').trim().toLowerCase();
   pp_filtJOs = pp_allJOs.filter(function(j) {
-    if (pp_mode === 'NEW' && j.status !== 'FOR_PLOTTING') return false;
-    if (pp_mode === 'REPRINT' && j.status !== 'PRINTING') return false;
+    if (pp_mode === 'NEW' && (j.status !== 'FOR_PLOTTING' || j.plottedBefore)) return false;
+    if (pp_mode === 'REPRINT' && !(j.plottedBefore || j.status === 'PRINTING')) return false;
     return !q || (j.joNumber + ' ' + j.customer + ' ' + (j.jobDescription || '')).toLowerCase().indexOf(q) !== -1;
   });
   pp_renderJOs();
@@ -416,7 +416,7 @@ function pp_renderJOs() {
   var el = document.getElementById('pp-joList');
   var count = document.getElementById('pp-joCount');
   if (!pp_filtJOs.length) {
-    var msg = pp_mode === 'NEW' ? 'No FOR_PLOTTING job orders found.' : 'No PRINTING job orders found.';
+    var msg = pp_mode === 'NEW' ? 'No new FOR_PLOTTING job orders found.' : 'No JOs waiting for reprint found.';
     el.innerHTML = '<div class="pp-empty"><svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>' + msg + '</div>';
     count.textContent = '';
     return;
