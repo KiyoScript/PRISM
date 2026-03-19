@@ -1535,7 +1535,7 @@ function prism_confirmPlotLayout(payload) {
         if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() === joNumber) {
           const existingRolls = String(r[JO_COL.ROLL_ID] || '')
             .split(',').map(x => x.trim()).filter(Boolean);
-          Object.keys(byRoll).forEach(rollId => {
+          Object.keys(joRollLengths[joNumber] || {}).forEach(rollId => {
             if (rollId && !existingRolls.includes(rollId)) existingRolls.push(rollId);
           });
           joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
