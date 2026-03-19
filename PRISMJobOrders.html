@@ -216,6 +216,18 @@ function jo3_apply() {
     if (q && (r.joNumber + ' ' + r.customer + ' ' + (r.jobDescription || '')).toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
+
+  jo3_filtered.sort(function(a, b) {
+    if (jo3_statusFilter === 'READY_TO_PRINT' || jo3_statusFilter === 'PRINTING') {
+      // Ascending (First plotted = First in list)
+      var tA = a.plotDateMs || new Date(a.dateCreated).getTime();
+      var tB = b.plotDateMs || new Date(b.dateCreated).getTime();
+      return tA - tB;
+    }
+    // Descending for ALL, FOR_PLOTTING, COMPLETED
+    return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
+  });
+
   document.getElementById('jo3-count').textContent = jo3_filtered.length + ' order' + (jo3_filtered.length !== 1 ? 's' : '');
   jo3_renderPage();
   jo3_renderPagination();

@@ -817,6 +817,7 @@ function prism_getAllJobOrders_() {
       plottingImageUrl: String(plotAsset.pngUrl || r[JO_COL.PLOTTING_LINK] || '').trim(),
       plottingPdfUrl: String(plotAsset.pdfUrl || '').trim(),
       plottingFolderUrl: String(plotAsset.folderUrl || '').trim(),
+      plotDateMs:     parseInt(plotAsset.dateMs) || 0,
       status:         String(r[JO_COL.STATUS]||JO_STATUS.FOR_PLOTTING).trim(),
       rollId:         String(r[JO_COL.ROLL_ID]||'').trim(),
       createdBy:      String(r[JO_COL.CREATED_BY]||'').trim(),
