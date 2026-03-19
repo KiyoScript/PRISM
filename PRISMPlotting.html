@@ -1600,7 +1600,7 @@ function pp_exportHistoryImage() {
 
 
 
-function pp_drawCanvas(L) {
+function pp_drawCanvas(L, forcedWidth) {
   var wrap   = document.getElementById('pp-canvas-wrap');
   var canvas = document.getElementById('pp-canvas');
   var ctx    = canvas.getContext('2d');
@@ -1611,13 +1611,13 @@ function pp_drawCanvas(L) {
   // True-to-size: scale so the roll width fills available space
   // and height is proportional to actual roll dimensions
   // Subtract axis width so full canvas fits without horizontal scrolling
-  var maxDispW   = Math.max(wrap.clientWidth - 24 - LABEL_W - 4, 200);
+  var maxDispW   = forcedWidth || Math.max(wrap.clientWidth - 24 - LABEL_W - 4, 200);
   var scale      = maxDispW / L.rollWidth; // px per ft — true ratio
   var dispW      = Math.round(L.rollWidth * scale);
   var totalLen   = Math.min(L.totalLen, L.rollAvail);
   var totalDispH = Math.round(totalLen * scale);
   // Cap height at 700px but keep ratio label accurate
-  var maxH       = Math.min(totalDispH, 700);
+  var maxH       = forcedWidth ? totalDispH : Math.min(totalDispH, 700);
   var heightScale = maxH / (totalDispH || 1); // compression factor if capped
 
   canvas.width  = dispW + LABEL_W;
@@ -1645,6 +1645,11 @@ function pp_drawCanvas(L) {
   if (!rollOrigLen) rollOrigLen = parseFloat(L.rollAvail || 0) + parseFloat(L.totalLen || 0);
   if (!currentStart && rollOrigLen > 0) {
     currentStart = Math.max(0, rollOrigLen - parseFloat(L.rollAvail || 0));
+  }
+  
+  // Bring the operator near the continuation point automatically, unless exporting
+  if (!forcedWidth) {
+    wrap.scrollTop = Math.max(0, Math.round(currentStart * scale * heightScale) - 120);
   }
 
   // Draw rows
@@ -1846,18 +1851,18 @@ function pp_showConfirmPanel() {
 function pp_captureRollMapImages() {
   if (!pp_layout) return [];
   var originalRollViewId = pp_activeRollViewId;
-  var originalMode = pp_historyRenderMode;
   var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
-  var canvas = document.getElementById('pp-historyCanvas');
+  var canvas = document.getElementById('pp-canvas');
   var out = [];
-
-  pp_historyRenderMode = 'export';
 
   plans.forEach(function(plan, idx) {
     var rollId = plan.rollId || (plan.roll && plan.roll.rollId) || '';
     if (!rollId) return;
     pp_activeRollViewId = rollId;
-    pp_renderHistoryMap(pp_layout);
+    
+    // Render the visual layout at high resolution
+    pp_drawCanvas(plan, 1200);
+    
     if (canvas && canvas.width) {
       out.push({
         rollId: rollId,
@@ -1867,7 +1872,6 @@ function pp_captureRollMapImages() {
     }
   });
 
-  pp_historyRenderMode = originalMode;
   pp_activeRollViewId = originalRollViewId || (plans[0] && plans[0].rollId) || '';
   pp_renderResults();
   return out;

@@ -237,14 +237,54 @@ function pq_renderMap(plan) {
   var curY = y0 + Math.round(lastHistoryEnd * pxPerFtY);
   var curH = Math.max(2, Math.round(planLen * pxPerFtY));
   
-  ctx.fillStyle = 'rgba(124,58,237,0.2)';
-  ctx.fillRect(x0+1, curY, bodyW-2, curH);
-  ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.strokeRect(x0+1, curY, bodyW-2, curH);
-  
-  ctx.fillStyle = '#4c1d95'; ctx.font = 'bold 11px DM Sans, sans-serif';
-  ctx.fillText('⚡ WILL PRINT HERE', x0+6, curY+14);
-  ctx.font = '10px DM Sans, sans-serif';
-  ctx.fillText('JOs: ' + (plan.joNumbers||[]).slice(0,3).join(', '), x0+6, curY+26);
+  var planRollWidth = parseFloat(plan.rollWidth) || 4.5;
+  var rowPxPerFtX = bodyW / planRollWidth;
+
+  if (plan.rows && plan.rows.length) {
+    ctx.fillStyle = 'rgba(124,58,237,0.05)';
+    ctx.fillRect(x0+1, curY, bodyW-2, curH);
+    ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5; ctx.strokeRect(x0+1, curY, bodyW-2, curH);
+
+    var currentRowAbsY = 0;
+    plan.rows.forEach(function(r) {
+      var ry = curY + (currentRowAbsY * pxPerFtY);
+
+      (r.pieces || []).forEach(function(p) {
+        var pw = parseFloat(p.w) || 0;
+        var ph = parseFloat(p.h) || 0;
+        var dx = parseFloat(p.dx) || 0;
+        var dy = parseFloat(p.dy) || 0;
+        var rotated = !!p.r;
+
+        var vw = (rotated ? ph : pw) * rowPxPerFtX;
+        var vh = (rotated ? pw : ph) * pxPerFtY;
+        var vx = x0 + 1 + (dx * rowPxPerFtX);
+        var vy = ry + (dy * pxPerFtY);
+
+        ctx.fillStyle = 'rgba(124,58,237,0.3)';
+        ctx.fillRect(vx, vy, vw, vh);
+        ctx.strokeStyle = '#6d28d9';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(vx, vy, vw, vh);
+
+        ctx.fillStyle = '#4c1d95';
+        ctx.font = 'bold 9px DM Sans, sans-serif';
+        var joText = String(p.jo || p.joNumber || '').replace(/^JO-/,'');
+        ctx.fillText(joText, vx + 4, vy + 12);
+      });
+
+      currentRowAbsY += parseFloat(r.rowH || r.h || 0);
+    });
+  } else {
+    ctx.fillStyle = 'rgba(124,58,237,0.2)';
+    ctx.fillRect(x0+1, curY, bodyW-2, curH);
+    ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.strokeRect(x0+1, curY, bodyW-2, curH);
+    
+    ctx.fillStyle = '#4c1d95'; ctx.font = 'bold 11px DM Sans, sans-serif';
+    ctx.fillText('⚡ WILL PRINT HERE', x0+6, curY+14);
+    ctx.font = '10px DM Sans, sans-serif';
+    ctx.fillText('JOs: ' + (plan.joNumbers||[]).slice(0,3).join(', '), x0+6, curY+26);
+  }
 
   // Axis
   ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
