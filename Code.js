@@ -659,6 +659,34 @@ function prism_recordTestPrint(payload) {
   } catch(e) { return { success: false, message: e.message }; }
 }
  
+function prism_getTestPrintLog() {
+  try {
+    const sh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const lr = sh.getLastRow();
+    if (lr < 2) return { success: true, data: [] };
+    
+    // Notes are stored in the PLOTTING_LINK column for test prints
+    const data = sh.getRange(2, 1, lr - 1, 8).getValues()
+      .filter(r => String(r[USAGE_COL.JO_NUMBER]).trim() === TEST_PRINT_MARKER)
+      .map(r => {
+        const d = r[USAGE_COL.DATE_USED];
+        return {
+          rollId: String(r[USAGE_COL.ROLL_ID] || '').trim(),
+          lengthUsed: parseFloat(r[USAGE_COL.LENGTH_USED]) || 0,
+          operator: String(r[USAGE_COL.OPERATOR] || '').trim(),
+          dateUsed: prism_fmtShort_(d),
+          notes: String(r[USAGE_COL.PLOTTING_LINK] || '').trim(),
+          _dateRaw: d ? new Date(d).getTime() : 0
+        };
+      })
+      .sort((a, b) => b._dateRaw - a._dateRaw);
+      
+    return { success: true, data: data };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
 // ============================================================
 //  DAMAGE DECLARATION
 // ============================================================
