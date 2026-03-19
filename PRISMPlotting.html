@@ -147,6 +147,12 @@
           <button onclick="pp_clearAll()" style="padding:4px 10px;border-radius:7px;border:1.5px solid var(--p-border);background:var(--p-surface);font-size:11px;font-weight:700;cursor:pointer;color:var(--p-muted);">Clear All</button>
         </div>
 
+        <!-- Mode Toggle -->
+        <div style="display:flex;gap:6px;margin-bottom:12px;background:var(--p-bg);padding:4px;border-radius:8px;border:1px solid var(--p-border);">
+          <button id="pp-tab-new" class="p-btn" style="flex:1;font-size:11px;padding:6px;background:var(--p-surface);border:1.5px solid var(--p-teal);color:var(--p-teal);" onclick="pp_setMode('NEW')">New Plots</button>
+          <button id="pp-tab-reprint" class="p-btn" style="flex:1;font-size:11px;padding:6px;background:transparent;border:1.5px solid transparent;color:var(--p-muted);" onclick="pp_setMode('REPRINT')">Reprints</button>
+        </div>
+
         <div class="p-search-wrap" style="margin-bottom:10px;">
           <span class="icon"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg></span>
           <input type="text" id="pp-joSearch" class="p-input" placeholder="Search JO or customer…" oninput="pp_filterJOs()" style="font-size:12px;">
@@ -282,9 +288,10 @@ function pp_toFt(value, unit) {
   }
 }
 
-var pp_allJOs   = [];   // all FOR_PLOTTING JOs from backend
+var pp_allJOs   = [];   // all FOR_PLOTTING and PRINTING JOs from backend
 var pp_filtJOs  = [];   // filtered for display
 var pp_selJOs   = {};   // { joNumber: true }
+var pp_mode     = 'NEW'; // 'NEW' | 'REPRINT'
 var pp_rolls    = [];   // open rolls
 var pp_materials = [];  // all materials (for name lookup)
 var pp_selRoll  = null; // selected roll object
@@ -380,9 +387,26 @@ function pp_loadRollHistory() {
 }
 
 /* ── JO List ── */
+function pp_setMode(mode) {
+  if (pp_mode === mode) return;
+  pp_mode = mode;
+  var tabNew = document.getElementById('pp-tab-new');
+  var tabReprint = document.getElementById('pp-tab-reprint');
+  if (mode === 'NEW') {
+    tabNew.style.background = 'var(--p-surface)'; tabNew.style.borderColor = 'var(--p-teal)'; tabNew.style.color = 'var(--p-teal)';
+    tabReprint.style.background = 'transparent'; tabReprint.style.borderColor = 'transparent'; tabReprint.style.color = 'var(--p-muted)';
+  } else {
+    tabReprint.style.background = 'var(--p-amber-lt)'; tabReprint.style.borderColor = 'var(--p-amber)'; tabReprint.style.color = 'var(--p-amber-dk)';
+    tabNew.style.background = 'transparent'; tabNew.style.borderColor = 'transparent'; tabNew.style.color = 'var(--p-muted)';
+  }
+  pp_clearAll(); // resets selection and filters
+}
+
 function pp_filterJOs() {
   var q = (document.getElementById('pp-joSearch').value || '').trim().toLowerCase();
   pp_filtJOs = pp_allJOs.filter(function(j) {
+    if (pp_mode === 'NEW' && j.status !== 'FOR_PLOTTING') return false;
+    if (pp_mode === 'REPRINT' && j.status !== 'PRINTING') return false;
     return !q || (j.joNumber + ' ' + j.customer + ' ' + (j.jobDescription || '')).toLowerCase().indexOf(q) !== -1;
   });
   pp_renderJOs();
@@ -392,7 +416,8 @@ function pp_renderJOs() {
   var el = document.getElementById('pp-joList');
   var count = document.getElementById('pp-joCount');
   if (!pp_filtJOs.length) {
-    el.innerHTML = '<div class="pp-empty"><svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>No FOR_PLOTTING job orders found.</div>';
+    var msg = pp_mode === 'NEW' ? 'No FOR_PLOTTING job orders found.' : 'No PRINTING job orders found.';
+    el.innerHTML = '<div class="pp-empty"><svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>' + msg + '</div>';
     count.textContent = '';
     return;
   }
@@ -543,12 +568,100 @@ function pp_updateRollSuggestions() {
 
 function pp_checkArrangeBtn() {
   var hasSel = Object.keys(pp_selJOs).some(function(k){ return pp_selJOs[k]; });
-  document.getElementById('pp-arrangeBtn').disabled = !(hasSel && pp_selRoll);
+  var btn = document.getElementById('pp-arrangeBtn');
+  btn.disabled = !(hasSel && pp_selRoll);
+  
+  if (pp_mode === 'REPRINT') {
+    btn.innerHTML = '⚠ Declare Damage & Replot';
+    btn.className = 'p-btn p-btn-amber';
+    btn.onclick = pp_declareDamageAndReplot;
+  } else {
+    btn.innerHTML = '✦ Auto-Arrange';
+    btn.className = 'p-btn p-btn-teal';
+    btn.onclick = pp_autoArrange;
+  }
+
   pp_updateRotateBtn();
 }
 
 function pp_getSelectedJOs() {
   return pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
+}
+
+function pp_declareDamageAndReplot() {
+  var selJOList = pp_getSelectedJOs();
+  if (!selJOList.length) return;
+  
+  var damagedRolls = [];
+  selJOList.forEach(function(j) {
+    if (j.usageLastRollId && damagedRolls.indexOf(j.usageLastRollId) === -1) {
+      damagedRolls.push(j.usageLastRollId);
+    }
+  });
+  
+  var dmgRollId = damagedRolls[0];
+  if (damagedRolls.length > 1) {
+    prism_toast('error', 'Selected JOs were printed on different rolls. Please process them one by one.');
+    return;
+  }
+  if (!dmgRollId) {
+    prism_toast('error', 'Could not determine the original roll for this JO.');
+    return;
+  }
+
+  var lenStr = prompt('⚠ Declare Damage\n\nEnter the wasted length (in feet) for roll ' + dmgRollId + ':\n(This will automatically refund the original layout length and deduct only this waste.)');
+  if (lenStr === null) return; // cancelled
+  var len = parseFloat(lenStr);
+  if (isNaN(len) || len <= 0) {
+    prism_toast('error', 'Invalid damage length.');
+    return;
+  }
+  
+  var btn = document.getElementById('pp-arrangeBtn');
+  var origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Processing...';
+  
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+      if (r.success) {
+        prism_toast('success', r.message);
+        var targets = selJOList.map(function(j){ return j.joNumber; });
+        pp_setMode('NEW');
+        prism_setReloading('pp-reloadBtn', true);
+        
+        google.script.run.withSuccessHandler(function(r2) {
+           prism_setReloading('pp-reloadBtn', false);
+           if(r2.success) {
+             pp_allJOs = r2.data;
+             pp_filterJOs();
+             targets.forEach(function(t) { pp_selJOs[t] = true; });
+             pp_renderJOs();
+             pp_updateRollSuggestions();
+             pp_checkArrangeBtn();
+             pp_loadRollHistory(); 
+             setTimeout(function() {
+                if (pp_selRoll) pp_autoArrange();
+             }, 500);
+           }
+        }).prism_getForPlottingJOs();
+      } else {
+        prism_toast('error', r.message);
+      }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+      prism_toast('error', e.message);
+    })
+    .prism_declareDamage({
+      rollId: dmgRollId,
+      lengthUsed: len,
+      remarks: 'Auto-Declared and Replotted from Planner',
+      joNumbers: selJOList.map(function(j){ return j.joNumber; })
+    });
 }
 
 function pp_isRotationApplicable() {

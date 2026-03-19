@@ -688,27 +688,68 @@ function prism_declareDamage(payload) {
     if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase() !== ROLL_STATUS.OPEN)
       return { success: false, message: 'Roll must be OPEN.' };
       
-    // ── Length validation & update ──
     const remaining  = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
     const lengthUsed = parseFloat(payload.lengthUsed);
-    if (lengthUsed > remaining)
-      return { success: false, message: `Damage length (${lengthUsed} ft) exceeds remaining (${remaining} ft).` };
       
     const rollWidth = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
     const originalLength = parseFloat(rollRow[ROLL_COL.ORIGINAL_LENGTH]) || 0;
+    const today   = new Date();
+
+    // ── Calculate Auto-Refund from recent Usage ──
+    let refundLength = 0;
+    const targets = (payload.joNumbers || []).map(jn => String(jn).trim().toUpperCase());
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const usageLr = usageSh.getLastRow();
+    let latestUsageByJo = {};
+
+    if (targets.length > 0 && usageLr >= 2) {
+      const usageData = usageSh.getRange(2, 1, usageLr - 1, 8).getValues();
+      usageData.forEach(r => {
+        const uJo = String(r[USAGE_COL.JO_NUMBER]).trim().toUpperCase();
+        const uRoll = String(r[USAGE_COL.ROLL_ID]).trim();
+        // Since rows are appended chronologically, the last one we see is the latest
+        if (uRoll === payload.rollId && targets.includes(uJo)) {
+          latestUsageByJo[uJo] = parseFloat(r[USAGE_COL.LENGTH_USED]) || 0;
+        }
+      });
+      Object.values(latestUsageByJo).forEach(len => { refundLength += len; });
+    }
+
+    if (lengthUsed > remaining + refundLength) {
+      return { success: false, message: `Damage length (${lengthUsed} ft) exceeds available remainder (${remaining + refundLength} ft).` };
+    }
     
     const settings     = prism_getSettings_();
-    const newRemaining = Math.max(0, remaining - lengthUsed);
+    const newRemaining = Math.max(0, remaining + refundLength - lengthUsed);
     const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
       ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
       
     rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
     rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
     
-    const today   = new Date();
+    // ── Write Auto-Refund Negatives to LFP_Usage ──
+    const refundRows = [];
+    Object.keys(latestUsageByJo).forEach(uJo => {
+      const len = latestUsageByJo[uJo];
+      if (len > 0) {
+        refundRows.push([
+          'REF-' + today.getTime() + '-' + uJo,
+          uJo,
+          payload.rollId,
+          rollWidth,
+          -len, // Negative usage to offset the failed plot
+          user.email,
+          'Auto-Refund from Damage Declaration',
+          today
+        ]);
+      }
+    });
+
+    if (refundRows.length > 0) {
+      usageSh.getRange(usageLr + 1, 1, refundRows.length, 8).setValues(refundRows);
+    }
     
-    // ── Write to LFP_Usage ──
-    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    // ── Write Damage to LFP_Usage ──
     usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
       'DAM-' + today.getTime(),
       'DAMAGE',                    // JO_Number = 'DAMAGE'
@@ -914,7 +955,7 @@ function prism_getForPlottingJOs() {
     const all = prism_getAllJobOrders_();
     const usageMap = prism_getUsageSummaryByJO_();
     const data = all
-      .filter(j => j.status === JO_STATUS.FOR_PLOTTING)
+      .filter(j => j.status === JO_STATUS.FOR_PLOTTING || j.status === 'PRINTING')
       .map(j => {
         const u = usageMap[String(j.joNumber || '').trim().toUpperCase()];
         if (!u) return Object.assign({}, j, {
