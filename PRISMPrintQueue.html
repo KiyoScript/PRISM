@@ -180,14 +180,18 @@ function pq_renderMap(plan) {
   });
 
   var planLen = parseFloat(plan.lengthUsed) || 0;
-  // The map only needs to show from 0 to lastHistoryEnd + planLen + 10ft buffer
-  var rollLen = Math.max(164, lastHistoryEnd + planLen + 20);
+  // The map only needs to show enough to comfortably fit the old history plus the new plan
+  var rollLen = Math.max(15, lastHistoryEnd + planLen + 5);
+  var planRollWidth = parseFloat(plan.rollWidth) || 4.5;
   
   var AX_L = 46;
   var AX_B = 36;
   var innerW = Math.max((wrap.clientWidth || 420) - AX_L - 28, 220);
   var bodyW = innerW;
-  var bodyH = Math.max(800, Math.round(rollLen * 14));
+  
+  // Set true physical 1:1 aspect ratio
+  var pxPerFt = bodyW / planRollWidth;
+  var bodyH = Math.round(rollLen * pxPerFt);
   var pxScale = 1;
 
   canvas.width = Math.round((bodyW + AX_L + 8) * pxScale);
@@ -202,16 +206,15 @@ function pq_renderMap(plan) {
 
   var x0 = AX_L;
   var y0 = 6;
-  var pxPerFtY = bodyH / rollLen;
 
   // Base background
   ctx.fillStyle = '#eef2f7'; ctx.fillRect(x0, y0, bodyW, bodyH);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, bodyW, bodyH);
 
   // Draw History
-  history.forEach(function(seg, i) {
-    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
-    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
+  history.forEach(function(seg) {
+    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFt);
+    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFt));
     if(sy > y0 + bodyH) return;
 
     if(seg.isDamage) {
@@ -225,6 +228,10 @@ function pq_renderMap(plan) {
       ctx.fillStyle = 'rgba(99,102,241,0.18)';
       ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
       ctx.strokeStyle = 'rgba(71,85,105,0.25)'; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
+      // Add subtle hatching to plot history
+      ctx.save(); ctx.strokeStyle='rgba(71,85,105,0.15)'; ctx.lineWidth=1; ctx.beginPath();
+      for(var xi=x0; xi<x0+bodyW+sh; xi+=14) { ctx.moveTo(xi,sy); ctx.lineTo(xi-sh, sy+sh); }
+      ctx.stroke(); ctx.restore();
     }
     if(sh > 14) {
       ctx.fillStyle = '#334155'; ctx.font = '10px DM Sans, sans-serif';
@@ -234,11 +241,8 @@ function pq_renderMap(plan) {
   });
 
   // Draw the Plannned Plan appended at the end
-  var curY = y0 + Math.round(lastHistoryEnd * pxPerFtY);
-  var curH = Math.max(2, Math.round(planLen * pxPerFtY));
-  
-  var planRollWidth = parseFloat(plan.rollWidth) || 4.5;
-  var rowPxPerFtX = bodyW / planRollWidth;
+  var curY = y0 + Math.round(lastHistoryEnd * pxPerFt);
+  var curH = Math.max(2, Math.round(planLen * pxPerFt));
 
   if (plan.rows && plan.rows.length) {
     ctx.fillStyle = 'rgba(124,58,237,0.05)';
@@ -247,7 +251,8 @@ function pq_renderMap(plan) {
 
     var currentRowAbsY = 0;
     plan.rows.forEach(function(r) {
-      var ry = curY + (currentRowAbsY * pxPerFtY);
+      var ry = curY + (currentRowAbsY * pxPerFt);
+      var rowHDisp = parseFloat(r.rowH || r.h || 0) * pxPerFt;
 
       (r.pieces || []).forEach(function(p) {
         var pw = parseFloat(p.w) || 0;
@@ -256,22 +261,43 @@ function pq_renderMap(plan) {
         var dy = parseFloat(p.dy) || 0;
         var rotated = !!p.r;
 
-        var vw = (rotated ? ph : pw) * rowPxPerFtX;
-        var vh = (rotated ? pw : ph) * pxPerFtY;
-        var vx = x0 + 1 + (dx * rowPxPerFtX);
-        var vy = ry + (dy * pxPerFtY);
+        var vw = (rotated ? ph : pw) * pxPerFt;
+        var vh = (rotated ? pw : ph) * pxPerFt;
+        var vx = x0 + 1 + (dx * pxPerFt);
+        var vy = ry + (dy * pxPerFt);
 
-        ctx.fillStyle = 'rgba(124,58,237,0.3)';
+        ctx.fillStyle = 'rgba(124,58,237,0.4)';
         ctx.fillRect(vx, vy, vw, vh);
-        ctx.strokeStyle = '#6d28d9';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#5b21b6';
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(vx, vy, vw, vh);
 
-        ctx.fillStyle = '#4c1d95';
-        ctx.font = 'bold 9px DM Sans, sans-serif';
+        // Subtly hatch inside the piece
+        ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.beginPath();
+        for(var xi=vx; xi<vx+vw+vh; xi+=8) { ctx.moveTo(xi,vy); ctx.lineTo(xi-vh, vy+vh); }
+        ctx.stroke(); ctx.restore();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px DM Sans, sans-serif';
         var joText = String(p.jo || p.joNumber || '').replace(/^JO-/,'');
-        ctx.fillText(joText, vx + 4, vy + 12);
+        ctx.fillText(joText, vx + 6, vy + 16);
+        ctx.font = '9px DM Sans, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText(pw+'x'+ph+'ft' + (rotated?' ↺':''), vx + 6, vy + 28);
       });
+      
+      var wasteW = parseFloat(r.wasteW) || 0;
+      if (wasteW > 0.05) {
+        var wasteX = x0 + Math.round((planRollWidth - wasteW) * pxPerFt);
+        var wasteW2 = x0 + bodyW - wasteX;
+        ctx.fillStyle = 'rgba(251,191,36,0.15)';
+        ctx.fillRect(wasteX, ry + 1, wasteW2, rowHDisp - 2);
+        ctx.save(); ctx.strokeStyle = 'rgba(251,191,36,0.6)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (var xi = wasteX; xi < wasteX + wasteW2 + rowHDisp; xi += 7) {
+          ctx.moveTo(xi, ry); ctx.lineTo(xi - rowHDisp, ry + rowHDisp);
+        }
+        ctx.stroke(); ctx.restore();
+      }
 
       currentRowAbsY += parseFloat(r.rowH || r.h || 0);
     });
@@ -288,12 +314,30 @@ function pq_renderMap(plan) {
 
   // Axis
   ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
-  for(var ft=0; ft<=rollLen; ft+=5) {
-    var yy = y0 + Math.round(ft * pxPerFtY);
+  for(var ft=0; ft<=rollLen; ft+=Math.max(1, Math.floor(rollLen/20))) {
+    var yy = y0 + Math.round(ft * pxPerFt);
     ctx.fillText(ft, x0-6, yy+3);
     ctx.strokeStyle = 'rgba(148,163,184,0.18)';
     ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+bodyW, yy); ctx.stroke();
   }
+
+  // Bottom text width indicator
+  var ty = bodyH + 20;
+  ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px DM Sans, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(planRollWidth + 'ft wide', x0 + bodyW/2, ty + 4);
+  
+  ctx.beginPath();
+  ctx.moveTo(x0, ty); ctx.lineTo(x0 + bodyW, ty);
+  ctx.moveTo(x0, ty); ctx.lineTo(x0 + 4, ty - 3);
+  ctx.moveTo(x0, ty); ctx.lineTo(x0 + 4, ty + 3);
+  ctx.moveTo(x0 + bodyW, ty); ctx.lineTo(x0 + bodyW - 4, ty - 3);
+  ctx.moveTo(x0 + bodyW, ty); ctx.lineTo(x0 + bodyW - 4, ty + 3);
+  ctx.stroke();
+
+  // Scroll smartly down to the new layout
+  setTimeout(function() {
+    wrap.scrollTop = Math.max(0, curY - 100);
+  }, 50);
 }
 
 function pq_startPrinting() {
