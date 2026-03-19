@@ -789,8 +789,31 @@ function prism_declareDamage(payload) {
       today
     ]]);
     
-    // ── Write to Plotting_Log for visual map ──
+    // ── Find and Void previous aborted plot in Plotting_Log ──
     const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotLr = plotSh.getLastRow();
+    if (plotLr >= 2) {
+      const plotData = plotSh.getRange(2, 6, plotLr - 1, 1).getValues();
+      for (let i = plotData.length - 1; i >= 0; i--) {
+        const jStr = String(plotData[i][0]).trim();
+        if (jStr.startsWith('{')) {
+          try {
+            const obj = JSON.parse(jStr);
+            if (obj.rollId === payload.rollId && !obj.isDamage && !obj.isVoid && obj.type === 'ROLL_PLAN') {
+              const objJos = obj.joNumbers || [];
+              if (targets.some(t => objJos.includes(t))) {
+                obj.isVoid = true;
+                obj.voidReason = 'Replaced by Damage ' + lengthUsed + 'ft';
+                plotSh.getRange(i + 2, 6).setValue(JSON.stringify(obj));
+                break;
+              }
+            }
+          } catch(e) {}
+        }
+      }
+    }
+    
+    // ── Write to Plotting_Log for visual map ──
     const plotId = 'PLT-DAM-' + today.getTime();
     
     const startAtFt = Math.max(0, originalLength - remaining);
@@ -1163,7 +1186,7 @@ function prism_getRollPlotHistoryMap(rollIds) {
 
         let parsed = null;
         try { parsed = JSON.parse(remarks); } catch (_) { parsed = null; }
-        if (!parsed || parsed.type !== 'ROLL_PLAN') return;
+        if (!parsed || parsed.type !== 'ROLL_PLAN' || parsed.isVoid) return;
 
         const rollId = String(parsed.rollId || '').trim();
         if (!rollId || !wantedSet[rollId]) return;
@@ -1865,8 +1888,8 @@ function prism_startPrintingLayout(payload) {
       if (String(plotData[i][0]).trim() === plotId) {
         targetRowIdx = i + 2;
         try { targetJson = JSON.parse(String(plotData[i][5] || '{}')); } catch(e){}
-        if (!targetJson || targetJson.status !== 'PLANNED') {
-          return { success: false, message: 'Layout is not currently PLANNED.' };
+        if (!targetJson || targetJson.status !== 'PLANNED' || targetJson.isVoid) {
+          return { success: false, message: 'Layout is not currently PLANNED or has been voided.' };
         }
         targetRollId = targetJson.rollId;
         targetLength = parseFloat(targetJson.lengthUsed) || 0;
@@ -1959,7 +1982,7 @@ function prism_getPrintQueueData() {
       const id = String(r[0]).trim();
       let j = {};
       try { j = JSON.parse(String(r[5] || '{}')); } catch(e){}
-      if (!j.rollId) return;
+      if (!j.rollId || j.isVoid) return;
 
       if (j.status === 'PLANNED') {
         planned.push({
@@ -1990,87 +2013,4 @@ function prism_getPrintQueueData() {
   } catch(e) {
     return { success: false, message: e.message };
   }
-}
-
-function prism_declareDamage(payload) {
-  try {
-    const user = prism_getUserInfo_();
-    if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
-      return { success: false, message: 'Access denied.' };
-
-    const rollId = String(payload.rollId || '').trim();
-    if (!rollId) return { success: false, message: 'Roll ID required.' };
-    const len = parseFloat(payload.lengthUsed) || 0;
-    if (len <= 0) return { success: false, message: 'Damage length must be > 0.' };
-
-    const rollSh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
-    const rollLr = rollSh.getLastRow();
-    const rollData = rollLr >= 2 ? rollSh.getRange(2, 1, rollLr - 1, 9).getValues() : [];
-    let rollRowIdx = -1;
-    let rollWidth = 0;
-    let remLen = 0;
-    for (let i = 0; i < rollData.length; i++) {
-      if (String(rollData[i][ROLL_COL.ROLL_ID] || '').trim() === rollId) {
-        rollRowIdx = i + 2;
-        rollWidth = parseFloat(rollData[i][ROLL_COL.WIDTH]) || 0;
-        remLen = parseFloat(rollData[i][ROLL_COL.REMAINING_LENGTH]) || 0;
-        break;
-      }
-    }
-    if (rollRowIdx === -1) return { success: false, message: 'Roll not found.' };
-
-    const newRem = Math.max(0, remLen - len);
-    rollSh.getRange(rollRowIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRem);
-    const settings = prism_getSettings_();
-    if (newRem === 0 && settings.auto_consume_on_zero === 'true') {
-      rollSh.getRange(rollRowIdx, ROLL_COL.STATUS + 1).setValue(ROLL_STATUS.CONSUMED);
-    }
-
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotData = plotSh.getLastRow() >= 2 ? plotSh.getRange(2, 1, plotSh.getLastRow() - 1, 6).getValues() : [];
-    let maxEnd = 0;
-    plotData.forEach(r => {
-      try {
-        const j = JSON.parse(String(r[5] || '{}'));
-        if (j.rollId === rollId && (j.status === 'PRINTED' || j.isDamage)) {
-          const e = parseFloat(j.endAtFt) || 0;
-          if (e > maxEnd) maxEnd = e;
-        }
-      } catch(e){}
-    });
-
-    const today = new Date();
-    const plotId = 'DMG-' + today.getTime() + '-' + rollId;
-    const joNumbers = Array.isArray(payload.joNumbers) ? payload.joNumbers : [];
-    
-    // Add explicitly to Plotting Log
-    const remarksObj = {
-      type: 'ROLL_PLAN',
-      rollId: rollId,
-      isDamage: true,
-      status: 'PRINTED',
-      startAtFt: maxEnd,
-      endAtFt: maxEnd + len,
-      lengthUsed: len,
-      joNumbers: joNumbers,
-      createdBy: user.email,
-      remarks: payload.remarks || ''
-    };
-    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
-      plotId, joNumbers.slice(0, 8).join(', ') || 'DAMAGE', '', user.email, today, JSON.stringify(remarksObj)
-    ]]);
-
-    // Log to LFP_USAGE
-    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
-      'USE-' + today.getTime() + '-' + rollId,
-      joNumbers.length ? joNumbers.join(', ') : 'DAMAGE',
-      rollId, rollWidth || 0, len, user.email, 'DAMAGE', today
-    ]]);
-
-    prism_audit_('PRISM_DECLARE_DAMAGE', { rollId: rollId, lengthUsed: len, by: user.email });
-    return { success: true, message: 'Damage declared and allocated on map.' };
-  } catch (e) {
-    return { success: false, message: e.message };
-  }
-}
+}
