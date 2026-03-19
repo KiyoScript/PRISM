@@ -414,7 +414,7 @@ function pp_filterJOs() {
   var q = (document.getElementById('pp-joSearch').value || '').trim().toLowerCase();
   pp_filtJOs = pp_allJOs.filter(function(j) {
     if (pp_mode === 'NEW' && j.status !== 'FOR_PLOTTING') return false;
-    if (pp_mode === 'REPRINT' && j.status !== 'PRINTING') return false;
+    if (pp_mode === 'REPRINT' && (j.status !== 'PRINTING' || !j.plottedBefore)) return false;
     return !q || (j.joNumber + ' ' + j.customer + ' ' + (j.jobDescription || '')).toLowerCase().indexOf(q) !== -1;
   });
   pp_renderJOs();
