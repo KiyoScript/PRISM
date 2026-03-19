@@ -28,13 +28,18 @@
       <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Job Orders</h2>
       <p style="font-size:13px;color:var(--p-muted);margin:0;">LFP job orders — auto-synced from Job Web App</p>
     </div>
-    <button id="jo3-reloadBtn" class="p-btn-reload" onclick="jo3_reload()">
-      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-      </svg>
-      Reload
-    </button>
+    <div style="display:flex; gap:8px;">
+      <button id="jo3-btn-damage" onclick="jo3_openDamageModal()" class="p-btn p-btn-amber">
+        ⚠ Declare Damage
+      </button>
+      <button id="jo3-reloadBtn" class="p-btn-reload" onclick="jo3_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+    </div>
   </div>
 
   <!-- Info banner -->
@@ -97,6 +102,60 @@
   <!-- Pagination -->
   <div id="jo3-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
 
+</div>
+
+<!-- Declare Damage Modal -->
+<div id="jo3-damageModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:60;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px;">
+  <div class="p-card" style="width:100%;max-width:440px;box-shadow:var(--p-shadow-md);max-height:90vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--p-border);">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:36px;height:36px;background:var(--p-amber-lt);border:1px solid var(--p-amber-bd);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--p-amber);">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div>
+          <p style="font-weight:800;font-size:15px;margin:0;">Declare Damage</p>
+          <p style="font-size:12px;color:var(--p-muted);margin:0;">Mark material waste & reprint JOs</p>
+        </div>
+      </div>
+      <button onclick="jo3_closeDamage()" style="padding:6px;border-radius:7px;border:none;background:none;cursor:pointer;color:var(--p-faint);">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div style="padding:18px;overflow-y:auto;flex:1;">
+      
+      <label class="p-label" style="margin-top:0;">1. Which roll was damaged?</label>
+      <select id="jo3-damRoll" class="p-input" style="margin-bottom:14px;font-family:'JetBrains Mono',monospace;" onchange="jo3_onDamRollChange()">
+        <option value="">-- Select OPEN roll --</option>
+      </select>
+
+      <label class="p-label">2. Wasted Length (Feet)</label>
+      <div style="position:relative;margin-bottom:14px;">
+        <input type="number" id="jo3-damLen" class="p-input" placeholder="e.g. 2.5" step="0.1" min="0.1" autocomplete="off" style="font-family:'JetBrains Mono',monospace;">
+        <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--p-faint);font-weight:700;font-size:12px;pointer-events:none;">ft</span>
+      </div>
+
+      <label class="p-label">3. Select affected JOs (will be reverted to FOR PLOTTING)</label>
+      <div id="jo3-damJOs" style="max-height:160px;overflow-y:auto;border:1.5px solid var(--p-border);border-radius:10px;padding:8px;background:var(--p-bg);margin-bottom:14px;">
+        <div style="text-align:center;padding:12px;color:var(--p-faint);font-size:12px;">Select a roll to see its active JOs</div>
+      </div>
+      
+      <label class="p-label">4. Damage Reason (Optional)</label>
+      <textarea id="jo3-damRs" class="p-input" placeholder="e.g. Head strike / banding / faded print" style="margin-bottom:18px;resize:vertical;min-height:50px;"></textarea>
+
+      <div class="p-alert p-alert-warn" style="margin-bottom:18px;font-size:12px;">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        This will irrevocably deduct material from the roll and plot a red damage block on the roll map.
+      </div>
+      
+      <button id="jo3-submitDam" onclick="jo3_submitDamage()" class="p-btn p-btn-amber" style="width:100%;padding:13px;font-size:14px;">
+        ⚠ Confirm Damage
+      </button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -340,6 +399,110 @@ function jo3_goToPlottingPlanner(joNumber) {
 function jo3_error(msg) {
   document.getElementById('jo3-tbody').innerHTML =
     '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--p-red);">Error: ' + jo3_esc(msg) + '</td></tr>';
+}
+
+/* ── Damage Declaration ── */
+var jo3_selectedDamJOs = {};
+
+function jo3_openDamageModal() {
+  document.getElementById('jo3-damageModal').style.display = 'flex';
+  document.getElementById('jo3-damLen').value = '';
+  document.getElementById('jo3-damRs').value = '';
+  jo3_selectedDamJOs = {};
+  
+  // load rolls
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if(r && r.rolls) {
+        var openRolls = r.rolls.filter(function(x){ return x.status === 'OPEN'; });
+        var h = '<option value="">-- Select OPEN roll --</option>';
+        openRolls.forEach(function(rr) {
+          h += '<option value="' + jo3_esc(rr.rollId) + '">' + jo3_esc(rr.rollId) + ' (' + rr.remainingLength + 'ft left)</option>';
+        });
+        document.getElementById('jo3-damRoll').innerHTML = h;
+      }
+    })
+    .prism_getAllRollsPublic();
+    
+  document.getElementById('jo3-damJOs').innerHTML = '<div style="text-align:center;padding:12px;color:var(--p-faint);font-size:12px;">Select a roll to see its active JOs</div>';
+}
+
+function jo3_closeDamage() {
+  document.getElementById('jo3-damageModal').style.display = 'none';
+}
+
+function jo3_onDamRollChange() {
+  var rollId = document.getElementById('jo3-damRoll').value;
+  var el = document.getElementById('jo3-damJOs');
+  if(!rollId) {
+    el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--p-faint);font-size:12px;">Select a roll to see its active JOs</div>';
+    return;
+  }
+  var activeJOs = jo3_all.filter(function(j) {
+    if (j.status !== 'PRINTING' && j.status !== 'READY_TO_PRINT') return false;
+    var jRolls = (j.rollId || '').split(',').map(function(s){return s.trim();});
+    return jRolls.includes(rollId);
+  });
+  
+  if(!activeJOs.length) {
+    el.innerHTML = '<div style="text-align:center;padding:12px;color:var(--p-faint);font-size:12px;">No active JOs found on this roll</div>';
+    return;
+  }
+  
+  var h = '';
+  activeJOs.forEach(function(j) {
+    h += '<label style="display:flex;align-items:flex-start;gap:10px;padding:8px;border-radius:6px;background:var(--p-surface);cursor:pointer;margin-bottom:4px;border:1px solid var(--p-border);">'
+      + '<input type="checkbox" value="' + jo3_esc(j.joNumber) + '" onchange="jo3_toggleDamJO(this)" style="margin-top:2px;accent-color:var(--p-amber);">'
+      + '<div>'
+      + '<div class="mono" style="font-size:12px;font-weight:700;color:var(--p-indigo);">' + jo3_esc(j.joNumber) + '</div>'
+      + '<div style="font-size:11px;color:var(--p-muted);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + jo3_esc(j.customer) + '</div>'
+      + '</div></label>';
+  });
+  el.innerHTML = h;
+}
+
+function jo3_toggleDamJO(chk) {
+  if (chk.checked) jo3_selectedDamJOs[chk.value] = true;
+  else delete jo3_selectedDamJOs[chk.value];
+}
+
+function jo3_submitDamage() {
+  var rollId = document.getElementById('jo3-damRoll').value;
+  var len = parseFloat(document.getElementById('jo3-damLen').value) || 0;
+  var remarks = document.getElementById('jo3-damRs').value || '';
+  
+  if(!rollId) { prism_toast('error', 'Please select a roll.'); return; }
+  if(len <= 0) { prism_toast('error', 'Please enter a valid damage length.'); return; }
+  
+  var affJOs = Object.keys(jo3_selectedDamJOs);
+  
+  var btn = document.getElementById('jo3-submitDam');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false;
+      btn.textContent = '⚠ Confirm Damage';
+      if(r.success) {
+        jo3_closeDamage();
+        prism_toast('success', r.message);
+        jo3_reload();
+      } else {
+        prism_toast('error', r.message);
+      }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false;
+      btn.textContent = '⚠ Confirm Damage';
+      prism_toast('error', e.message);
+    })
+    .prism_declareDamage({
+      rollId: rollId,
+      lengthUsed: len,
+      remarks: remarks,
+      joNumbers: affJOs
+    });
 }
 
 function jo3_esc(s) {

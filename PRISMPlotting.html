@@ -1191,21 +1191,38 @@ function pp_renderHistoryMap(L) {
     var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
     var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
     if (sy > y0 + bodyH) return;
-    if (Array.isArray(seg.rows) && seg.rows.length) {
+    if (Array.isArray(seg.rows) && seg.rows.length && !seg.isDamage) {
       pp_drawHistorySegmentRows(ctx, seg, x0, sy, bodyW, rollWidth, pxPerFtY, { opacity: '55', labelColor: '#f8fafc' });
       ctx.strokeStyle = i % 2 ? 'rgba(99,102,241,0.35)' : 'rgba(20,184,166,0.35)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
+      ctx.strokeRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
+    } else if (seg.isDamage) {
+      ctx.fillStyle = 'rgba(245,158,11,0.3)'; // amber
+      ctx.fillRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
+      
+      // Draw warning stripes
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245,158,11,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (var xi = x0; xi < x0 + bodyW + sh; xi += 10) {
+        ctx.moveTo(xi, sy); ctx.lineTo(xi - sh, sy + sh);
+      }
+      ctx.stroke();
+      ctx.restore();
     } else {
       ctx.fillStyle = i % 2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
-      ctx.fillRect(x0 + 1, sy, bodyW - 2, sh);
+      ctx.fillRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
       ctx.strokeStyle = 'rgba(71,85,105,0.25)';
-      ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
+      ctx.strokeRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
     }
     if (sh > 14) {
       ctx.fillStyle = '#334155';
       ctx.font = '10px DM Sans, sans-serif';
-      var tag = 'prev ' + ((seg.datePlotted || '').replace(',', '') || '') + ' · ' + ((seg.joNumbers||[]).slice(0,2).join(', '));
+      var tag = seg.isDamage ? 'WASTE (' + (seg.lengthUsed||0).toFixed(1) + 'ft)' : 'prev ' + ((seg.datePlotted || '').replace(',', '') || '') + ' · ' + ((seg.joNumbers||[]).slice(0,2).join(', '));
       ctx.fillText(tag, x0 + 6, sy + 12);
     }
   });

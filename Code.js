@@ -659,23 +659,132 @@ function prism_recordTestPrint(payload) {
   } catch(e) { return { success: false, message: e.message }; }
 }
  
-function prism_getTestPrintLog() {
+// ============================================================
+//  DAMAGE DECLARATION
+// ============================================================
+function prism_declareDamage(payload) {
   try {
-    const sh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const lr = sh.getLastRow();
-    if (lr < 2) return { success: true, data: [] };
-    const data = sh.getRange(2, 1, lr - 1, 8).getValues()
-      .filter(r => String(r[USAGE_COL.JO_NUMBER] || '').trim().toUpperCase() === TEST_PRINT_MARKER)
-      .map(r => ({
-        usageId:    String(r[USAGE_COL.USAGE_ID]).trim(),
-        rollId:     String(r[USAGE_COL.ROLL_ID]).trim(),
-        lengthUsed: parseFloat(r[USAGE_COL.LENGTH_USED]) || 0,
-        operator:   String(r[USAGE_COL.OPERATOR]).trim(),
-        notes:      String(r[USAGE_COL.PLOTTING_LINK] || '').trim(), // notes in PlottingLink col
-        dateUsed:   prism_fmtShort_(r[USAGE_COL.DATE_USED])
-      }))
-      .reverse(); // newest first
-    return { success: true, data };
+    const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
+      return { success: false, message: 'Digital Operators only.' };
+    
+    if (!payload.rollId)
+      return { success: false, message: 'Roll ID required.' };
+    if (!payload.lengthUsed || payload.lengthUsed <= 0)
+      return { success: false, message: 'Damage length must be > 0.' };
+      
+    // ── Fetch roll row ──
+    const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollLr   = rollSh.getLastRow();
+    const rollData = rollSh.getRange(2, 1, rollLr - 1, 9).getValues();
+    let rollIdx = -1, rollRow = null;
+    rollData.forEach((r, i) => {
+      if (String(r[ROLL_COL.ROLL_ID]).trim() === payload.rollId) {
+        rollIdx = i + 2; rollRow = r;
+      }
+    });
+    if (rollIdx === -1)
+      return { success: false, message: `Roll "${payload.rollId}" not found.` };
+    if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase() !== ROLL_STATUS.OPEN)
+      return { success: false, message: 'Roll must be OPEN.' };
+      
+    // ── Length validation & update ──
+    const remaining  = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
+    const lengthUsed = parseFloat(payload.lengthUsed);
+    if (lengthUsed > remaining)
+      return { success: false, message: `Damage length (${lengthUsed} ft) exceeds remaining (${remaining} ft).` };
+      
+    const rollWidth = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
+    const originalLength = parseFloat(rollRow[ROLL_COL.ORIGINAL_LENGTH]) || 0;
+    
+    const settings     = prism_getSettings_();
+    const newRemaining = Math.max(0, remaining - lengthUsed);
+    const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
+      ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
+      
+    rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
+    rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
+    
+    const today   = new Date();
+    
+    // ── Write to LFP_Usage ──
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+      'DAM-' + today.getTime(),
+      'DAMAGE',                    // JO_Number = 'DAMAGE'
+      payload.rollId,
+      rollWidth,                   // widthUsed = full roll width
+      lengthUsed,
+      user.email,
+      payload.remarks || '',       
+      today
+    ]]);
+    
+    // ── Write to Plotting_Log for visual map ──
+    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotId = 'PLT-DAM-' + today.getTime();
+    
+    const startAtFt = Math.max(0, originalLength - remaining);
+    const endAtFt = startAtFt + lengthUsed;
+    
+    const remarksObj = {
+      type: "ROLL_PLAN",
+      isDamage: true,
+      rollId: payload.rollId,
+      rollWidth: rollWidth,
+      originalLength: originalLength,
+      startAtFt: startAtFt,
+      endAtFt: endAtFt,
+      lengthUsed: lengthUsed,
+      joNumbers: payload.joNumbers || [],
+      createdBy: user.email,
+      damageReason: payload.remarks || ''
+    };
+    
+    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
+      plotId, 
+      'DAMAGE', 
+      '', // No link for damage
+      user.email, 
+      today, 
+      JSON.stringify(remarksObj)
+    ]]);
+    
+    // ── Revert affected JOs back to FOR_PLOTTING ──
+    let affectedCount = 0;
+    if (payload.joNumbers && payload.joNumbers.length > 0) {
+      const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+      const joLr = joSh.getLastRow();
+      if (joLr >= 2) {
+        const joData = joSh.getRange(2, 1, joLr - 1, 13).getValues();
+        const targets = payload.joNumbers.map(jn => String(jn).trim().toUpperCase());
+        joData.forEach((r, i) => {
+          const joNum = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
+          if (targets.includes(joNum)) {
+            joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.FOR_PLOTTING);
+            affectedCount++;
+          }
+        });
+      }
+    }
+    
+    prism_audit_('PRISM_DECLARE_DAMAGE', {
+      rollId:       payload.rollId,
+      lengthUsed,
+      newRemaining,
+      newRollStatus,
+      affectedJOs:  payload.joNumbers || [],
+      remarks:      payload.remarks || '',
+      by:           user.email
+    });
+    
+    return {
+      success: true,
+      message: `Declared ${lengthUsed}ft damage. ` + (affectedCount > 0 ? `${affectedCount} JO(s) reverted to FOR_PLOTTING.` : ''),
+      newRemaining,
+      newRollStatus
+    };
+    
   } catch(e) { return { success: false, message: e.message }; }
 }
 
@@ -1001,6 +1110,7 @@ function prism_getRollPlotHistoryMap(rollIds) {
           createdBy: String(parsed.createdBy || r[PLOT_COL.OPERATOR] || '').trim(),
           datePlotted: prism_fmtShort_(r[PLOT_COL.DATE_PLOTTED]),
           rows: Array.isArray(parsed.rows) ? parsed.rows : [],
+          isDamage: !!parsed.isDamage,
           source: 'ROLL_PLAN'
         });
       });
