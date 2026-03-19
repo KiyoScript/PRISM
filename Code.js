@@ -1116,11 +1116,8 @@ function prism_getRollPlotHistoryMap(rollIds) {
       });
     }
 
-    const fallbackNeeded = wanted.filter(rollId => {
-      if (!out[rollId].length) return true;
-      const firstStart = out[rollId].reduce((m, seg) => Math.min(m, parseFloat(seg.startAtFt) || 0), Number.POSITIVE_INFINITY);
-      return firstStart > 0.05;
-    });
+    // Remove the `firstStart > 0.05` constraint. Always parse USAGE_FALLBACK to fill gaps throughout the roll.
+    const fallbackNeeded = wanted;
 
     if (fallbackNeeded.length) {
       const fallbackSet = {};
@@ -1155,14 +1152,25 @@ function prism_getRollPlotHistoryMap(rollIds) {
             return String(a.usageId).localeCompare(String(b.usageId));
           });
 
-          const firstSnapshotStart = out[rollId].length
-            ? out[rollId].reduce((m, seg) => Math.min(m, parseFloat(seg.startAtFt) || 0), Number.POSITIVE_INFINITY)
-            : Number.POSITIVE_INFINITY;
-          let cursorFt = 0;
+          // Sort out[rollId] so we can properly check for gaps between known plotted segments.
+          out[rollId].sort((a, b) => (a.startAtFt || 0) - (b.startAtFt || 0));
 
+          let cursorFt = 0;
           grouped[rollId].forEach(item => {
             const nextEnd = cursorFt + item.lengthUsed;
-            if (nextEnd <= firstSnapshotStart + 0.0001) {
+
+            // Check if this usage overlaps with an already-known visual snapshot in out[rollId]
+            let isCovered = false;
+            for (let s = 0; s < out[rollId].length; s++) {
+              const seg = out[rollId][s];
+              // If this usage fits entirely inside or mostly overlaps with a Plotting_Log snapshot
+              if (Math.abs(cursorFt - seg.startAtFt) < 0.1 || (cursorFt >= seg.startAtFt && nextEnd <= seg.endAtFt + 0.1)) {
+                isCovered = true;
+                break;
+              }
+            }
+
+            if (!isCovered) {
               out[rollId].push({
                 plotId: item.usageId,
                 rollId: rollId,
