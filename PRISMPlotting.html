@@ -1073,7 +1073,9 @@ function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPer
   var rows = Array.isArray(seg.rows) ? seg.rows : [];
   var y = startY;
   var opacity = (opts && opts.opacity) || '33';
-  var labelColor = (opts && opts.labelColor) || '#ffffff';
+  var labelColor = (opts && opts.labelColor) || '#64748b'; // Changed to slate for better contrast on gray
+  var boxColor = '#94a3b8'; // Base gray color for history blocks
+  var strokeColor = '#64748b'; // Darker gray for outlines
 
   rows.forEach(function(r) {
     var rh = Math.max(2, Math.round((parseFloat(r.rowH) || 0) * pxPerFtY));
@@ -1083,10 +1085,12 @@ function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPer
       var pieceWidth = parseFloat(p.w) || 0;
       var pw = Math.max(1, Math.round((pieceWidth / rollWidth) * bodyW));
       var joNumber = String(p.joNumber || p.jo || '').trim().toUpperCase();
-      var color = pp_colorForHistoryJO(joNumber);
-      ctx.fillStyle = color + opacity;
+      
+      // Use standard gray tones for historical pieces
+      ctx.fillStyle = boxColor + opacity;
       ctx.fillRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
-      ctx.strokeStyle = color;
+      
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 1;
       ctx.strokeRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, rh - 2));
 
@@ -1192,8 +1196,8 @@ function pp_renderHistoryMap(L) {
     var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
     if (sy > y0 + bodyH) return;
     if (Array.isArray(seg.rows) && seg.rows.length && !seg.isDamage) {
-      pp_drawHistorySegmentRows(ctx, seg, x0, sy, bodyW, rollWidth, pxPerFtY, { opacity: '55', labelColor: '#f8fafc' });
-      ctx.strokeStyle = i % 2 ? 'rgba(99,102,241,0.35)' : 'rgba(20,184,166,0.35)';
+      pp_drawHistorySegmentRows(ctx, seg, x0, sy, bodyW, rollWidth, pxPerFtY, { opacity: '30', labelColor: '#64748b' });
+      ctx.strokeStyle = '#94a3b8'; // subtle gray outline for the entire strip
       ctx.lineWidth = 1;
       ctx.strokeRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
     } else if (seg.isDamage) {
