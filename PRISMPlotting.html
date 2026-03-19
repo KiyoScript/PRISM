@@ -11,7 +11,7 @@
     .pp-topbar { grid-template-columns: 1fr auto; }
     .pp-topstats { grid-column: 1 / -1; }
   }
-  .pp-results-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; align-items: start; }
+  .pp-results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; align-items: start; }
   .pp-results-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .pp-results-right { display: flex; flex-direction: column; min-width: 0; align-self: start; }
   #pp-historyWrap { overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px; height: 720px; max-height: 720px; }
@@ -222,7 +222,7 @@
           <div class="pp-results-left">
 
             <!-- Visual layout -->
-            <div class="p-card" style="display:none;">
+            <div class="p-card" style="padding:14px;overflow:hidden;">
               <div class="pp-pane-head">
                 <p class="pp-pane-title">Visual Layout</p>
                 <div style="display:flex;align-items:center;gap:8px;">
