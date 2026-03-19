@@ -1120,6 +1120,8 @@ function prism_compactRollRows_(rows) {
       jo: String(p.joNumber || '').trim().toUpperCase(),
       w: parseFloat(p.w) || 0,
       h: parseFloat(p.h) || 0,
+      dx: p.dx !== undefined ? (parseFloat(p.dx) || 0) : undefined,
+      dy: p.dy !== undefined ? (parseFloat(p.dy) || 0) : undefined,
       r: !!p.rotated
     }))
   }));

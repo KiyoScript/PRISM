@@ -950,24 +950,48 @@ function pp_packPiecesForRoll(pieces, rollWidth, rollAvail) {
     var row = [];
     var usedW = 0;
     var rowH = 0;
+    var columns = []; // { x, w, y }
 
     while (true) {
-      var spaceLeft = rollWidth - usedW;
       var bestIdx = -1;
       var bestOr = null;
       var bestScore = -999999;
+      var bestColIdx = -1;
 
       for (var i = 0; i < remaining.length; i++) {
         var p = remaining[i];
-        var ors = pp_orientationsForSpace(p, rollWidth, spaceLeft);
+        var ors = pp_orientationsForSpace(p, rollWidth, rollWidth);
         for (var oi = 0; oi < ors.length; oi++) {
           var o = ors[oi];
-          var nextH = row.length ? Math.max(rowH, o.h) : o.h;
-          var score = o.w - (row.length ? (nextH - rowH) * 0.25 : 0);
-          if (score > bestScore || (score === bestScore && (!bestOr || o.w > bestOr.w))) {
-            bestScore = score;
-            bestIdx = i;
-            bestOr = o;
+
+          // 1. Can it fit in an existing column vertically?
+          var fitColFound = false;
+          for (var c = 0; c < columns.length; c++) {
+            var col = columns[c];
+            if (o.w <= col.w && col.y + o.h <= rowH) {
+              var score = 10000 + o.w * o.h; // Prioritize filling vertical gaps!
+              if (o.w === col.w) score += 5000;
+              if (score > bestScore) {
+                bestScore = score;
+                bestIdx = i;
+                bestOr = o;
+                bestColIdx = c;
+              }
+              fitColFound = true;
+            }
+          }
+
+          // 2. Can it start a new column horizontally?
+          var spaceLeft = rollWidth - usedW;
+          if (o.w <= spaceLeft) {
+            var nextH = row.length ? Math.max(rowH, o.h) : o.h;
+            var score = o.w - (row.length ? (nextH - rowH) * 0.25 : 0);
+            if (score > bestScore || (score === bestScore && (!bestOr || o.w > bestOr.w))) {
+              bestScore = score;
+              bestIdx = i;
+              bestOr = o;
+              bestColIdx = -1;
+            }
           }
         }
       }
@@ -978,11 +1002,21 @@ function pp_packPiecesForRoll(pieces, rollWidth, rollAvail) {
       picked.w = bestOr.w;
       picked.h = bestOr.h;
       picked.rotated = bestOr.rotated;
-      row.push(picked);
-      usedW += picked.w;
-      if (picked.h > rowH) rowH = picked.h;
 
-      if (rollWidth - usedW < 0.01) break;
+      if (bestColIdx === -1) { // New column
+        picked.dx = usedW;
+        picked.dy = 0;
+        columns.push({ x: usedW, w: picked.w, y: picked.h });
+        usedW += picked.w;
+        if (picked.h > rowH) rowH = picked.h;
+      } else { // Existing column
+        var col = columns[bestColIdx];
+        picked.dx = col.x;
+        picked.dy = col.y;
+        col.y += picked.h;
+      }
+      
+      row.push(picked);
     }
 
     if (!row.length) break;
@@ -1243,7 +1277,6 @@ function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPer
   rows.forEach(function(r) {
     var rh = Math.max(2, Math.round((parseFloat(r.rowH) || 0) * pxPerFtY));
     var cx = x0;
-
     (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
       var pieceWidth = parseFloat(p.w) || 0;
       var pw = Math.max(1, Math.round((pieceWidth / rollWidth) * bodyW));
@@ -1253,22 +1286,25 @@ function pp_drawHistorySegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPer
       var p_rh = Math.max(2, Math.round(pieceHeight * pxPerFtY));
       if (p_rh > rh) p_rh = rh;
 
+      var px = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx - x0));
+      var py = y + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
+
       // Use standard gray tones for historical pieces
       ctx.fillStyle = boxColor + opacity;
-      ctx.fillRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+      ctx.fillRect(px + 1, py + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
       
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 1;
-      ctx.strokeRect(cx + 1, y + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+      ctx.strokeRect(px + 1, py + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
 
       if (pw > 34 && p_rh > 14 && joNumber) {
         ctx.fillStyle = labelColor;
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         var customerLabel = String(p.customer || joNumber || '').slice(0, 14);
-        ctx.fillText(customerLabel, cx + pw / 2, y + p_rh / 2 + 3);
+        ctx.fillText(customerLabel, px + pw / 2, py + p_rh / 2 + 3);
       }
-      cx += pw;
+      if (p.dx === undefined) cx += pw;
     });
 
     var wasteW = parseFloat(r.wasteW) || 0;
@@ -1426,18 +1462,21 @@ function pp_renderHistoryMap(L) {
       var p_rh = Math.max(2, Math.round(pieceHeight * pxPerFtY));
       if (p_rh > rh) p_rh = rh;
 
+      var px = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx - x0));
+      var py = cy + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
+
       ctx.fillStyle = (p.color || '#4f46e5') + 'cc';
-      ctx.fillRect(cx + 1, cy + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+      ctx.fillRect(px + 1, py + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
       ctx.strokeStyle = p.color || '#4f46e5';
       ctx.lineWidth = 1;
-      ctx.strokeRect(cx + 1, cy + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+      ctx.strokeRect(px + 1, py + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
       if (pw > 30 && p_rh > 12) {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(String(p.customer || p.joNumber || '').slice(0, 14), cx + pw / 2, cy + p_rh / 2 + 3);
+        ctx.fillText(String(p.customer || p.joNumber || '').slice(0, 14), px + pw / 2, py + p_rh / 2 + 3);
       }
-      cx += pw;
+      if (p.dx === undefined) cx += pw;
     });
     if ((parseFloat(r.wasteW)||0) > 0.02) {
       var ww = Math.max(1, Math.round(((parseFloat(r.wasteW)||0) / rollWidth) * bodyW));
@@ -1621,34 +1660,21 @@ function pp_drawCanvas(L) {
     ctx.fillRect(LABEL_W, y, dispW, rowDispH);
 
     // Draw pieces
-    var x = LABEL_W;
+    var startX = LABEL_W;
+    var currentX = startX;
     row.pieces.forEach(function(p) {
       var pw = Math.round(p.w * scale);
       var ph = Math.round((parseFloat(p.h) || row.rowH) * scale * heightScale);
       if (ph > rowDispH) ph = rowDispH;
 
+      var px = startX + (p.dx !== undefined ? Math.round(p.dx * scale) : (currentX - startX));
+      var py = y + (p.dy !== undefined ? Math.round(p.dy * scale * heightScale) : 0);
+
       ctx.fillStyle = p.color + 'bb';
-      ctx.fillRect(x + 1, y + 1, pw - 2, ph - 2);
+      ctx.fillRect(px + 1, py + 1, pw - 2, ph - 2);
       ctx.strokeStyle = p.color;
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(x + 1, y + 1, pw - 2, ph - 2);
-
-      // Waste hatching for vertical gap
-      if (ph < rowDispH - 2) {
-        var vWasteY = y + ph;
-        var vWasteH = rowDispH - ph;
-        ctx.fillStyle = 'rgba(251,191,36,0.1)';
-        ctx.fillRect(x + 1, vWasteY, pw - 2, vWasteH);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(251,191,36,0.3)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (var xi = x; xi < x + pw + vWasteH; xi += 6) {
-          ctx.moveTo(xi, vWasteY); ctx.lineTo(xi - vWasteH, vWasteY + vWasteH);
-        }
-        ctx.stroke();
-        ctx.restore();
-      }
+      ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
 
       // Size label inside piece
       if (pw > 40 && ph > 22) {
@@ -1656,12 +1682,13 @@ function pp_drawCanvas(L) {
         ctx.font = 'bold 9px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         var customerLabel = String(p.customer || p.joNumber || '').slice(0, 14);
-        ctx.fillText(customerLabel, x + pw/2, y + ph/2 - 3);
+        ctx.fillText(customerLabel, px + pw/2, py + ph/2 - 3);
         ctx.font = '8px DM Sans, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillText(p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : ''), x + pw/2, y + ph/2 + 8);
+        ctx.fillText(p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : ''), px + pw/2, py + ph/2 + 8);
       }
-      x += pw;
+      
+      if (p.dx === undefined) currentX += pw;
     });
 
     // Waste hatching
