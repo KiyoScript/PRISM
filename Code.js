@@ -926,8 +926,15 @@ function prism_declareDamageForPlot(payload) {
     const rollId      = targetJson.rollId || payload.rollId;
     const rollWidth   = parseFloat(targetJson.rollWidth) || 0;
     const joNumbers   = targetJson.joNumbers || payload.joNumbers || [];
-    const startAtFt   = parseFloat(targetJson.startAtFt) || 0;
-    const lengthUsed  = parseFloat(payload.lengthUsed) || parseFloat(targetJson.lengthUsed) || 0;
+    // Derive the true start position of the voided print.
+    // startAtFt is stored when Start Printing is pressed (= maxEnd at that moment).
+    // If for any reason it is missing, fall back to endAtFt - lengthUsed.
+    const printedLen  = parseFloat(targetJson.lengthUsed) || 0;
+    const printedEnd  = parseFloat(targetJson.endAtFt)   || 0;
+    const startAtFt   = (parseFloat(targetJson.startAtFt) > 0)
+                          ? parseFloat(targetJson.startAtFt)
+                          : Math.max(0, printedEnd - printedLen);
+    const lengthUsed  = parseFloat(payload.lengthUsed) || printedLen || 0;
     const today       = new Date();
 
     // 1. Void the PRINTED entry
@@ -2055,7 +2062,9 @@ function prism_startPrintingLayout(payload) {
     plotData.forEach(r => {
       try {
         const j = JSON.parse(String(r[5] || '{}'));
-        if (j.rollId === targetRollId && (j.status === 'PRINTED' || j.isDamage)) {
+        // Only count non-voided PRINTED and DAMAGE entries — voided prints must NOT
+        // contribute to the starting position or the next layout begins in the wrong place.
+        if (j.rollId === targetRollId && !j.isVoid && (j.status === 'PRINTED' || j.isDamage)) {
           const e = parseFloat(j.endAtFt) || 0;
           if (e > maxEnd) maxEnd = e;
         }
