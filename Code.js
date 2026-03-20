@@ -889,6 +889,151 @@ function prism_declareDamage(payload) {
 }
 
 // ============================================================
+//  DECLARE DAMAGE FROM PRINT QUEUE (by plotId)
+//  Voids the specific PRINTED plot entry, logs a damage block,
+//  reverts JOs to FOR_PLOTTING, writes a REPRINT entry.
+// ============================================================
+function prism_declareDamageForPlot(payload) {
+  // payload: { plotId, rollId, joNumbers, lengthUsed, remarks }
+  try {
+    const user = prism_getUser_();
+    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotLr = plotSh.getLastRow();
+    if (plotLr < 2) return { success: false, message: 'No plot records found.' };
+
+    const plotData = plotSh.getRange(2, 1, plotLr - 1, 6).getValues();
+    let targetRowIdx = -1;
+    let targetJson = null;
+
+    // Find the specific PRINTED plot by plotId
+    for (let i = 0; i < plotData.length; i++) {
+      const id = String(plotData[i][0]).trim();
+      if (id !== payload.plotId) continue;
+      try {
+        const obj = JSON.parse(String(plotData[i][5] || '{}'));
+        if ((obj.status === 'PRINTED' || obj.type === 'ROLL_PLAN') && !obj.isDamage && !obj.isVoid) {
+          targetRowIdx = i + 2; // 1-indexed sheet row
+          targetJson = obj;
+        }
+      } catch(e) {}
+      break;
+    }
+
+    if (!targetRowIdx || !targetJson) {
+      return { success: false, message: 'Plot entry not found or already voided.' };
+    }
+
+    const rollId      = targetJson.rollId || payload.rollId;
+    const rollWidth   = parseFloat(targetJson.rollWidth) || 0;
+    const joNumbers   = targetJson.joNumbers || payload.joNumbers || [];
+    const startAtFt   = parseFloat(targetJson.startAtFt) || 0;
+    const lengthUsed  = parseFloat(payload.lengthUsed) || parseFloat(targetJson.lengthUsed) || 0;
+    const today       = new Date();
+
+    // 1. Void the PRINTED entry
+    targetJson.isVoid = true;
+    targetJson.voidReason = 'Damage declared from Print Queue: ' + (payload.remarks || '');
+    plotSh.getRange(targetRowIdx, 6).setValue(JSON.stringify(targetJson));
+
+    // 2. Restore roll remaining length
+    const rollSh    = prism_sh_(PRISM_SHEETS.ROLLS);
+    const rollLr    = rollSh.getLastRow();
+    const rollData  = rollLr >= 2 ? rollSh.getRange(2, 1, rollLr - 1, ROLL_COL_COUNT_).getValues() : [];
+    let rollIdx = -1;
+    rollData.forEach((r, i) => { if (String(r[ROLL_COL.ROLL_ID]).trim() === rollId) rollIdx = i + 2; });
+
+    if (rollIdx >= 0) {
+      const currentRemaining = parseFloat(rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).getValue()) || 0;
+      const printedLen       = parseFloat(targetJson.lengthUsed) || 0;
+      // Refund the printed length, then deduct only the declared damage
+      const newRemaining     = Math.max(0, currentRemaining + printedLen - lengthUsed);
+      rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
+      rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRemaining === 0 ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN);
+
+      // Write refund to LFP_Usage
+      const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+      if (printedLen > 0) {
+        joNumbers.forEach(jo => {
+          usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+            'REF-' + today.getTime() + '-' + jo,
+            jo, rollId, rollWidth, -printedLen / joNumbers.length,
+            user.email, 'Auto-refund from damage declaration (Print Queue)', today
+          ]]);
+        });
+      }
+      // Write damage to LFP_Usage
+      usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
+        'DAM-PQ-' + today.getTime(),
+        'DAMAGE', rollId, rollWidth, lengthUsed,
+        user.email, payload.remarks || '', today
+      ]]);
+    }
+
+    // 3. Log DAMAGE block to Plotting_Log (the visible waste segment on map)
+    const damageId = 'PLT-DAM-PQ-' + today.getTime();
+    const damageObj = {
+      type: 'ROLL_PLAN',
+      isDamage: true,
+      rollId: rollId,
+      rollWidth: rollWidth,
+      startAtFt: startAtFt,
+      endAtFt: startAtFt + lengthUsed,
+      lengthUsed: lengthUsed,
+      joNumbers: joNumbers,
+      damageCustomer: joNumbers.join(', '),
+      damageReason: payload.remarks || '',
+      createdBy: user.email
+    };
+    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([
+      [damageId, 'DAMAGE', '', user.email, today, JSON.stringify(damageObj)]
+    ]);
+
+    // 4. Write REPRINT entry to Plotting_Log (goes back to Print Queue as a reprint)
+    const reprintId = 'PLT-RPT-' + today.getTime();
+    const reprintCount = (parseInt(targetJson.reprintCount) || 0) + 1;
+    const reprintObj = Object.assign({}, targetJson, {
+      plotId: reprintId,
+      status: 'PLANNED',
+      isVoid: false,
+      voidReason: undefined,
+      isReprint: true,
+      reprintCount: reprintCount,
+      reprintOf: payload.plotId,
+      startAtFt: startAtFt + lengthUsed, // continues after the damage
+      createdAt: today.toISOString()
+    });
+    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([
+      [reprintId, 'PLANNED', targetJson.pngUrl || '', user.email, today, JSON.stringify(reprintObj)]
+    ]);
+
+    // 5. Revert JOs to FOR_PLOTTING
+    const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr = joSh.getLastRow();
+    if (joLr >= 2 && joNumbers.length > 0) {
+      const joData = joSh.getRange(2, 1, joLr - 1, 13).getValues();
+      const targets = joNumbers.map(jn => String(jn).trim().toUpperCase());
+      joData.forEach((r, i) => {
+        if (targets.includes(String(r[JO_COL.JO_NUMBER]).trim().toUpperCase())) {
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.FOR_PLOTTING);
+        }
+      });
+    }
+
+    prism_audit_('PRISM_DECLARE_DAMAGE_FOR_PLOT', {
+      plotId: payload.plotId, rollId, joNumbers, lengthUsed,
+      remarks: payload.remarks || '', by: user.email
+    });
+
+    return {
+      success: true,
+      message: `Declared ${lengthUsed}ft damage. ${joNumbers.length} JO(s) queued for reprint.`,
+      reprintId, damageId
+    };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+
+// ============================================================
 //  JOB ORDERS
 // ============================================================
 function prism_getAllJobOrders_() {
@@ -1983,7 +2128,8 @@ function prism_getPrintQueueData() {
     const plotLr = plotSh.getLastRow();
     const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
 
-    const planned = [];
+    const planned    = [];
+    const reprints   = [];
     const rollsHistory = {};
 
     plotData.forEach(r => {
@@ -1993,7 +2139,7 @@ function prism_getPrintQueueData() {
       if (!j.rollId || j.isVoid) return;
 
       if (j.status === 'PLANNED') {
-        planned.push({
+        const item = {
           plotId: id,
           joNumbers: j.joNumbers || [],
           rollId: j.rollId,
@@ -2001,27 +2147,38 @@ function prism_getPrintQueueData() {
           lengthUsed: j.lengthUsed || 0,
           date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
           pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          rows: j.rows || []
-        });
+          rows: j.rows || [],
+          isReprint: !!j.isReprint,
+          reprintCount: parseInt(j.reprintCount) || 0,
+          reprintOf: j.reprintOf || null
+        };
+        if (j.isReprint) {
+          reprints.push(item);
+        } else {
+          planned.push(item);
+        }
       } else if (j.status === 'PRINTED' || j.isDamage) {
-        // Skip entries that were voided (e.g. rolled back by a damage declaration)
         if (j.isVoid) return;
         if (!rollsHistory[j.rollId]) rollsHistory[j.rollId] = [];
         rollsHistory[j.rollId].push({
           plotId: id,
           rollId: j.rollId,
+          rollWidth: parseFloat(j.rollWidth) || 0,
           startAtFt: j.startAtFt || 0,
           endAtFt: j.endAtFt || 0,
           lengthUsed: j.lengthUsed || 0,
           joNumbers: j.joNumbers || [],
           isDamage: !!j.isDamage,
+          damageCustomer: j.damageCustomer || (j.joNumbers || []).join(', '),
+          rows: j.rows || [],
           pngUrl: r[2] || j.plottingLink || j.pngUrl || ''
         });
       }
     });
 
-    return { success: true, planned: planned, rollsHistory: rollsHistory };
+    return { success: true, planned, reprints, rollsHistory };
   } catch(e) {
     return { success: false, message: e.message };
   }
-}
+}
+
