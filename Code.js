@@ -748,12 +748,20 @@ function prism_declareDamage(payload) {
     }
     
     const settings     = prism_getSettings_();
+    // The refundLength brings back what was previously deducted for those JOs.
+    // We only subtract the declared damage amount from whatever space those JOs occupied.
+    // Net effect: roll gains back (refundLength - lengthUsed) feet.
     const newRemaining = Math.max(0, remaining + refundLength - lengthUsed);
     const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
       ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
       
     rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
-    rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
+    // Always write the status — if the roll was previously CONSUMED due to the plot, restore it to OPEN
+    rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(ROLL_STATUS.OPEN);
+    // Then only override to CONSUMED if legitimately zero
+    if (newRemaining === 0 && settings.auto_consume_on_zero === 'true') {
+      rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(ROLL_STATUS.CONSUMED);
+    }
     
     // ── Write Auto-Refund Negatives to LFP_Usage ──
     const refundRows = [];
@@ -1995,6 +2003,8 @@ function prism_getPrintQueueData() {
           rows: j.rows || []
         });
       } else if (j.status === 'PRINTED' || j.isDamage) {
+        // Skip entries that were voided (e.g. rolled back by a damage declaration)
+        if (j.isVoid) return;
         if (!rollsHistory[j.rollId]) rollsHistory[j.rollId] = [];
         rollsHistory[j.rollId].push({
           plotId: id,
