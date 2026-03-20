@@ -83,6 +83,34 @@
   </div>
 </div>
 
+<!-- Image Preview Modal -->
+<div id="pq-imageModal" onclick="pq_closeImageModal()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()" style="position:relative;max-width:90vw;max-height:90vh;background:#111;border-radius:12px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
+    <button onclick="pq_closeImageModal()" style="position:absolute;top:10px;right:12px;background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:700;z-index:1;">✕ Close</button>
+    <img id="pq-imageModalImg" src="" style="display:block;max-width:90vw;max-height:85vh;object-fit:contain;" />
+  </div>
+</div>
+
+<!-- Start Printing Confirm Modal -->
+<div id="pq-confirmModal" onclick="pq_closeConfirmModal()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()" style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:440px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.4);">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--p-purple-lt);display:flex;align-items:center;justify-content:center;font-size:20px;">🖨️</div>
+      <div>
+        <p style="font-weight:800;font-size:16px;margin:0;color:var(--p-text);">Start Printing?</p>
+        <p style="font-size:12px;color:var(--p-muted);margin:0;">This action is permanent</p>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--p-text);margin:0 0 8px;">You are about to send layout:</p>
+    <p id="pq-confirmPlotId" style="font-family:monospace;font-weight:700;font-size:13px;color:var(--p-purple);background:var(--p-purple-lt);padding:6px 10px;border-radius:8px;margin:0 0 8px;">—</p>
+    <p style="font-size:13px;color:var(--p-text);margin:0 0 16px;">to roll <strong id="pq-confirmRollId" style="color:var(--p-purple);">—</strong>.<br><span style="color:var(--p-muted);font-size:12px;">This will append the layout to the Roll Map permanently and mark the JOs as <strong>PRINTING</strong>.</span></p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="pq_closeConfirmModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="pq_doStartPrinting()" style="background:var(--p-purple);color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">▶ Confirm &amp; Print</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var pq_planned = [];
 var pq_rollsHistory = {};
@@ -164,188 +192,211 @@ function pq_selectLayout(plotId) {
   pq_renderMap(pq_selectedLayout);
 }
 
+// ── Full Roll Map Renderer (mirrors pp_renderHistoryMap) ──────────────────────
 function pq_renderMap(plan) {
   var canvas = document.getElementById('pq-historyCanvas');
-  var wrap = document.getElementById('pq-historyWrap');
-  if(!canvas || !wrap) return;
+  var wrap   = document.getElementById('pq-historyWrap');
+  if (!canvas || !wrap) return;
 
-  var rollId = plan.rollId;
-  // Fallbacks since we don\'t have roll.originalLength in PrintQueue yet, let\'s assume 164ft for visualization or dynamic height
-  var history = pq_rollsHistory[rollId] || [];
-  
-  var lastHistoryEnd = 0;
-  history.forEach(function(seg) {
-    var e = parseFloat(seg.endAtFt);
-    if(isFinite(e) && e > lastHistoryEnd) lastHistoryEnd = e;
-  });
+  // Show loading state
+  canvas.width = 300; canvas.height = 80;
+  var c0 = canvas.getContext('2d');
+  c0.clearRect(0,0,300,80);
+  c0.fillStyle = '#6b7280'; c0.font = '12px DM Sans, sans-serif';
+  c0.fillText('Loading roll map…', 10, 30);
 
-  var planLen = parseFloat(plan.lengthUsed) || 0;
-  // The map only needs to show enough to comfortably fit the old history plus the new plan
-  var rollLen = Math.max(15, lastHistoryEnd + planLen + 5);
-  var planRollWidth = parseFloat(plan.rollWidth) || 4.5;
-  
-  var AX_L = 46;
-  var AX_B = 36;
-  var innerW = Math.max((wrap.clientWidth || 420) - AX_L - 28, 220);
-  var bodyW = innerW;
-  
-  // Set true physical 1:1 aspect ratio
-  var pxPerFt = bodyW / planRollWidth;
-  var bodyH = Math.round(rollLen * pxPerFt);
-  var pxScale = 1;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res.success) { prism_toast('error', res.message); return; }
+      var history = (res.data && res.data[plan.rollId]) || [];
+      pq_drawFullRollMap(plan, history, canvas, wrap);
+    })
+    .withFailureHandler(function(e) { prism_toast('error', e.message); })
+    .prism_getRollPlotHistoryMap([plan.rollId]);
+}
 
-  canvas.width = Math.round((bodyW + AX_L + 8) * pxScale);
-  canvas.height = Math.round((bodyH + AX_B + 8) * pxScale);
-  canvas.style.width = (bodyW + AX_L + 8) + 'px';
-  canvas.style.height = (bodyH + AX_B + 8) + 'px';
+function pq_drawFullRollMap(plan, prior, canvas, wrap) {
+  prior.sort(function(a,b){ return (a.startAtFt||0) - (b.startAtFt||0); });
+
+  var rollWidth  = parseFloat(plan.rollWidth) || 4.5;
+  var totalLen   = parseFloat(plan.lengthUsed) || 0;
+  var lastEnd    = 0;
+  prior.forEach(function(s) { var e=parseFloat(s.endAtFt); if(isFinite(e)&&e>lastEnd) lastEnd=e; });
+  var currentStart = lastEnd;
+  var currentEnd   = currentStart + totalLen;
+
+  // Use same scale as pp_renderHistoryMap
+  var rollLen = Math.max(164, currentEnd + 20);
+  prior.forEach(function(s){ var e=parseFloat(s.endAtFt); if(isFinite(e)&&e>rollLen) rollLen=e+10; });
+
+  var AX_L   = 46;
+  var AX_B   = 36;
+  var bodyW  = Math.max((wrap.clientWidth || 500) - AX_L - 28, 220);
+  var bodyH  = Math.max(980, Math.round(rollLen * 14));
+
+  canvas.width  = bodyW + AX_L + 8;
+  canvas.height = bodyH + AX_B + 8;
+  canvas.style.width  = canvas.width  + 'px';
+  canvas.style.height = canvas.height + 'px';
 
   var ctx = canvas.getContext('2d');
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.setTransform(pxScale, 0, 0, pxScale, 0, 0);
 
-  var x0 = AX_L;
-  var y0 = 6;
+  var x0 = AX_L, y0 = 6;
+  var pxPerFtY = bodyH / rollLen;
 
-  // Base background
+  // Background
   ctx.fillStyle = '#eef2f7'; ctx.fillRect(x0, y0, bodyW, bodyH);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, bodyW, bodyH);
 
-  // Draw History
-  history.forEach(function(seg) {
-    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFt);
-    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFt));
-    if(sy > y0 + bodyH) return;
+  // ── Draw history segments ────────────────────────────────────────────────────
+  prior.forEach(function(seg, i) {
+    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
+    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
+    if (sy > y0 + bodyH) return;
 
-    if(seg.isDamage) {
+    if (Array.isArray(seg.rows) && seg.rows.length && !seg.isDamage) {
+      // Draw piece-level detail (same as pp_drawHistorySegmentRows)
+      pq_drawHistoryRows(ctx, seg, x0, sy, bodyW, rollWidth, pxPerFtY);
+      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+      ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
+    } else if (seg.isDamage) {
       ctx.fillStyle = 'rgba(245,158,11,0.3)';
       ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
       ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
       ctx.save(); ctx.strokeStyle='rgba(245,158,11,0.6)'; ctx.lineWidth=1.5; ctx.beginPath();
-      for(var xi=x0; xi<x0+bodyW+sh; xi+=10) { ctx.moveTo(xi,sy); ctx.lineTo(xi-sh, sy+sh); }
+      for(var xi=x0; xi<x0+bodyW+sh; xi+=10) { ctx.moveTo(xi,sy); ctx.lineTo(xi-sh,sy+sh); }
       ctx.stroke(); ctx.restore();
     } else {
-      ctx.fillStyle = 'rgba(99,102,241,0.18)';
+      ctx.fillStyle = i%2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
       ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
       ctx.strokeStyle = 'rgba(71,85,105,0.25)'; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
-      // Add subtle hatching to plot history
-      ctx.save(); ctx.strokeStyle='rgba(71,85,105,0.15)'; ctx.lineWidth=1; ctx.beginPath();
-      for(var xi=x0; xi<x0+bodyW+sh; xi+=14) { ctx.moveTo(xi,sy); ctx.lineTo(xi-sh, sy+sh); }
-      ctx.stroke(); ctx.restore();
     }
-    if(sh > 14) {
-      ctx.fillStyle = '#334155'; ctx.font = '10px DM Sans, sans-serif';
-      var tag = seg.isDamage ? 'WASTE ('+(seg.lengthUsed||0).toFixed(1)+'ft)' : 'PRINTED ' + (seg.joNumbers||[]).slice(0,2).join(', ');
+    if (sh > 14) {
+      ctx.fillStyle='#334155'; ctx.font='10px DM Sans,sans-serif'; ctx.textAlign='left';
+      var tag = seg.isDamage ? 'WASTE ('+(seg.lengthUsed||0).toFixed(1)+'ft)' : 'prev · '+(seg.joNumbers||[]).slice(0,2).join(', ');
       ctx.fillText(tag, x0+6, sy+12);
     }
   });
 
-  // Draw the Plannned Plan appended at the end
-  var curY = y0 + Math.round(lastHistoryEnd * pxPerFt);
-  var curH = Math.max(2, Math.round(planLen * pxPerFt));
-
+  // ── Draw current planned layout ──────────────────────────────────────────────
+  var cy = y0 + Math.round(currentStart * pxPerFtY);
   if (plan.rows && plan.rows.length) {
-    ctx.fillStyle = 'rgba(124,58,237,0.05)';
-    ctx.fillRect(x0+1, curY, bodyW-2, curH);
-    ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5; ctx.strokeRect(x0+1, curY, bodyW-2, curH);
-
-    var currentRowAbsY = 0;
     plan.rows.forEach(function(r) {
-      var ry = curY + (currentRowAbsY * pxPerFt);
-      var rowHDisp = parseFloat(r.rowH || r.h || 0) * pxPerFt;
-
+      var rh = Math.max(2, Math.round((parseFloat(r.rowH)||0) * pxPerFtY));
+      var cx2 = x0;
       (r.pieces || []).forEach(function(p) {
-        var pw = parseFloat(p.w) || 0;
-        var ph = parseFloat(p.h) || 0;
-        var dx = parseFloat(p.dx) || 0;
-        var dy = parseFloat(p.dy) || 0;
-        // p.w/p.h are already post-rotation physical dimensions from the packing algorithm.
-        // Do NOT swap them based on rotation flag (that would double-flip).
-        var rotated = !!p.r;
-
-        var vw = pw * pxPerFt;
-        var vh = ph * pxPerFt;
-        var vx = x0 + 1 + (dx * pxPerFt);
-        var vy = ry + (dy * pxPerFt);
-
-        ctx.fillStyle = 'rgba(124,58,237,0.4)';
-        ctx.fillRect(vx, vy, vw, vh);
-        ctx.strokeStyle = '#5b21b6';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(vx, vy, vw, vh);
-
-        // Subtly hatch inside the piece
-        ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.beginPath();
-        for(var xi=vx; xi<vx+vw+vh; xi+=8) { ctx.moveTo(xi,vy); ctx.lineTo(xi-vh, vy+vh); }
-        ctx.stroke(); ctx.restore();
-
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 11px DM Sans, sans-serif';
-        var joText = String(p.jo || p.joNumber || '').replace(/^JO-/,'');
-        ctx.fillText(joText, vx + 6, vy + 16);
-        ctx.font = '9px DM Sans, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillText(pw+'x'+ph+'ft' + (rotated?' ↺':''), vx + 6, vy + 28);
-      });
-      
-      var wasteW = parseFloat(r.wasteW) || 0;
-      if (wasteW > 0.05) {
-        var wasteX = x0 + Math.round((planRollWidth - wasteW) * pxPerFt);
-        var wasteW2 = x0 + bodyW - wasteX;
-        ctx.fillStyle = 'rgba(251,191,36,0.15)';
-        ctx.fillRect(wasteX, ry + 1, wasteW2, rowHDisp - 2);
-        ctx.save(); ctx.strokeStyle = 'rgba(251,191,36,0.6)'; ctx.lineWidth = 1; ctx.beginPath();
-        for (var xi = wasteX; xi < wasteX + wasteW2 + rowHDisp; xi += 7) {
-          ctx.moveTo(xi, ry); ctx.lineTo(xi - rowHDisp, ry + rowHDisp);
+        var pw = Math.max(1, Math.round(((parseFloat(p.w)||0) / rollWidth) * bodyW));
+        var ph = parseFloat(p.h) || parseFloat(r.rowH) || 0;
+        var p_rh = Math.max(2, Math.round(ph * pxPerFtY));
+        if (p_rh > rh) p_rh = rh;
+        var px2 = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx2 - x0));
+        var py2 = cy + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
+        ctx.fillStyle = (p.color || '#4f46e5') + 'cc';
+        ctx.fillRect(px2+1, py2+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
+        ctx.strokeStyle = p.color || '#4f46e5'; ctx.lineWidth = 1;
+        ctx.strokeRect(px2+1, py2+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
+        if (pw > 30 && p_rh > 12) {
+          ctx.fillStyle='#fff'; ctx.font='bold 9px JetBrains Mono,monospace'; ctx.textAlign='center';
+          ctx.fillText(String(p.jo||p.joNumber||'').slice(0,14), px2+pw/2, py2+p_rh/2+3);
         }
-        ctx.stroke(); ctx.restore();
+        if (p.dx === undefined) cx2 += pw;
+      });
+      if ((parseFloat(r.wasteW)||0) > 0.02) {
+        var ww = Math.max(1, Math.round(((parseFloat(r.wasteW)||0) / rollWidth) * bodyW));
+        ctx.fillStyle = 'rgba(245,158,11,0.30)';
+        ctx.fillRect(cx2+1, cy+1, Math.max(1,ww-2), Math.max(1,rh-2));
       }
-
-      currentRowAbsY += parseFloat(r.rowH || r.h || 0);
+      cy += rh;
     });
-  } else {
-    ctx.fillStyle = 'rgba(124,58,237,0.2)';
-    ctx.fillRect(x0+1, curY, bodyW-2, curH);
-    ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.strokeRect(x0+1, curY, bodyW-2, curH);
-    
-    ctx.fillStyle = '#4c1d95'; ctx.font = 'bold 11px DM Sans, sans-serif';
-    ctx.fillText('⚡ WILL PRINT HERE', x0+6, curY+14);
-    ctx.font = '10px DM Sans, sans-serif';
-    ctx.fillText('JOs: ' + (plan.joNumbers||[]).slice(0,3).join(', '), x0+6, curY+26);
   }
 
-  // Axis
-  ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
-  for(var ft=0; ft<=rollLen; ft+=Math.max(1, Math.floor(rollLen/20))) {
-    var yy = y0 + Math.round(ft * pxPerFt);
+  // ── CURRENT PLAN green border ───────────────────────────────────────────────
+  var planY = y0 + Math.round(currentStart * pxPerFtY);
+  var planH = Math.max(2, Math.round(totalLen * pxPerFtY));
+  ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2;
+  ctx.strokeRect(x0+1, planY+1, bodyW-2, Math.max(1,planH-2));
+  ctx.fillStyle='#065f46'; ctx.font='bold 10px DM Sans,sans-serif'; ctx.textAlign='left';
+  ctx.fillText('CURRENT PLAN', x0+6, Math.max(16, planY+12));
+  if (currentStart > 0.05) {
+    ctx.strokeStyle='rgba(5,150,105,0.65)'; ctx.lineWidth=1; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(x0, planY); ctx.lineTo(x0+bodyW, planY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#047857'; ctx.font='bold 10px DM Sans,sans-serif'; ctx.textAlign='right';
+    ctx.fillText('Continuation @ '+currentStart.toFixed(1)+'ft', x0+bodyW-6, Math.max(14, planY-6));
+  }
+
+  // ── Left axis ───────────────────────────────────────────────────────────────
+  ctx.fillStyle='#64748b'; ctx.font='10px DM Sans,sans-serif'; ctx.textAlign='right';
+  for (var ft=0; ft<=rollLen; ft+=5) {
+    var yy = y0 + Math.round(ft * pxPerFtY);
     ctx.fillText(ft, x0-6, yy+3);
-    ctx.strokeStyle = 'rgba(148,163,184,0.18)';
-    ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+bodyW, yy); ctx.stroke();
+    ctx.strokeStyle='rgba(148,163,184,0.18)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x0+bodyW,yy); ctx.stroke();
   }
 
-  // Bottom text width indicator
-  var ty = bodyH + 20;
-  ctx.fillStyle = '#64748b'; ctx.font = 'bold 10px DM Sans, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(planRollWidth + 'ft wide', x0 + bodyW/2, ty + 4);
-  
-  ctx.beginPath();
-  ctx.moveTo(x0, ty); ctx.lineTo(x0 + bodyW, ty);
-  ctx.moveTo(x0, ty); ctx.lineTo(x0 + 4, ty - 3);
-  ctx.moveTo(x0, ty); ctx.lineTo(x0 + 4, ty + 3);
-  ctx.moveTo(x0 + bodyW, ty); ctx.lineTo(x0 + bodyW - 4, ty - 3);
-  ctx.moveTo(x0 + bodyW, ty); ctx.lineTo(x0 + bodyW - 4, ty + 3);
-  ctx.stroke();
+  // ── Bottom width axis ───────────────────────────────────────────────────────
+  var by = y0 + bodyH + 18;
+  ctx.strokeStyle='#9db5ae'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x0,by); ctx.lineTo(x0+bodyW,by); ctx.stroke();
+  ctx.fillStyle='#374151'; ctx.font='bold 10px DM Sans,sans-serif';
+  ctx.textAlign='left';   ctx.fillText('0', x0, by+12);
+  ctx.textAlign='center'; ctx.fillText(rollWidth+'ft wide', x0+bodyW/2, by+12);
+  ctx.textAlign='right';  ctx.fillText(rollWidth+'ft', x0+bodyW, by+12);
 
-  // Scroll smartly down to the new layout
-  setTimeout(function() {
-    wrap.scrollTop = Math.max(0, curY - 100);
-  }, 50);
+  // Scroll to current plan
+  setTimeout(function() { wrap.scrollTop = Math.max(0, planY - 120); }, 50);
+}
+
+function pq_drawHistoryRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPerFtY) {
+  var rows = Array.isArray(seg.rows) ? seg.rows : [];
+  var y = startY;
+  rows.forEach(function(r) {
+    var rh = Math.max(2, Math.round((parseFloat(r.rowH)||0) * pxPerFtY));
+    var cx = x0;
+    (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
+      var pw = Math.max(1, Math.round(((parseFloat(p.w)||0) / rollWidth) * bodyW));
+      var ph = parseFloat(p.h) || parseFloat(r.rowH) || 0;
+      var p_rh = Math.max(2, Math.round(ph * pxPerFtY));
+      if (p_rh > rh) p_rh = rh;
+      var pxc = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx - x0));
+      var pyc = y + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
+      ctx.fillStyle = 'rgba(148,163,184,0.33)';
+      ctx.fillRect(pxc+1, pyc+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
+      ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
+      ctx.strokeRect(pxc+1, pyc+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
+      if (pw > 34 && p_rh > 14) {
+        ctx.fillStyle='#334155'; ctx.font='bold 9px JetBrains Mono,monospace'; ctx.textAlign='center';
+        ctx.fillText(String(p.jo||p.joNumber||p.customer||'').slice(0,14), pxc+pw/2, pyc+p_rh/2+3);
+      }
+      if (p.dx === undefined) cx += pw;
+    });
+    var wasteW = parseFloat(r.wasteW) || 0;
+    if (wasteW > 0.02) {
+      var ww = Math.max(1, Math.round((wasteW / rollWidth) * bodyW));
+      ctx.fillStyle = 'rgba(245,158,11,0.20)';
+      ctx.fillRect(cx+1, y+1, Math.max(1,ww-2), Math.max(1,rh-2));
+      ctx.strokeStyle = 'rgba(245,158,11,0.35)'; ctx.strokeRect(cx+1, y+1, Math.max(1,ww-2), Math.max(1,rh-2));
+    }
+    y += rh;
+  });
 }
 
 function pq_startPrinting() {
   if(!pq_selectedLayout) return;
-  if(!confirm('Start printing ' + pq_selectedLayout.plotId + ' on roll ' + pq_selectedLayout.rollId + '?\n\nThis will append the layout to the Roll Map permanently and mark the JOs as PRINTING.')) return;
+  document.getElementById('pq-confirmPlotId').textContent = pq_selectedLayout.plotId;
+  document.getElementById('pq-confirmRollId').textContent = pq_selectedLayout.rollId;
+  document.getElementById('pq-confirmModal').style.display = 'flex';
+}
 
+function pq_closeConfirmModal() {
+  document.getElementById('pq-confirmModal').style.display = 'none';
+}
+
+function pq_doStartPrinting() {
+  if(!pq_selectedLayout) return;
+  pq_closeConfirmModal();
   var btn = document.getElementById('pq-printBtn');
   btn.disabled = true; btn.textContent = 'Recording Print...';
 
@@ -354,7 +405,7 @@ function pq_startPrinting() {
       btn.disabled = false; btn.textContent = '▶ Start Printing';
       if(r.success) {
         prism_toast('success', r.message);
-        pq_load(); // reload queue entirely to get updated history
+        pq_load();
       } else {
         prism_toast('error', r.message);
       }
@@ -364,6 +415,16 @@ function pq_startPrinting() {
       prism_toast('error', e.message);
     })
     .prism_startPrintingLayout({ plotId: pq_selectedLayout.plotId });
+}
+
+function pq_openImageModal(url) {
+  document.getElementById('pq-imageModalImg').src = url;
+  document.getElementById('pq-imageModal').style.display = 'flex';
+}
+
+function pq_closeImageModal() {
+  document.getElementById('pq-imageModal').style.display = 'none';
+  document.getElementById('pq-imageModalImg').src = '';
 }
 
 function pq_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
