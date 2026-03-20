@@ -1997,6 +1997,7 @@ function prism_getPrintQueueData() {
           plotId: id,
           joNumbers: j.joNumbers || [],
           rollId: j.rollId,
+          rollWidth: parseFloat(j.rollWidth) || 0,
           lengthUsed: j.lengthUsed || 0,
           date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
           pngUrl: r[2] || j.plottingLink || j.pngUrl || '',

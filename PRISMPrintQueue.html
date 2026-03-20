@@ -259,10 +259,12 @@ function pq_renderMap(plan) {
         var ph = parseFloat(p.h) || 0;
         var dx = parseFloat(p.dx) || 0;
         var dy = parseFloat(p.dy) || 0;
+        // p.w/p.h are already post-rotation physical dimensions from the packing algorithm.
+        // Do NOT swap them based on rotation flag (that would double-flip).
         var rotated = !!p.r;
 
-        var vw = (rotated ? ph : pw) * pxPerFt;
-        var vh = (rotated ? pw : ph) * pxPerFt;
+        var vw = pw * pxPerFt;
+        var vh = ph * pxPerFt;
         var vx = x0 + 1 + (dx * pxPerFt);
         var vy = ry + (dy * pxPerFt);
 
