@@ -603,18 +603,19 @@ function pq_renderAll() {
         // ── Damage / void — striped amber ─────────────────────────────────────
         ctx.save();
         ctx.beginPath(); ctx.rect(axisW, sy, bodyW, sh); ctx.clip();
-        ctx.fillStyle = 'rgba(245,158,11,0.15)';
+        ctx.fillStyle = 'rgba(239,68,68,0.15)';
         ctx.fillRect(axisW, sy, bodyW, sh);
-        ctx.strokeStyle = 'rgba(245,158,11,0.45)'; ctx.lineWidth = 0.5;
+        ctx.strokeStyle = 'rgba(239,68,68,0.45)'; ctx.lineWidth = 0.5;
         for (var xi = -sh; xi < bodyW + sh; xi += 10) {
           ctx.beginPath(); ctx.moveTo(axisW + xi, sy); ctx.lineTo(axisW + xi + sh, sy + sh); ctx.stroke();
         }
         ctx.restore();
-        ctx.strokeStyle = 'rgba(245,158,11,0.6)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(239,68,68,0.6)'; ctx.lineWidth = 1;
         ctx.strokeRect(axisW, sy, bodyW, sh);
         if (sh > 12) {
           ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
-          ctx.fillText('WASTE (' + ((parseFloat(seg.endAtFt) || 0) - (parseFloat(seg.startAtFt) || 0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
+          ctx.fillStyle = '#dc2626'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText('DAMAGE (' + ((parseFloat(seg.endAtFt) || 0) - (parseFloat(seg.startAtFt) || 0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
         }
 
       } else {

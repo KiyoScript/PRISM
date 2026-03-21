@@ -1359,15 +1359,15 @@ function pp_renderHistoryMap(L) {
       ctx.lineWidth = 1;
       ctx.strokeRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
     } else if (seg.isDamage) {
-      ctx.fillStyle = 'rgba(245,158,11,0.3)'; // amber
+      ctx.fillStyle = 'rgba(239,68,68,0.2)';
       ctx.fillRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
-      ctx.strokeStyle = '#f59e0b';
+      ctx.strokeStyle = '#dc2626';
       ctx.lineWidth = 1;
       ctx.strokeRect(x0 + 1, sy, bodyW - 2, Math.max(1, sh - 2));
       
       // Draw warning stripes
       ctx.save();
-      ctx.strokeStyle = 'rgba(245,158,11,0.6)';
+      ctx.strokeStyle = 'rgba(239,68,68,0.5)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (var xi = x0; xi < x0 + bodyW + sh; xi += 10) {
@@ -1384,7 +1384,7 @@ function pp_renderHistoryMap(L) {
     if (sh > 14) {
       ctx.fillStyle = '#334155';
       ctx.font = '10px DM Sans, sans-serif';
-      var tag = seg.isDamage ? 'WASTE (' + (seg.lengthUsed||0).toFixed(1) + 'ft)' : 'prev ' + ((seg.datePlotted || '').replace(',', '') || '') + ' · ' + ((seg.joNumbers||[]).slice(0,2).join(', '));
+      var tag = seg.isDamage ? 'DAMAGE (' + (seg.lengthUsed||0).toFixed(1) + 'ft)' : 'prev ' + ((seg.datePlotted || '').replace(',', '') || '') + ' · ' + ((seg.joNumbers||[]).slice(0,2).join(', '));
       ctx.fillText(tag, x0 + 6, sy + 12);
     }
   });
