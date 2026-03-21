@@ -552,12 +552,10 @@ google.script.run
       navUsage.style.display = 'none';
     }
     switchTab('job-orders');
-    prism_init_job-orders();
   })
   .withFailureHandler(function() {
     document.getElementById('roleBadgeText').textContent = 'No Role';
     switchTab('job-orders');
-    prism_init_job-orders();
   })
   .prism_getUserInfoPublic();
 
