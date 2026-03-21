@@ -135,7 +135,18 @@
         </div>
         <div id="pq-historyWrap" style="flex:1;background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;
                  overflow:auto;position:relative;padding:16px;text-align:center;min-height:500px;">
-          <canvas id="pq-historyCanvas" style="max-width:100%;display:block;margin:0 auto;
+          <div id="pq-noSelection"
+            style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;color:var(--p-faint);">
+            <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              style="margin-bottom:14px;opacity:.4;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2"
+                d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
+            </svg>
+            <p style="font-size:15px;font-weight:700;color:var(--p-muted);margin:0 0 6px;">No preview yet</p>
+            <p style="font-size:13px;color:var(--p-faint);margin:0;">Select a layout from the queue to view its roll map
+            </p>
+          </div>
+          <canvas id="pq-historyCanvas" style="max-width:100%;display:none;margin:0 auto;
             box-shadow:var(--p-shadow);border-radius:4px;"></canvas>
         </div>
       </div>
@@ -212,8 +223,7 @@
     <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">
       Damage Length (ft) <span style="color:var(--p-red);">*</span>
     </label>
-    <input id="pq-dmgLength" type="number" step="0.1" min="0.1" placeholder="e.g. 2.5"
-      style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;
+    <input id="pq-dmgLength" type="number" step="0.1" min="0.1" placeholder="e.g. 2.5" style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;
              padding:9px 12px;font-size:13px;background:var(--p-bg);color:var(--p-text);margin-bottom:12px;">
     <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">
       Reason / Remarks
@@ -234,8 +244,8 @@
   var pq_planned = [];   // READY_TO_PRINT (waiting)
   var pq_reprints = [];   // reprint items (waiting)
   var pq_printing = null; // currently PRINTING item (single slot)
-  var pq_rollsHistory   = {};
-var pq_joCustomerMap  = {};
+  var pq_rollsHistory = {};
+  var pq_joCustomerMap = {};
   var pq_selectedLayout = null;
   var pq_damageTarget = null;
 
@@ -266,9 +276,9 @@ var pq_joCustomerMap  = {};
           pq_planned = r.planned || [];
           pq_reprints = r.reprints || [];
           pq_printing = r.printing || null;
-          pq_rollsHistory  = r.rollsHistory  || {};
-        pq_joCustomerMap = r.joCustomerMap || {};
-        pq_renderAll();
+          pq_rollsHistory = r.rollsHistory || {};
+          pq_joCustomerMap = r.joCustomerMap || {};
+          pq_renderAll();
         } else {
           prism_toast('error', r.message);
           document.getElementById('pq-list').innerHTML =
@@ -283,17 +293,17 @@ var pq_joCustomerMap  = {};
   }
 
   // ── Render both panels ──────────────────────────────────────────────────────
-function pq_renderAll() {
-  pq_renderPrintingSlot();
-  pq_renderWaitingList();
-  if (pq_printing) {
-    document.getElementById('pq-rollMeta').innerHTML =
-      'Roll: <strong class="mono" style="color:var(--p-green);">'
-      + pq_esc(pq_printing.rollId) + '</strong>'
-      + ' &mdash; Currently printing. Mark done or declare damage when finished.';
-    setTimeout(function() { pq_renderMap(pq_printing); }, 80);
+  function pq_renderAll() {
+    pq_renderPrintingSlot();
+    pq_renderWaitingList();
+    if (pq_printing) {
+      document.getElementById('pq-rollMeta').innerHTML =
+        'Roll: <strong class="mono" style="color:var(--p-green);">'
+        + pq_esc(pq_printing.rollId) + '</strong>'
+        + ' &mdash; Currently printing. Mark done or declare damage when finished.';
+      setTimeout(function () { pq_renderMap(pq_printing); }, 80);
+    }
   }
-}
 
   function pq_renderPrintingSlot() {
     var slot = document.getElementById('pq-printing-slot');
@@ -303,8 +313,8 @@ function pq_renderAll() {
     }
     var p = pq_printing;
     var customerLabel = (p.customers && p.customers.length)
-    ? p.customers.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ')
-    : (p.joNumbers||[]).join(', ');
+      ? p.customers.filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ')
+      : (p.joNumbers || []).join(', ');
     var h = '<div class="pq-printing-card">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
     h += '<span style="font-weight:800;font-size:15px;color:var(--p-text);">' + pq_esc(customerLabel) + '</span>';
@@ -318,16 +328,16 @@ function pq_renderAll() {
         + 'text-decoration:none;background:var(--p-purple-lt);padding:4px 9px;border-radius:6px;'
         + 'border:1px solid var(--p-purple-bd);margin-bottom:8px;">View Image &#8599;</a>';
     }
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-bottom:8px;">';
-    h += '<button onclick="pq_openDoneModal()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;'
-      + 'color:#166534;background:#dcfce7;padding:4px 9px;border-radius:6px;'
-      + 'border:1px solid #86efac;cursor:pointer;">&#10003; Mark Done</button>';
-    h += '<button onclick="pq_openDamageModal(\'' + pq_esc(p.plotId) + '\')" style="display:inline-flex;align-items:center;gap:4px;'
-      + 'font-size:11px;font-weight:700;color:#dc2626;background:rgba(239,68,68,0.1);'
-      + 'padding:4px 9px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);cursor:pointer;">&#9888; Declare Damage</button>';
+    h += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">';
+    h += '<button onclick="pq_openDoneModal()" style="display:flex;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:700;'
+      + 'color:#166534;background:#dcfce7;padding:7px 12px;border-radius:8px;'
+      + 'border:1px solid #86efac;cursor:pointer;width:100%;">&#10003; Mark Done</button>';
+    h += '<button onclick="pq_openDamageModal(\'' + pq_esc(p.plotId) + '\')" style="display:flex;align-items:center;justify-content:center;gap:4px;'
+      + 'font-size:12px;font-weight:700;color:#dc2626;background:rgba(239,68,68,0.1);'
+      + 'padding:7px 12px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);cursor:pointer;width:100%;">&#9888; Declare Damage</button>';
     h += '</div>';
     h += '<div style="font-size:11px;color:var(--p-faint);">JOs: <span style="color:var(--p-text);font-weight:600;">'
-      + pq_esc((p.joNumbers||[]).join(', ')) + '</span></div>';
+      + pq_esc((p.joNumbers || []).join(', ')) + '</span></div>';
     h += '</div>';
     slot.innerHTML = h;
   }
@@ -477,8 +487,8 @@ function pq_renderAll() {
     pq_damageTarget = pq_printing;
     document.getElementById('pq-dmgPlotId').textContent =
       plotId + ' (' + (pq_damageTarget.joNumbers || []).join(', ') + ')';
-    document.getElementById('pq-dmgLength').value  = '';
-  document.getElementById('pq-dmgRemarks').value = '';
+    document.getElementById('pq-dmgLength').value = '';
+    document.getElementById('pq-dmgRemarks').value = '';
     document.getElementById('pq-damageModal').style.display = 'flex';
   }
   function pq_closeDamageModal() {
@@ -487,30 +497,30 @@ function pq_renderAll() {
   }
 
   function pq_submitDamage() {
-  if (!pq_damageTarget) return;
-  var len     = parseFloat(document.getElementById('pq-dmgLength').value);
-  var remarks = document.getElementById('pq-dmgRemarks').value.trim();
-  if (!len || len <= 0) { prism_toast('error', 'Please enter a valid damage length.'); return; }
-  var btn = document.getElementById('pq-dmgSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Submitting...';
-  google.script.run
-    .withSuccessHandler(function(r) {
-      btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
-      pq_closeDamageModal();
-      if (r.success) { prism_toast('success', r.message); pq_load(); }
-      else             prism_toast('error', r.message);
-    })
-    .withFailureHandler(function(e) {
-      btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
-      prism_toast('error', e.message);
-    })
-    .prism_declareDamageForPlot({
-      plotId:    pq_damageTarget.plotId,
-      rollId:    pq_damageTarget.rollId,
-      joNumbers: pq_damageTarget.joNumbers || [],
-      lengthUsed: len,
-      remarks:   remarks
-    });
+    if (!pq_damageTarget) return;
+    var len = parseFloat(document.getElementById('pq-dmgLength').value);
+    var remarks = document.getElementById('pq-dmgRemarks').value.trim();
+    if (!len || len <= 0) { prism_toast('error', 'Please enter a valid damage length.'); return; }
+    var btn = document.getElementById('pq-dmgSubmitBtn');
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
+        pq_closeDamageModal();
+        if (r.success) { prism_toast('success', r.message); pq_load(); }
+        else prism_toast('error', r.message);
+      })
+      .withFailureHandler(function (e) {
+        btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
+        prism_toast('error', e.message);
+      })
+      .prism_declareDamageForPlot({
+        plotId: pq_damageTarget.plotId,
+        rollId: pq_damageTarget.rollId,
+        joNumbers: pq_damageTarget.joNumbers || [],
+        lengthUsed: len,
+        remarks: remarks
+      });
   }
   // ── Image modal ──────────────────────────────────────────────────────────────
   function pq_openImageModal(url) {
@@ -528,6 +538,8 @@ function pq_renderAll() {
     var canvas = document.getElementById('pq-historyCanvas');
     var wrap = document.getElementById('pq-historyWrap');
     if (!canvas || !wrap) return;
+    document.getElementById('pq-noSelection').style.display = 'none';
+    canvas.style.display = 'block';
 
     var rollId = plan.rollId;
     var rollWidth = parseFloat(plan.rollWidth) || 4.5;
@@ -543,17 +555,19 @@ function pq_renderAll() {
     });
 
     var planLen = parseFloat(plan.lengthUsed) || 0;
-    var totalLen = totalPrinted + planLen + 2;
+    var rollOrigLen = parseFloat(plan.rollOrigLen || plan.originalLength) || 0;
+    if (!rollOrigLen) rollOrigLen = totalPrinted + planLen + 10;
+    var totalLen = Math.max(rollOrigLen, totalPrinted + planLen + 2);
 
-    var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 500);
-    var pxPerFt = 22;
-    var axisW   = 36;
-    var bodyW   = wrapW - axisW;
-    var topPad  = 20;
+    var wrapW = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 500);
+    var pxPerFt = 10;
+    var axisW = 36;
+    var bodyW = wrapW - axisW;
+    var topPad = 20;
     var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60 + topPad);
 
-    canvas.style.width  = '100%';
-    canvas.style.height = 'auto';
+    canvas.style.width = wrapW + 'px';
+    canvas.style.height = canvasH + 'px';
     canvas.width = wrapW;
     canvas.height = canvasH;
 
@@ -625,9 +639,9 @@ function pq_renderAll() {
         ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.5;
         ctx.strokeRect(axisW, sy, bodyW, sh);
         var joLabel = (seg.joNumbers || []).join(', ');
-        var custLabel = (seg.joNumbers || []).map(function(jo) {
+        var custLabel = (seg.joNumbers || []).map(function (jo) {
           return pq_joCustomerMap[String(jo).trim().toUpperCase()] || jo;
-        }).filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
+        }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ');
         if (sh > 12) {
           ctx.fillStyle = '#475569'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
           ctx.fillText(custLabel || joLabel, axisW + 6, sy + 14);
@@ -667,6 +681,10 @@ function pq_renderAll() {
     }
     ctx.fillStyle = '#b45309'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
     ctx.fillText('Continuation @ ' + (totalPrinted + planLen).toFixed(1) + 'ft', axisW + bodyW - 6, planY + 14);
+
+    // Auto-scroll to show the last printed segment / current plan
+    var scrollTarget = Math.round(totalPrinted * pxPerFt) + topPad - 120;
+    wrap.scrollTop = Math.max(0, scrollTarget);
   }
 
   function pq_drawSegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPerFtY) {
