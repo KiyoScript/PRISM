@@ -551,13 +551,13 @@ google.script.run
     if (navUsage && !isAdmin && !isOperator) {
       navUsage.style.display = 'none';
     }
-    switchTab('dashboard');
-    prism_init_dashboard();
+    switchTab('job-orders');
+    prism_init_job-orders();
   })
   .withFailureHandler(function() {
     document.getElementById('roleBadgeText').textContent = 'No Role';
-    switchTab('dashboard');
-    prism_init_dashboard();
+    switchTab('job-orders');
+    prism_init_job-orders();
   })
   .prism_getUserInfoPublic();
 

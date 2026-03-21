@@ -172,11 +172,9 @@
 
       <!-- Status chips — only shown on All tab -->
       <div id="jo-status-chips" style="display:flex;gap:6px;overflow-x:auto;">
-        <button class="fchip active" onclick="jo_setStatus('ALL',this)">All</button>
-        <button class="fchip" onclick="jo_setStatus('FOR_PLOTTING',this)">For Plotting</button>
+        <button class="fchip" onclick="jo_setStatus('ALL',this)">All</button>
+        <button class="fchip active" onclick="jo_setStatus('FOR_PLOTTING',this)">For Plotting</button>
         <button class="fchip" onclick="jo_setStatus('READY_TO_PRINT',this)">Ready to Print</button>
-        <button class="fchip" onclick="jo_setStatus('PRINTING',this)">Printing</button>
-        <button class="fchip" onclick="jo_setStatus('COMPLETED',this)">Completed</button>
       </div>
 
       <p id="jo-count" style="font-size:12px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;flex-shrink:0;"></p>
@@ -211,7 +209,7 @@
 
 <script>
 var jo_tab        = 'all';
-var jo_statusFilter = 'ALL';
+var jo_statusFilter = 'FOR_PLOTTING';
 var jo_page       = 1;
 var jo_pageSize   = 30;
 var jo_all        = [];
@@ -242,21 +240,20 @@ function jo_loadData() {
     })
     .withFailureHandler(function() { prism_setReloading('jo-reloadBtn', false); })
     .prism_getJobOrdersPublic();
-
+ 
   google.script.run
     .withSuccessHandler(function(r) {
       prism_setReloading('jo-reloadBtn', false);
       if (r && r.success) {
-        var all = r.data || [];
-        jo_damages    = all.filter(function(u){ return u.joNumber === 'DAMAGE'; });
-        jo_testPrints = all.filter(function(u){ return u.joNumber === 'TEST-PRINT'; });
+        jo_damages    = r.damages    || [];
+        jo_testPrints = r.testPrints || [];
         if (jo_tab === 'damage' || jo_tab === 'testprint') jo_apply();
       }
     })
     .withFailureHandler(function() { prism_setReloading('jo-reloadBtn', false); })
-    .prism_getUsageLog();
+    .prism_getJobOrderReports();
 }
-
+ 
 function jo_setTab(tab, el) {
   jo_tab  = tab;
   jo_page = 1;
@@ -273,7 +270,7 @@ function jo_setTab(tab, el) {
 function jo_updateHeaders() {
   var th = document.getElementById('jo-thead');
   if (jo_tab === 'damage') {
-    th.innerHTML = '<tr><th>Roll ID</th><th>JOs</th><th>Damage Length</th><th>Operator</th><th>Reason</th><th>Date</th></tr>';
+    th.innerHTML = '<tr><th>Roll ID</th><th>JOs</th><th>Customer</th><th>Damage Length</th><th>Operator</th><th>Reason</th><th>Date</th></tr>';
   } else if (jo_tab === 'testprint') {
     th.innerHTML = '<tr><th>Roll ID</th><th>Length Used</th><th>Operator</th><th>Notes</th><th>Date</th></tr>';
   } else {
@@ -330,13 +327,18 @@ function jo_renderPage() {
   var h = '';
   if (jo_tab === 'damage') {
     slice.forEach(function(r) {
+      var joTag = (r.joNumbers && r.joNumbers.length)
+        ? r.joNumbers.map(function(j){ return '<span class="jo-num" style="margin-right:3px;">'+jo_esc(j)+'</span>'; }).join('')
+        : '<span style="color:var(--p-faint);">—</span>';
+      var custTag = jo_esc(r.customer || '—');
       h += '<tr class="dmg-row">'
         + '<td><span class="jo-roll">' + jo_esc(r.rollId) + '</span></td>'
-        + '<td style="font-size:11px;color:var(--p-muted);">' + jo_esc(r.joNumber) + '</td>'
+        + '<td>' + joTag + '</td>'
+        + '<td style="font-size:12px;font-weight:600;">' + custTag + '</td>'
         + '<td><span style="font-weight:700;color:#dc2626;">' + (r.lengthUsed||0) + ' ft</span></td>'
         + '<td style="font-size:11px;">' + jo_esc(r.operator) + '</td>'
-        + '<td style="font-size:11px;color:var(--p-muted);max-width:200px;">' + jo_esc(r.plottingLink||'—') + '</td>'
-        + '<td style="font-size:11px;color:var(--p-faint);">' + jo_esc(r.dateUsed) + '</td>'
+        + '<td style="font-size:11px;color:var(--p-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + jo_esc(r.reason||'—') + '</td>'
+        + '<td style="font-size:11px;color:var(--p-faint);white-space:nowrap;">' + jo_esc(r.date) + '</td>'
         + '</tr>';
     });
   } else if (jo_tab === 'testprint') {
