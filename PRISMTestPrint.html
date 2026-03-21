@@ -136,19 +136,7 @@
       <button onclick="tp_preview()" class="p-btn" style="width:100%;padding:13px;font-size:13px;background:var(--p-amber-lt);color:var(--p-amber);border:1.5px solid var(--p-amber-bd);border-radius:11px;margin-bottom:12px;">
         ✦ Preview Test Print
       </button>
-
-      <!-- Confirm panel (hidden until preview) -->
-      <div id="tp-confirmPanel" style="display:none;">
-        <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">🖨 Confirm Test Print</p>
-        <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll immediately.</p>
-        <button id="tp-confirmBtn" onclick="tp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
-          ✓ Confirm & Deduct from Roll
-        </button>
-      </div>
-
-    </div><!-- /left panel -->
-
-    <!-- RIGHT PANEL -->
+    </div>
     <div>
 
       <!-- Empty state -->
@@ -159,40 +147,42 @@
         <p style="font-size:15px;font-weight:700;color:var(--p-muted);margin:0 0 6px;">No preview yet</p>
         <p style="font-size:13px;color:var(--p-faint);margin:0;">Select a roll, enter test length, then click Preview</p>
       </div>
-
+ 
       <!-- Results (hidden until preview) -->
       <div id="tp-results" style="display:none;">
-
-        <!-- Two-column: visual left | full map right -->
-        <div id="tp-results-grid">
-
-          <!-- Visual canvas -->
-          <div class="tp-results-left">
-            <div class="p-card" style="padding:14px;overflow:hidden;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Visual Preview</p>
-                <span id="tp-canvasLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-amber);"></span>
-              </div>
-              <div id="tp-canvasWrap">
-                <canvas id="tp-canvas"></canvas>
-              </div>
-            </div>
+ 
+        <!-- Visual preview -->
+        <div class="p-card" style="padding:14px;overflow:hidden;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Visual Preview</p>
+            <span id="tp-canvasLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-amber);"></span>
           </div>
-
-          <!-- Full Roll Map -->
-          <div class="tp-results-right">
-            <div class="p-card" style="padding:14px;overflow:hidden;">
-              <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Full Roll Map</p>
-              <div id="tp-historyWrap">
-                <canvas id="tp-historyCanvas"></canvas>
-              </div>
-              <p id="tp-historyMeta" style="font-size:11px;color:var(--p-faint);margin:8px 0 0;"></p>
-            </div>
+          <div id="tp-canvasWrap">
+            <canvas id="tp-canvas"></canvas>
           </div>
-
-        </div><!-- /tp-results-grid -->
+        </div>
+ 
+        <!-- Confirm panel below visual -->
+        <div id="tp-confirmPanel" style="display:none;margin-bottom:12px;">
+          <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">Confirm Test Print</p>
+          <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll and record it on the roll map.</p>
+          <button id="tp-confirmBtn" onclick="tp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
+            ✓ Confirm & Deduct from Roll
+          </button>
+        </div>
+ 
+        <!-- Full Roll Map -->
+        <div class="p-card" style="padding:14px;overflow:hidden;">
+          <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 6px;">Full Roll Map</p>
+          <p id="tp-historyMeta" style="font-size:12px;color:var(--p-muted);margin:0 0 10px;"></p>
+          <div id="tp-historyWrap" style="background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;overflow:auto;padding:16px;min-height:300px;">
+            <canvas id="tp-historyCanvas" style="max-width:100%;display:block;margin:0 auto;"></canvas>
+          </div>
+        </div>
+ 
       </div><!-- /tp-results -->
     </div><!-- /right panel -->
+
   </div><!-- /tp-grid -->
 
   <!-- History log -->
@@ -387,236 +377,183 @@ function tp_preview() {
 
   tp_onLengthChange();
   tp_drawCanvas();
-  tp_drawHistoryMap();
+  setTimeout(function() { tp_drawHistoryMap(); }, 80);
 }
 
 /* ══════════════════════════════════════════
    VISUAL CANVAS — shows test strip at correct position
 ══════════════════════════════════════════ */
+
 function tp_drawCanvas() {
   if (!tp_layout) return;
   var L      = tp_layout;
   var wrap   = document.getElementById('tp-canvasWrap');
   var canvas = document.getElementById('tp-canvas');
   var ctx    = canvas.getContext('2d');
-
-  var LABEL_H = 40;
-  var LABEL_W = 36;
-  var maxDispW = Math.max((wrap.clientWidth || 400) - 24 - LABEL_W - 4, 180);
-  var scale    = maxDispW / L.roll.width;
-  var dispW    = Math.round(L.roll.width * scale);
-  var totalDispH = Math.round(L.lengthUsed * scale);
-  var maxH     = Math.min(Math.max(totalDispH, 60), 400);
-  var hScale   = maxH / (totalDispH || 1);
-
-  canvas.width  = dispW + LABEL_W;
-  canvas.height = maxH + LABEL_H;
-  canvas.style.width  = (dispW + LABEL_W) + 'px';
-  canvas.style.height = (maxH + LABEL_H) + 'px';
-
+ 
+  var rollWidth = parseFloat(L.roll.width) || 4.5;
+  var lu        = parseFloat(L.lengthUsed) || 0;
+  var wrapW     = Math.max((wrap.clientWidth || 400) - 8, 200);
+  var pxPerFt   = wrapW / rollWidth;
+  var stripH    = Math.max(60, Math.min(120, Math.round(lu * pxPerFt)));
+  var axisH     = 28;
+ 
+  canvas.width  = wrapW;
+  canvas.height = stripH + axisH;
+  canvas.style.width  = wrapW + 'px';
+  canvas.style.height = (stripH + axisH) + 'px';
+ 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Prior used block at top (gray)
-  var priorDispH = L.currentStart > 0.05 && L.rollOrigLen > 0
-    ? Math.round((L.currentStart / L.rollOrigLen) * totalDispH * hScale)
-    : 0;
-
-  if (priorDispH > 0) {
-    ctx.fillStyle = 'rgba(148,163,184,0.18)';
-    ctx.fillRect(LABEL_W, 0, dispW, Math.min(priorDispH, maxH));
-    if (priorDispH > 16) {
-      ctx.fillStyle = '#64748b';
-      ctx.font = '10px DM Sans, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('Previously used (' + L.currentStart.toFixed(1) + 'ft)', LABEL_W + 6, 14);
-    }
-  }
-
-  // Test strip — full width, amber
-  var testY = Math.min(priorDispH, maxH - 2);
-  var testH = Math.min(maxH - testY, Math.round(L.lengthUsed * scale * hScale));
-  if (testH < 4) testH = 4;
-
+ 
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(0, 0, wrapW, stripH);
+ 
   ctx.fillStyle = 'rgba(245,158,11,0.28)';
-  ctx.fillRect(LABEL_W + 1, testY, dispW - 2, testH);
-  ctx.strokeStyle = 'rgba(217,119,6,0.7)';
+  ctx.fillRect(1, 1, wrapW - 2, stripH - 2);
+  ctx.strokeStyle = 'rgba(217,119,6,0.8)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 3]);
-  ctx.strokeRect(LABEL_W + 1, testY, dispW - 2, testH);
+  ctx.strokeRect(1, 1, wrapW - 2, stripH - 2);
   ctx.setLineDash([]);
-
-  // Label inside strip
-  if (testH > 18) {
-    ctx.fillStyle = '#92400e';
-    ctx.font = 'bold 11px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('🖨 TEST PRINT · ' + L.lengthUsed + ' ft', LABEL_W + dispW / 2, testY + testH / 2 + 4);
-  }
-
-  // Bottom axis labels
-  var by = maxH + 18;
+ 
+  ctx.fillStyle = '#92400e';
+  ctx.font = 'bold 12px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('TEST PRINT  ' + lu + ' ft  x  ' + rollWidth + 'ft wide', wrapW / 2, stripH / 2 + 5);
+ 
+  ctx.fillStyle = '#64748b';
+  ctx.font = '10px DM Sans, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(L.currentStart.toFixed(1) + 'ft', wrapW - 4, 12);
+  ctx.fillText(L.currentEnd.toFixed(1)   + 'ft', wrapW - 4, stripH - 4);
+ 
   ctx.strokeStyle = '#9db5ae'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(LABEL_W, by); ctx.lineTo(LABEL_W + dispW, by); ctx.stroke();
-  ctx.fillStyle = '#374151'; ctx.font = 'bold 10px DM Sans, sans-serif';
-  ctx.textAlign = 'left';   ctx.fillText('0', LABEL_W, by + 12);
-  ctx.textAlign = 'center'; ctx.fillText(L.roll.width + 'ft wide', LABEL_W + dispW / 2, by + 12);
-  ctx.textAlign = 'right';  ctx.fillText(L.roll.width + 'ft', LABEL_W + dispW, by + 12);
-
-  // Left length labels
-  ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
-  ctx.fillText(L.currentStart.toFixed(1), LABEL_W - 4, testY + 4);
-  ctx.fillText(L.currentEnd.toFixed(1),   LABEL_W - 4, testY + testH);
+  ctx.beginPath();
+  ctx.moveTo(0, stripH + 1); ctx.lineTo(wrapW, stripH + 1);
+  ctx.stroke();
+  ctx.fillStyle = '#374151'; ctx.font = '10px DM Sans, sans-serif';
+  ctx.textAlign = 'left';   ctx.fillText('0', 2, stripH + 14);
+  ctx.textAlign = 'center'; ctx.fillText(rollWidth + 'ft wide', wrapW / 2, stripH + 14);
+  ctx.textAlign = 'right';  ctx.fillText(rollWidth + 'ft', wrapW - 2, stripH + 14);
 }
 
 /* ══════════════════════════════════════════
    FULL ROLL MAP — mirrors pp_renderHistoryMap
 ══════════════════════════════════════════ */
+
 function tp_drawHistoryMap() {
   if (!tp_layout) return;
-  var L       = tp_layout;
-  var canvas  = document.getElementById('tp-historyCanvas');
-  var wrap    = document.getElementById('tp-historyWrap');
-  var meta    = document.getElementById('tp-historyMeta');
+  var L      = tp_layout;
+  var canvas = document.getElementById('tp-historyCanvas');
+  var wrap   = document.getElementById('tp-historyWrap');
+  var meta   = document.getElementById('tp-historyMeta');
   if (!canvas || !wrap) return;
-
-  var rollLen  = L.rollOrigLen || 164;
-  var rollWidth = parseFloat(L.roll.width) || 0;
-  var history  = (L.history || []).slice().sort(function(a, b) { return (a.startAtFt||0) - (b.startAtFt||0); });
-
-  var AX_L = 46, AX_B = 36;
-  var bodyW  = Math.max((wrap.clientWidth || 380) - AX_L - 28, 180);
-  var bodyH  = Math.max(980, Math.round(rollLen * 14));
-
-  canvas.width  = bodyW + AX_L + 8;
-  canvas.height = bodyH + AX_B + 8;
-  canvas.style.width  = (bodyW + AX_L + 8) + 'px';
-  canvas.style.height = (bodyH + AX_B + 8) + 'px';
-
+ 
+  var rollId    = L.roll.rollId;
+  var rollWidth = parseFloat(L.roll.width) || 4.5;
+  var history   = (tp_rollHistory[rollId] || []).slice().sort(function(a,b){
+    return (parseFloat(a.startAtFt)||0) - (parseFloat(b.startAtFt)||0);
+  });
+ 
+  var totalPrinted = 0;
+  history.forEach(function(s) {
+    var e = parseFloat(s.endAtFt) || 0;
+    if (e > totalPrinted) totalPrinted = e;
+  });
+ 
+  var planLen  = parseFloat(L.lengthUsed) || 0;
+  var totalLen = totalPrinted + planLen + 2;
+ 
+  var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 300);
+  var pxPerFt = 22;
+  var axisW   = 36;
+  var bodyW   = wrapW - axisW;
+  var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
+ 
+  canvas.width  = wrapW;
+  canvas.height = canvasH;
+  canvas.style.width  = '100%';
+  canvas.style.height = 'auto';
+ 
   var ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  var x0 = AX_L, y0 = 6;
-  var pxPerFtY = bodyH / rollLen;
-
-  // Roll background
-  ctx.fillStyle = '#eef2f7';
-  ctx.fillRect(x0, y0, bodyW, bodyH);
-  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
-  ctx.strokeRect(x0, y0, bodyW, bodyH);
-
-  // Prior segments
-  history.forEach(function(seg, i) {
-    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
-    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
-    if (sy > y0 + bodyH) return;
-
+ 
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(axisW, 0, bodyW, canvasH);
+ 
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  for (var ft = 0; ft <= Math.ceil(totalLen); ft += 5) {
+    var ty = Math.round(ft * pxPerFt);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(ft, axisW - 4, ty + 4);
+    ctx.strokeStyle = 'rgba(148,163,184,0.25)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(axisW, ty); ctx.lineTo(axisW + bodyW, ty); ctx.stroke();
+  }
+ 
+  history.forEach(function(seg) {
+    var sy = Math.round((parseFloat(seg.startAtFt)||0) * pxPerFt);
+    var ey = Math.round((parseFloat(seg.endAtFt)  ||0) * pxPerFt);
+    var sh = Math.max(2, ey - sy);
+ 
     if (seg.isTestPrint) {
-      // Amber dashed — prior test prints
-      ctx.fillStyle = 'rgba(245,158,11,0.22)';
-      ctx.fillRect(x0 + 1, sy, bodyW - 2, sh);
-      ctx.strokeStyle = 'rgba(217,119,6,0.5)'; ctx.lineWidth = 1;
-      ctx.setLineDash([5, 3]);
-      ctx.strokeRect(x0 + 1, sy, bodyW - 2, sh);
-      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(245,158,11,0.30)';
+      ctx.fillRect(axisW, sy, bodyW, sh);
+      ctx.strokeStyle = 'rgba(245,158,11,0.7)'; ctx.lineWidth = 1;
+      ctx.strokeRect(axisW, sy, bodyW, sh);
       if (sh > 12) {
-        ctx.fillStyle = '#92400e'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'left';
-        ctx.fillText('TEST PRINT · ' + (seg.lengthUsed||0).toFixed(2) + 'ft', x0 + 6, sy + 12);
+        ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('TEST PRINT (' + (parseFloat(seg.lengthUsed)||0).toFixed(1) + 'ft)', axisW + 6, sy + 14);
       }
-    } else if (Array.isArray(seg.rows) && seg.rows.length) {
-      // JO segment with row detail
-      var rows = seg.rows;
-      var ry = sy;
-      rows.forEach(function(r) {
-        var rh = Math.max(2, Math.round((parseFloat(r.rowH)||0) * pxPerFtY));
-        var cx = x0;
-        (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
-          var pw = Math.max(1, Math.round(((parseFloat(p.w||p.width)||0) / rollWidth) * bodyW));
-          var jo = String(p.joNumber || p.jo || '').trim().toUpperCase();
-          var hash = 0;
-          for (var ci = 0; ci < jo.length; ci++) hash = ((hash * 31) + jo.charCodeAt(ci)) >>> 0;
-          var color = ['#6366f1','#0d9488','#f59e0b','#ec4899','#10b981','#8b5cf6','#ef4444','#3b82f6'][hash % 8];
-          ctx.fillStyle = color + '55';
-          ctx.fillRect(cx+1, ry+1, Math.max(1,pw-2), Math.max(1,rh-2));
-          cx += pw;
-        });
-        ry += rh;
-      });
-      ctx.strokeStyle = i%2 ? 'rgba(99,102,241,0.35)' : 'rgba(20,184,166,0.35)'; ctx.lineWidth = 1;
-      ctx.strokeRect(x0+1, sy, bodyW-2, sh);
+    } else if (seg.isDamage) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(axisW, sy, bodyW, sh); ctx.clip();
+      ctx.fillStyle = 'rgba(245,158,11,0.15)'; ctx.fillRect(axisW, sy, bodyW, sh);
+      ctx.strokeStyle = 'rgba(245,158,11,0.45)'; ctx.lineWidth = 0.5;
+      for (var xi = -sh; xi < bodyW + sh; xi += 10) {
+        ctx.beginPath(); ctx.moveTo(axisW+xi, sy); ctx.lineTo(axisW+xi+sh, sy+sh); ctx.stroke();
+      }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(245,158,11,0.6)'; ctx.lineWidth = 1;
+      ctx.strokeRect(axisW, sy, bodyW, sh);
+      if (sh > 12) {
+        ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('WASTE (' + ((parseFloat(seg.endAtFt)||0)-(parseFloat(seg.startAtFt)||0)).toFixed(1) + 'ft)', axisW+6, sy+14);
+      }
     } else {
-      ctx.fillStyle = i%2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
-      ctx.fillRect(x0+1, sy, bodyW-2, sh);
-      ctx.strokeStyle = 'rgba(71,85,105,0.25)';
-      ctx.strokeRect(x0+1, sy, bodyW-2, sh);
-    }
-    if (!seg.isTestPrint && sh > 14) {
-      ctx.fillStyle = '#334155'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'left';
-      ctx.fillText('prev · ' + ((seg.joNumbers||[]).slice(0,2).join(', ')), x0+6, sy+12);
+      ctx.fillStyle = 'rgba(148,163,184,0.35)';
+      ctx.fillRect(axisW, sy, bodyW, sh);
+      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(axisW, sy, bodyW, sh);
+      var joLabel = (seg.joNumbers || []).join(', ');
+      if (sh > 12 && joLabel) {
+        ctx.fillStyle = '#475569'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(joLabel, axisW + 6, sy + 14);
+      }
     }
   });
-
-  // Legacy used gap at top
-  if (!history.length && L.currentStart > 0.05) {
-    var legH = Math.max(2, Math.round(L.currentStart * pxPerFtY));
-    ctx.fillStyle = 'rgba(148,163,184,0.16)';
-    ctx.fillRect(x0+1, y0+1, bodyW-2, legH-2);
-    ctx.strokeStyle = 'rgba(100,116,139,0.28)'; ctx.lineWidth = 1;
-    ctx.setLineDash([4,4]); ctx.strokeRect(x0+1, y0+1, bodyW-2, legH-2); ctx.setLineDash([]);
-    if (legH > 14) {
-      ctx.fillStyle = '#475569'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'left';
-      ctx.fillText('PREVIOUSLY USED (' + L.currentStart.toFixed(1) + 'ft)', x0+6, y0+14);
-    }
+ 
+  var planY = Math.round(totalPrinted * pxPerFt);
+  var planH = Math.max(4, Math.round(planLen * pxPerFt));
+ 
+  ctx.strokeStyle = '#d97706'; ctx.lineWidth = 2;
+  ctx.strokeRect(axisW, planY, bodyW, planH);
+  ctx.fillStyle = 'rgba(245,158,11,0.28)';
+  ctx.fillRect(axisW, planY, bodyW, planH);
+ 
+  if (planH > 14) {
+    ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('TEST PRINT (current)', axisW + 6, planY + 14);
+    ctx.fillStyle = '#92400e'; ctx.textAlign = 'right';
+    ctx.fillText('@ ' + (totalPrinted + planLen).toFixed(1) + 'ft', axisW + bodyW - 6, planY + 14);
   }
-
-  // Current test strip — amber with green border
-  var curY = y0 + Math.round(L.currentStart * pxPerFtY);
-  var curH = Math.max(4, Math.round((L.currentEnd - L.currentStart) * pxPerFtY));
-
-  ctx.fillStyle = 'rgba(245,158,11,0.30)';
-  ctx.fillRect(x0+1, curY, bodyW-2, curH);
-  ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2;
-  ctx.strokeRect(x0+1, curY+1, bodyW-2, Math.max(1, curH-2));
-
-  if (curH > 14) {
-    ctx.fillStyle = '#065f46'; ctx.font = 'bold 10px DM Sans, sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText('🖨 TEST PRINT · ' + L.lengthUsed + 'ft', x0+6, Math.max(y0+12, curY+12));
+ 
+  if (meta) {
+    meta.textContent = rollId + '  ·  ' + rollWidth + 'ft wide  ·  '
+      + totalPrinted.toFixed(1) + 'ft used  ·  test: ' + planLen + 'ft';
   }
-
-  // Continuation dashed line
-  if (L.currentStart > 0.05) {
-    ctx.strokeStyle = 'rgba(245,158,11,0.65)'; ctx.lineWidth = 1;
-    ctx.setLineDash([6,4]);
-    ctx.beginPath(); ctx.moveTo(x0, curY); ctx.lineTo(x0+bodyW, curY); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px DM Sans, sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText('Starts @ ' + L.currentStart.toFixed(1) + 'ft', x0+bodyW-6, Math.max(14, curY-4));
-  }
-
-  // Left scale marks
-  ctx.fillStyle = '#64748b'; ctx.font = '10px DM Sans, sans-serif'; ctx.textAlign = 'right';
-  for (var ft = 0; ft <= rollLen; ft += 5) {
-    var yy = y0 + Math.round(ft * pxPerFtY);
-    ctx.fillText(ft, x0-4, yy+3);
-    ctx.strokeStyle = 'rgba(148,163,184,0.18)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x0+bodyW, yy); ctx.stroke();
-  }
-
-  // Bottom axis
-  var by = y0 + bodyH + 18;
-  ctx.strokeStyle = '#9db5ae'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(x0, by); ctx.lineTo(x0+bodyW, by); ctx.stroke();
-  ctx.fillStyle = '#374151'; ctx.font = 'bold 10px DM Sans, sans-serif';
-  ctx.textAlign = 'left';   ctx.fillText('0', x0, by+12);
-  ctx.textAlign = 'center'; ctx.fillText(rollWidth+'ft wide', x0+bodyW/2, by+12);
-  ctx.textAlign = 'right';  ctx.fillText(rollWidth+'ft', x0+bodyW, by+12);
-
-  if (meta) meta.textContent = 'Roll ' + L.roll.rollId + ' · ' + rollLen + 'ft total · '
-    + L.currentStart.toFixed(1) + 'ft used · test: ' + L.lengthUsed + 'ft';
-
-  // Scroll to test strip
-  wrap.scrollTop = Math.max(0, Math.round(L.currentStart * pxPerFtY) - 100);
 }
-
 /* ══════════════════════════════════════════
    CONFIRM & DEDUCT
 ══════════════════════════════════════════ */
