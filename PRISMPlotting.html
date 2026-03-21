@@ -147,12 +147,6 @@
           <button onclick="pp_clearAll()" style="padding:4px 10px;border-radius:7px;border:1.5px solid var(--p-border);background:var(--p-surface);font-size:11px;font-weight:700;cursor:pointer;color:var(--p-muted);">Clear All</button>
         </div>
 
-        <!-- Mode Toggle -->
-        <div style="display:flex;gap:6px;margin-bottom:12px;background:var(--p-bg);padding:4px;border-radius:8px;border:1px solid var(--p-border);">
-          <button id="pp-tab-new" class="p-btn" style="flex:1;font-size:11px;padding:6px;background:var(--p-surface);border:1.5px solid var(--p-teal);color:var(--p-teal);" onclick="pp_setMode('NEW')">New Plots</button>
-          <button id="pp-tab-reprint" class="p-btn" style="flex:1;font-size:11px;padding:6px;background:transparent;border:1.5px solid transparent;color:var(--p-muted);" onclick="pp_setMode('REPRINT')">Reprints</button>
-        </div>
-
         <div class="p-search-wrap" style="margin-bottom:10px;">
           <span class="icon"><svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg></span>
           <input type="text" id="pp-joSearch" class="p-input" placeholder="Search JO or customer…" oninput="pp_filterJOs()" style="font-size:12px;">
@@ -176,12 +170,6 @@
         <div id="pp-rollList" style="max-height:300px;overflow-y:auto;">
           <div class="pp-empty">Loading open rolls…</div>
         </div>
-      </div>
-
-      <!-- Damage Input (Visible only in REPRINT mode) -->
-      <div id="pp-damageInputWrap" style="display:none;margin-bottom:14px;">
-        <label style="display:block;font-size:11px;font-weight:700;color:var(--p-amber);margin-bottom:6px;">⚠ Damage Amount (feet)</label>
-        <input type="number" id="pp-damageInput" class="p-input" min="0" step="0.5" placeholder="e.g. 2.5">
       </div>
 
       <!-- Auto-Arrange button -->
@@ -298,7 +286,7 @@ function pp_toFt(value, unit) {
 var pp_allJOs   = [];   // all FOR_PLOTTING and PRINTING JOs from backend
 var pp_filtJOs  = [];   // filtered for display
 var pp_selJOs   = {};   // { joNumber: true }
-var pp_mode     = 'NEW'; // 'NEW' | 'REPRINT'
+var pp_mode     = 'NEW';
 var pp_rolls    = [];   // open rolls
 var pp_materials = [];  // all materials (for name lookup)
 var pp_selRoll  = null; // selected roll object
@@ -393,29 +381,10 @@ function pp_loadRollHistory() {
     .prism_getRollPlotHistoryMap(rollIds);
 }
 
-/* ── JO List ── */
-function pp_setMode(mode) {
-  if (pp_mode === mode) return;
-  pp_mode = mode;
-  var tabNew = document.getElementById('pp-tab-new');
-  var tabReprint = document.getElementById('pp-tab-reprint');
-  if (mode === 'NEW') {
-    tabNew.style.background = 'var(--p-surface)'; tabNew.style.borderColor = 'var(--p-teal)'; tabNew.style.color = 'var(--p-teal)';
-    tabReprint.style.background = 'transparent'; tabReprint.style.borderColor = 'transparent'; tabReprint.style.color = 'var(--p-muted)';
-  } else {
-    tabReprint.style.background = 'var(--p-amber-lt)'; tabReprint.style.borderColor = 'var(--p-amber)'; tabReprint.style.color = 'var(--p-amber-dk)';
-    tabNew.style.background = 'transparent'; tabNew.style.borderColor = 'transparent'; tabNew.style.color = 'var(--p-muted)';
-  }
-  document.getElementById('pp-damageInputWrap').style.display = (mode === 'REPRINT') ? 'block' : 'none';
-  pp_clearAll(); // resets selection and filters
-  if (mode === 'REPRINT') pp_reload();
-}
-
 function pp_filterJOs() {
   var q = (document.getElementById('pp-joSearch').value || '').trim().toLowerCase();
   pp_filtJOs = pp_allJOs.filter(function(j) {
-    if (pp_mode === 'NEW' && j.status !== 'FOR_PLOTTING') return false;
-    if (pp_mode === 'REPRINT' && (j.status !== 'PRINTING' || !j.plottedBefore)) return false;
+    if (j.status !== 'FOR_PLOTTING') return false;
     return !q || (j.joNumber + ' ' + j.customer + ' ' + (j.jobDescription || '')).toLowerCase().indexOf(q) !== -1;
   });
   pp_renderJOs();
@@ -425,7 +394,7 @@ function pp_renderJOs() {
   var el = document.getElementById('pp-joList');
   var count = document.getElementById('pp-joCount');
   if (!pp_filtJOs.length) {
-    var msg = pp_mode === 'NEW' ? 'No FOR_PLOTTING job orders found.' : 'No PRINTING job orders found.';
+    var msg = 'No FOR_PLOTTING job orders found.';
     el.innerHTML = '<div class="pp-empty"><svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>' + msg + '</div>';
     count.textContent = '';
     return;
@@ -509,20 +478,6 @@ function pp_clearAll() {
   if (dmgInput) dmgInput.value = '';
   pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
 }
-
-window.pp_selectForReprint = function(joNumber) {
-  pp_setMode('REPRINT');
-  pp_clearAll();
-  var searchInput = document.getElementById('pp-joSearch');
-  if (searchInput) searchInput.value = joNumber;
-  pp_filterJOs();
-  setTimeout(function() {
-    pp_selJOs[joNumber] = true;
-    pp_renderJOs();
-    pp_updateRollSuggestions();
-    pp_checkArrangeBtn();
-  }, 100);
-};
 
 /* ── Roll List ── */
 function pp_renderRolls() {
