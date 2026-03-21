@@ -2183,12 +2183,14 @@ function prism_getPrintQueueData() {
     // ── Build a quick lookup: joNumber → current status from JobOrders sheet ──
     const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
     const joLr = joSh.getLastRow();
-    const joStatusMap = {};
+    const joStatusMap   = {};
+    const joCustomerMap = {};
     if (joLr >= 2) {
       joSh.getRange(2, 1, joLr - 1, 13).getValues().forEach(r => {
-        const jo = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
-        const st = String(r[JO_COL.STATUS] || '').trim();
-        if (jo) joStatusMap[jo] = st;
+        const jo   = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
+        const st   = String(r[JO_COL.STATUS]    || '').trim();
+        const cust = String(r[JO_COL.CUSTOMER]  || '').trim();
+        if (jo) { joStatusMap[jo] = st; joCustomerMap[jo] = cust; }
       });
     }
 
@@ -2229,17 +2231,21 @@ function prism_getPrintQueueData() {
       // ── Route by effective status ───────────────────────────────────────────
       if (effectiveStatus === 'PRINTING') {
         const item = {
-          plotId: id,
+          plotId:     id,
           joNumbers,
           rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
+          rollWidth:  parseFloat(j.rollWidth)  || 0,
           lengthUsed: parseFloat(j.lengthUsed) || 0,
-          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          rows: j.rows || [],
-          isReprint: !!j.isReprint,
-          startAtFt: parseFloat(j.startAtFt) || 0,
-          endAtFt: parseFloat(j.endAtFt) || 0
+          date:       r[4] ? prism_fmtShort_(new Date(r[4])) : '',
+          pngUrl:     r[2] || j.plottingLink || j.pngUrl || '',
+          rows:       j.rows     || [],
+          isReprint:  !!j.isReprint,
+          startAtFt:  parseFloat(j.startAtFt) || 0,
+          endAtFt:    parseFloat(j.endAtFt)   || 0,
+          customers:  joNumbers.map(jo => {
+            const st = joStatusMap[String(jo).trim().toUpperCase()];
+            return st ? (joCustomerMap[String(jo).trim().toUpperCase()] || jo) : jo;
+          })
         };
         if (!printing || item.startAtFt > printing.startAtFt) printing = item;
 
@@ -2260,22 +2266,22 @@ function prism_getPrintQueueData() {
         });
 
       } else if (effectiveStatus === 'PLANNED') {
-        // Genuinely waiting — not yet printed
         const item = {
-          plotId: id,
+          plotId:       id,
           joNumbers,
           rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
-          lengthUsed: parseFloat(j.lengthUsed) || 0,
-          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          rows: j.rows || [],
-          isReprint: !!j.isReprint,
+          rollWidth:    parseFloat(j.rollWidth)  || 0,
+          lengthUsed:   parseFloat(j.lengthUsed) || 0,
+          date:         r[4] ? prism_fmtShort_(new Date(r[4])) : '',
+          pngUrl:       r[2] || j.plottingLink || j.pngUrl || '',
+          rows:         j.rows         || [],
+          isReprint:    !!j.isReprint,
           reprintCount: parseInt(j.reprintCount) || 0,
-          reprintOf: j.reprintOf || null
+          reprintOf:    j.reprintOf    || null,
+          customers:    joNumbers.map(jo => joCustomerMap[String(jo).trim().toUpperCase()] || jo)
         };
         if (j.isReprint) reprints.push(item);
-        else planned.push(item);
+        else             planned.push(item);
       }
     });
 
@@ -2331,7 +2337,7 @@ function prism_getPrintQueueData() {
       rollsHistory[rollId] = [...real, ...tests].sort((a, b) => a.startAtFt - b.startAtFt);
     });
 
-    return { success: true, planned, reprints, printing, rollsHistory };
+    return { success: true, planned, reprints, printing, rollsHistory, joCustomerMap };
   } catch (e) {
     return { success: false, message: e.message };
   }

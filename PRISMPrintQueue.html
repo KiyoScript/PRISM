@@ -228,7 +228,8 @@
   var pq_planned = [];   // READY_TO_PRINT (waiting)
   var pq_reprints = [];   // reprint items (waiting)
   var pq_printing = null; // currently PRINTING item (single slot)
-  var pq_rollsHistory = {};
+  var pq_rollsHistory   = {};
+var pq_joCustomerMap  = {};
   var pq_selectedLayout = null;
   var pq_damageTarget = null;
 
@@ -294,12 +295,16 @@ function pq_renderAll() {
       return;
     }
     var p = pq_printing;
-    var h = '<div class="pq-printing-card">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
-    h += '<span class="mono" style="font-weight:800;font-size:14px;color:var(--p-green);">' + pq_esc(p.rollId) + '</span>';
-    h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
-    h += '</div>';
-    h += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 6px;">Started: ' + pq_esc(p.date) + '</p>';
+    var customerLabel = (p.customers && p.customers.length)
+    ? p.customers.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ')
+    : (p.joNumbers||[]).join(', ');
+      var h = '<div class="pq-printing-card">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
+      h += '<span style="font-weight:800;font-size:15px;color:var(--p-text);">' + pq_esc(customerLabel) + '</span>';
+      h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
+      h += '</div>';
+      h += '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:6px;">' + pq_esc(p.rollId) + '</span>';
+      h += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 6px;">Started: ' + pq_esc(p.date) + '</p>';
     if (p.pngUrl) {
       h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
         + ' style="display:inline-block;font-size:11px;font-weight:700;color:var(--p-purple);'
