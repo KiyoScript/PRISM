@@ -447,8 +447,9 @@ function tp_drawHistoryMap() {
     if (e > totalPrinted) totalPrinted = e;
   });
  
-  var planLen  = parseFloat(L.lengthUsed) || 0;
-  var totalLen = totalPrinted + planLen + 2;
+  var planLen    = parseFloat(L.lengthUsed) || 0;
+  var rollOrigLen = parseFloat(L.rollOrigLen) || 0;
+  var totalLen   = Math.max(rollOrigLen, totalPrinted + planLen + 2);
  
   var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 300);
   var pxPerFt = 22;
