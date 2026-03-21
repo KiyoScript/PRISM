@@ -585,4 +585,6 @@ function tp_confirm() {
     .prism_recordTestPrint({ rollId: rid, lengthUsed: lu, notes: notes });
 }
 
+function tp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 </script>
