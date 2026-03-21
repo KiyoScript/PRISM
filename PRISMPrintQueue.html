@@ -283,7 +283,7 @@ function pq_renderAll() {
       'Roll: <strong class="mono" style="color:var(--p-green);">'
       + pq_esc(pq_printing.rollId) + '</strong>'
       + ' &mdash; Currently printing. Mark done or declare damage when finished.';
-    pq_renderMap(pq_printing);
+    setTimeout(function() { pq_renderMap(pq_printing); }, 80);
   }
 }
 
@@ -530,12 +530,14 @@ function pq_renderAll() {
     var planLen = parseFloat(plan.lengthUsed) || 0;
     var totalLen = totalPrinted + planLen + 2;
 
-    var wrapW = Math.max(wrap.clientWidth - 48, 300);
+    var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 500);
     var pxPerFt = 22;
     var axisW = 36;
     var bodyW = wrapW - axisW;
     var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
 
+    canvas.style.width  = '100%';
+  canvas.style.height = 'auto';
     canvas.width = wrapW;
     canvas.height = canvasH;
 
