@@ -555,12 +555,34 @@
     });
 
     var planLen = parseFloat(plan.lengthUsed) || 0;
+
+    // Try to find original roll length from history segment metadata
     var rollOrigLen = parseFloat(plan.rollOrigLen || plan.originalLength) || 0;
-    if (!rollOrigLen) rollOrigLen = totalPrinted + planLen + 10;
+    if (!rollOrigLen) {
+      history.forEach(function(s) {
+        var orig = parseFloat(s.rollOriginalLength || s.origLen || s.rollLength) || 0;
+        if (orig > rollOrigLen) rollOrigLen = orig;
+        // Also infer from startAtFt + remaining if available
+        var inferred = parseFloat(s.rollRemainingBefore || 0) + parseFloat(s.startAtFt || 0);
+        if (inferred > rollOrigLen) rollOrigLen = inferred;
+      });
+    }
+    // Last resort: look up from the rolls list in pq_rollsHistory keys
+    // by checking if any segment has an endAtFt close to a known standard length
+    if (!rollOrigLen || rollOrigLen < totalPrinted + planLen) {
+      // Standard roll lengths: 164, 100, 150, 200
+      var standards = [164, 200, 150, 100, 300];
+      for (var si = 0; si < standards.length; si++) {
+        if (standards[si] >= totalPrinted + planLen) {
+          rollOrigLen = standards[si];
+          break;
+        }
+      }
+    }
     var totalLen = Math.max(rollOrigLen, totalPrinted + planLen + 2);
 
     var wrapW = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 500);
-    var pxPerFt = 10;
+    var pxPerFt = 15;
     var axisW = 36;
     var bodyW = wrapW - axisW;
     var topPad = 20;
