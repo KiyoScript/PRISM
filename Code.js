@@ -582,20 +582,21 @@ function prism_recordUsage(payload) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
+
 function prism_recordTestPrint(payload) {
   try {
     const user = prism_getUserInfo_();
     if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
       return { success: false, message: 'Digital Operators only.' };
-
+ 
     if (!payload.rollId)
       return { success: false, message: 'Roll ID required.' };
     if (!payload.lengthUsed || payload.lengthUsed <= 0)
       return { success: false, message: 'Length used must be > 0.' };
-
+ 
     // ── Fetch roll row ──
-    const rollSh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
-    const rollLr = rollSh.getLastRow();
+    const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollLr   = rollSh.getLastRow();
     const rollData = rollSh.getRange(2, 1, rollLr - 1, 9).getValues();
     let rollIdx = -1, rollRow = null;
     rollData.forEach((r, i) => {
@@ -607,57 +608,92 @@ function prism_recordTestPrint(payload) {
       return { success: false, message: `Roll "${payload.rollId}" not found.` };
     if (String(rollRow[ROLL_COL.STATUS]).trim().toUpperCase() !== ROLL_STATUS.OPEN)
       return { success: false, message: 'Roll must be OPEN.' };
-
+ 
     // ── Length validation ──
-    const remaining = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
+    const remaining  = parseFloat(rollRow[ROLL_COL.REMAINING_LENGTH]) || 0;
     const lengthUsed = parseFloat(payload.lengthUsed);
     if (lengthUsed > remaining)
       return { success: false, message: `Length used (${lengthUsed} ft) exceeds remaining (${remaining} ft).` };
-
+ 
     // ── Deduct from roll ──
-    const settings = prism_getSettings_();
-    const newRemaining = Math.max(0, remaining - lengthUsed);
+    const settings      = prism_getSettings_();
+    const newRemaining  = Math.max(0, remaining - lengthUsed);
     const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
       ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
-
+    const rollWidth     = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
+ 
     rollSh.getRange(rollIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
     rollSh.getRange(rollIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
-
+ 
+    const today   = new Date();
+ 
     // ── Write to LFP_Usage with TEST-PRINT marker ──
-    // notes stored in the PlottingLink column (col G / index 6)
-    const today = new Date();
     const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const rollWidth = parseFloat(rollRow[ROLL_COL.WIDTH]) || 0;
     usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
       'TEST-' + today.getTime(),
-      TEST_PRINT_MARKER,           // JO_Number = 'TEST-PRINT'
+      TEST_PRINT_MARKER,
       payload.rollId,
-      rollWidth,                   // widthUsed = full roll width
+      rollWidth,
       lengthUsed,
       user.email,
-      payload.notes || '',         // notes in PlottingLink column
+      payload.notes || '',
       today
     ]]);
-
+ 
+    // ── Write to Plotting_Log so test print appears on the roll map ──
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotLr   = plotSh.getLastRow();
+    const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
+ 
+    // Find the furthest end position on this roll across all non-voided entries
+    let maxEnd = 0;
+    plotData.forEach(r => {
+      try {
+        const j = JSON.parse(String(r[5] || '{}'));
+        if (j.rollId === payload.rollId && !j.isVoid) {
+          const e = parseFloat(j.endAtFt) || 0;
+          if (e > maxEnd) maxEnd = e;
+        }
+      } catch(e) {}
+    });
+ 
+    const testPlotId  = 'TEST-PLT-' + today.getTime();
+    const testPlotObj = {
+      type:        'TEST_PRINT',
+      status:      'PRINTED',
+      isTestPrint: true,
+      rollId:      payload.rollId,
+      rollWidth:   rollWidth,
+      startAtFt:   maxEnd,
+      endAtFt:     maxEnd + lengthUsed,
+      lengthUsed:  lengthUsed,
+      joNumbers:   [],
+      notes:       payload.notes || '',
+      createdBy:   user.email
+    };
+    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
+      testPlotId, 'TEST_PRINT', '', user.email, today, JSON.stringify(testPlotObj)
+    ]]);
+ 
     prism_audit_('PRISM_TEST_PRINT', {
-      rollId: payload.rollId,
+      rollId:       payload.rollId,
       lengthUsed,
       newRemaining,
       newRollStatus,
-      notes: payload.notes || '',
-      by: user.email
+      notes:        payload.notes || '',
+      by:           user.email
     });
-
+ 
     return {
-      success: true,
-      message: `Test print recorded. ${payload.rollId}: ${newRemaining} ft remaining.`
-        + (newRollStatus === ROLL_STATUS.CONSUMED ? ' Roll CONSUMED.' : ''),
+      success:      true,
+      message:      `Test print recorded. ${payload.rollId}: ${newRemaining} ft remaining.`
+                    + (newRollStatus === ROLL_STATUS.CONSUMED ? ' Roll CONSUMED.' : ''),
       newRemaining,
       newRollStatus
     };
-
-  } catch (e) { return { success: false, message: e.message }; }
-}
+ 
+  } catch(e) { return { success: false, message: e.message }; }
+} 
 
 function prism_getTestPrintLog() {
   try {
@@ -2187,16 +2223,15 @@ function prism_markPrintingComplete(payload) {
   }
 }
 
-
 function prism_getPrintQueueData() {
   try {
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotLr   = plotSh.getLastRow();
     const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
-
-    // ── Build a quick lookup: joNumber → current status from JobOrders sheet ──
-    const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
-    const joLr = joSh.getLastRow();
+ 
+    // ── Build JO status + customer lookup ──
+    const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr   = joSh.getLastRow();
     const joStatusMap   = {};
     const joCustomerMap = {};
     if (joLr >= 2) {
@@ -2207,42 +2242,38 @@ function prism_getPrintQueueData() {
         if (jo) { joStatusMap[jo] = st; joCustomerMap[jo] = cust; }
       });
     }
-
-    const planned = [];
-    const reprints = [];
-    let printing = null;
+ 
+    const planned      = [];
+    const reprints     = [];
+    let   printing     = null;
     const rollsHistory = {};
-
+ 
     const addHistory = (rollId, entry) => {
       if (!rollsHistory[rollId]) rollsHistory[rollId] = [];
       rollsHistory[rollId].push(entry);
     };
-
+ 
     plotData.forEach(r => {
       const id = String(r[0]).trim();
       let j = {};
-      try { j = JSON.parse(String(r[5] || '{}')); } catch (e) { }
+      try { j = JSON.parse(String(r[5] || '{}')); } catch(e){}
       if (!j.rollId) return;
       if (j.isVoid || j.status === 'VOIDED') return;
-
-      const rollId = j.rollId;
+ 
+      const rollId    = j.rollId;
       const joNumbers = Array.isArray(j.joNumbers) ? j.joNumbers : [];
-
-      // ── Determine effective status ──────────────────────────────────────────
-      // Legacy entries may still say PLANNED even though the job already printed.
-      // If ALL the JOs in this plot are PRINTING or COMPLETED in the JobOrders
-      // sheet, treat this plot as PRINTED history (backwards-compatible fix).
+ 
+      // ── Effective status: fix legacy PLANNED entries whose JOs are done ──
       let effectiveStatus = j.status || 'PLANNED';
-
-      if (effectiveStatus === 'PLANNED' && joNumbers.length > 0) {
+      if (effectiveStatus === 'PLANNED' && !j.isReprint && joNumbers.length > 0) {
         const allDone = joNumbers.every(jo => {
           const st = joStatusMap[String(jo).trim().toUpperCase()] || '';
           return st === JO_STATUS.PRINTING || st === JO_STATUS.COMPLETED;
         });
         if (allDone) effectiveStatus = 'PRINTED';
       }
-
-      // ── Route by effective status ───────────────────────────────────────────
+ 
+      // ── Route ──
       if (effectiveStatus === 'PRINTING') {
         const item = {
           plotId:     id,
@@ -2252,34 +2283,31 @@ function prism_getPrintQueueData() {
           lengthUsed: parseFloat(j.lengthUsed) || 0,
           date:       r[4] ? prism_fmtShort_(new Date(r[4])) : '',
           pngUrl:     r[2] || j.plottingLink || j.pngUrl || '',
-          rows:       j.rows     || [],
+          rows:       j.rows    || [],
           isReprint:  !!j.isReprint,
           startAtFt:  parseFloat(j.startAtFt) || 0,
           endAtFt:    parseFloat(j.endAtFt)   || 0,
-          customers:  joNumbers.map(jo => {
-            const st = joStatusMap[String(jo).trim().toUpperCase()];
-            return st ? (joCustomerMap[String(jo).trim().toUpperCase()] || jo) : jo;
-          })
+          customers:  joNumbers.map(jo => joCustomerMap[String(jo).trim().toUpperCase()] || jo)
         };
         if (!printing || item.startAtFt > printing.startAtFt) printing = item;
-
-      } else if (effectiveStatus === 'PRINTED' || j.isDamage) {
+ 
+      } else if (effectiveStatus === 'PRINTED' || j.isDamage || j.isTestPrint) {
         addHistory(rollId, {
-          plotId:         id,
+          plotId:      id,
           rollId,
-          rollWidth:      parseFloat(j.rollWidth)  || 0,
-          startAtFt:      parseFloat(j.startAtFt)  || 0,
-          endAtFt:        parseFloat(j.endAtFt)     || 0,
-          lengthUsed:     parseFloat(j.lengthUsed)  || 0,
+          rollWidth:   parseFloat(j.rollWidth)  || 0,
+          startAtFt:   parseFloat(j.startAtFt)  || 0,
+          endAtFt:     parseFloat(j.endAtFt)    || 0,
+          lengthUsed:  parseFloat(j.lengthUsed) || 0,
           joNumbers,
-          isDamage:       !!j.isDamage,
-          isVoid:         false,
-          rows:           j.rows || [],
-          pngUrl:         r[2] || j.plottingLink || j.pngUrl || '',
-          isTestPrint:    false,
-          dateMs:         r[4] ? new Date(r[4]).getTime() : 0
+          isDamage:    !!j.isDamage,
+          isVoid:      false,
+          isTestPrint: !!j.isTestPrint,
+          rows:        j.rows || [],
+          pngUrl:      r[2] || j.plottingLink || j.pngUrl || '',
+          dateMs:      r[4] ? new Date(r[4]).getTime() : 0
         });
-
+ 
       } else if (effectiveStatus === 'PLANNED') {
         const item = {
           plotId:       id,
@@ -2299,66 +2327,14 @@ function prism_getPrintQueueData() {
         else             planned.push(item);
       }
     });
-
-    // ── Add Test Print entries from LFP_Usage into rollsHistory ───────────────
-    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const usageLr = usageSh.getLastRow();
-    if (usageLr >= 2) {
-      usageSh.getRange(2, 1, usageLr - 1, 8).getValues().forEach(r => {
-        const joNum = String(r[USAGE_COL.JO_NUMBER] || '').trim();
-        if (joNum !== TEST_PRINT_MARKER) return;
-        const rollId = String(r[USAGE_COL.ROLL_ID] || '').trim();
-        const len = parseFloat(r[USAGE_COL.LENGTH_USED]) || 0;
-        if (!rollId || len <= 0) return;
-
-        // Find where this test print sits on the roll by scanning existing history
-        // Test prints consume from the current remaining length — we approximate
-        // their position by stacking them after PRINTED segments.
-        // Since we don't store startAtFt for test prints, we mark them specially
-        // and let the renderer stack them in order of date.
-        const dateRaw = r[USAGE_COL.DATE_USED];
-        addHistory(rollId, {
-          plotId: 'TEST-' + (dateRaw ? new Date(dateRaw).getTime() : Math.random()),
-          rollId,
-          rollWidth: parseFloat(r[USAGE_COL.WIDTH_USED]) || 0,
-          startAtFt: -1,   // signals "stack after last known segment"
-          endAtFt: -1,
-          lengthUsed: len,
-          joNumbers: [],
-          isDamage: false,
-          isVoid: false,
-          rows: [],
-          pngUrl: '',
-          isTestPrint: true,
-          operator: String(r[USAGE_COL.OPERATOR] || '').trim(),
-          dateMs: dateRaw ? new Date(dateRaw).getTime() : 0
-        });
-      });
-    }
-
+ 
+    // ── Sort each roll's history by startAtFt ──
     Object.keys(rollsHistory).forEach(rollId => {
-      const segs  = rollsHistory[rollId];
-      const real  = segs.filter(s => !s.isTestPrint).sort((a,b) => a.startAtFt - b.startAtFt);
-      const tests = segs.filter(s => s.isTestPrint).sort((a,b) => a.dateMs - b.dateMs);
-      let cursor = 0;
-      const allByDate = [
-        ...real.map(s => ({ ...s, _isReal: true })),
-        ...tests.map(s => ({ ...s, _isReal: false }))
-      ].sort((a, b) => (a.dateMs || 0) - (b.dateMs || 0));
-
-      allByDate.forEach(seg => {
-        if (!seg._isReal) {
-          seg.startAtFt = cursor;
-          seg.endAtFt   = cursor + seg.lengthUsed;
-        }
-        cursor = Math.max(cursor, seg.endAtFt || 0);
-      });
-
-      rollsHistory[rollId] = allByDate.sort((a,b) => a.startAtFt - b.startAtFt);
+      rollsHistory[rollId].sort((a, b) => a.startAtFt - b.startAtFt);
     });
-
+ 
     return { success: true, planned, reprints, printing, rollsHistory, joCustomerMap };
-  } catch (e) {
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
