@@ -1,4 +1,4 @@
-<!-- PRISMJobOrders.html v5 — Full redesign: viewport-fit, 4 report tabs -->
+<!-- PRISMJobOrders.html v6 -->
 <style>
   #tab-job-orders, #tab-job-orders * { color: var(--p-text); }
 
@@ -6,19 +6,18 @@
     display: flex;
     flex-direction: column;
     height: calc(100vh - 52px);
-    padding: 0;
     overflow: hidden;
   }
 
   #jo-topbar {
     flex-shrink: 0;
-    padding: 16px 20px 0;
-    background: var(--p-bg);
+    padding: 14px 20px 0;
   }
 
-  #jo-tabs-row {
+  #jo-tabsearch-row {
     flex-shrink: 0;
     display: flex;
+    align-items: center;
     gap: 0;
     padding: 0 20px;
     border-bottom: 1px solid var(--p-border);
@@ -27,7 +26,7 @@
   }
 
   .jo-tab {
-    padding: 10px 18px;
+    padding: 10px 16px;
     font-size: 12px;
     font-weight: 700;
     border: none;
@@ -36,25 +35,34 @@
     color: var(--p-muted);
     border-bottom: 2px solid transparent;
     white-space: nowrap;
+    flex-shrink: 0;
     transition: all .15s;
   }
   .jo-tab.active { color: var(--p-green); border-bottom-color: var(--p-green); }
   .jo-tab:hover:not(.active) { color: var(--p-text); }
+
+  #jo-tabsearch-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 6px 0;
+    flex-shrink: 0;
+  }
 
   #jo-content {
     flex: 1;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 12px 20px 16px;
+    padding: 10px 20px 14px;
   }
 
-  #jo-filter-row {
+  #jo-chips-row {
     flex-shrink: 0;
     display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 10px;
+    gap: 6px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
   }
 
@@ -71,32 +79,24 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding-top: 10px;
+    padding-top: 8px;
     flex-wrap: wrap;
   }
 
   .jo-tbl { width: 100%; border-collapse: collapse; }
   .jo-tbl thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
+    position: sticky; top: 0; z-index: 2;
     padding: 9px 12px;
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    color: var(--p-muted);
-    background: var(--p-bg);
+    font-size: 11px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .07em;
+    color: var(--p-muted); background: var(--p-bg);
     border-bottom: 1px solid var(--p-border);
-    text-align: left;
-    white-space: nowrap;
+    text-align: left; white-space: nowrap;
   }
   .jo-tbl tbody tr:hover td { background: #f6fbf8; }
   .jo-tbl tbody td {
-    padding: 9px 12px;
-    font-size: 12px;
-    border-bottom: 1px solid #f0f4f2;
-    vertical-align: middle;
+    padding: 9px 12px; font-size: 12px;
+    border-bottom: 1px solid #f0f4f2; vertical-align: middle;
   }
   .jo-tbl tbody tr:last-child td { border-bottom: none; }
 
@@ -108,32 +108,30 @@
   .st-PRINTING       { background: #dcfce7; color: #166534; }
   .st-COMPLETED      { background: #f1f5f9; color: #64748b; }
 
-  .jo-action-btn {
-    padding: 3px 9px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    white-space: nowrap;
+  .jo-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11px; font-weight: 700;
+    border: none; cursor: pointer; white-space: nowrap;
   }
   .jo-btn-plot      { background: #f3e8ff; color: #6d28d9; }
   .jo-btn-plot:hover { background: #e9d5ff; }
+  .jo-btn-view      { background: #e0f2fe; color: #075985; }
+  .jo-btn-view:hover { background: #bae6fd; }
   .jo-btn-printing  { background: #dcfce7; color: #166534; }
   .jo-btn-completed { background: #f1f5f9; color: #374151; }
-  .jo-btn-view      { background: #e0f2fe; color: #075985; }
 
-  .dmg-row { background: rgba(239,68,68,0.04); }
-  .dmg-row:hover td { background: rgba(239,68,68,0.08) !important; }
-  .test-row { background: rgba(245,158,11,0.04); }
-  .test-row:hover td { background: rgba(245,158,11,0.08) !important; }
+  .dmg-row td { background: rgba(239,68,68,0.03); }
+  .dmg-row:hover td { background: rgba(239,68,68,0.07) !important; }
+  .test-row td { background: rgba(245,158,11,0.03); }
+  .test-row:hover td { background: rgba(245,158,11,0.07) !important; }
 </style>
 
 <div id="jo-shell">
 
   <!-- Top bar -->
   <div id="jo-topbar">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
       <div>
         <h2 style="font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0 0 2px;">Job Orders</h2>
         <p style="font-size:12px;color:var(--p-muted);margin:0;">LFP job orders — synced from Job Web App</p>
@@ -148,51 +146,40 @@
     </div>
   </div>
 
-  <!-- Tab row -->
-  <div id="jo-tabs-row">
+  <!-- Tabs + search on same row -->
+  <div id="jo-tabsearch-row">
     <button class="jo-tab active" onclick="jo_setTab('all',this)">All Job Orders</button>
     <button class="jo-tab" onclick="jo_setTab('completed',this)">Completed</button>
     <button class="jo-tab" onclick="jo_setTab('damage',this)">Damage Report</button>
     <button class="jo-tab" onclick="jo_setTab('testprint',this)">Test Print Report</button>
-  </div>
 
-  <!-- Content area -->
-  <div id="jo-content">
-
-    <!-- Filter row -->
-    <div id="jo-filter-row">
-      <div class="p-search-wrap" style="flex:1;min-width:180px;">
+    <div id="jo-tabsearch-right">
+      <!-- chips — only on all tab -->
+      <div id="jo-status-chips" style="display:flex;gap:5px;">
+        <button class="fchip" onclick="jo_setStatus('ALL',this)">All</button>
+        <button class="fchip active" onclick="jo_setStatus('FOR_PLOTTING',this)">For Plotting</button>
+      </div>
+      <!-- search -->
+      <div class="p-search-wrap" style="width:220px;">
         <span class="icon">
-          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
           </svg>
         </span>
         <input type="text" id="jo-search" class="p-input" placeholder="Search…" oninput="jo_apply()" style="font-size:12px;">
       </div>
-
-      <!-- Status chips — only shown on All tab -->
-      <div id="jo-status-chips" style="display:flex;gap:6px;overflow-x:auto;">
-        <button class="fchip" onclick="jo_setStatus('ALL',this)">All</button>
-        <button class="fchip active" onclick="jo_setStatus('FOR_PLOTTING',this)">For Plotting</button>
-        <button class="fchip" onclick="jo_setStatus('READY_TO_PRINT',this)">Ready to Print</button>
-      </div>
-
-      <p id="jo-count" style="font-size:12px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;flex-shrink:0;"></p>
+      <p id="jo-count" style="font-size:11px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;"></p>
     </div>
+  </div>
 
-    <!-- Scrollable table -->
+  <!-- Content -->
+  <div id="jo-content">
     <div id="jo-table-wrap">
       <table class="jo-tbl">
         <thead id="jo-thead">
           <tr>
-            <th>JO Number</th>
-            <th>Customer</th>
-            <th>Description</th>
-            <th>Size</th>
-            <th>Status</th>
-            <th>Roll</th>
-            <th>Date</th>
-            <th>Action</th>
+            <th>JO</th><th>Customer</th><th>Description</th>
+            <th>Size</th><th>Status</th><th>Roll</th><th>Date</th><th>Action</th>
           </tr>
         </thead>
         <tbody id="jo-tbody">
@@ -200,26 +187,22 @@
         </tbody>
       </table>
     </div>
-
-    <!-- Pagination -->
     <div id="jo-pagination-row"></div>
-
   </div>
+
 </div>
 
 <script>
-var jo_tab        = 'all';
+var jo_tab          = 'all';
 var jo_statusFilter = 'FOR_PLOTTING';
-var jo_page       = 1;
-var jo_pageSize   = 30;
-var jo_all        = [];
-var jo_damages    = [];
-var jo_testPrints = [];
-var jo_filtered   = [];
+var jo_page         = 1;
+var jo_pageSize     = 30;
+var jo_all          = [];
+var jo_damages      = [];
+var jo_testPrints   = [];
+var jo_filtered     = [];
 
-function prism_init_job_orders() {
-  jo_loadData();
-}
+function prism_init_job_orders() { jo_loadData(); }
 
 function jo_reload() {
   prism_setReloading('jo-reloadBtn', true);
@@ -240,7 +223,7 @@ function jo_loadData() {
     })
     .withFailureHandler(function() { prism_setReloading('jo-reloadBtn', false); })
     .prism_getJobOrdersPublic();
- 
+
   google.script.run
     .withSuccessHandler(function(r) {
       prism_setReloading('jo-reloadBtn', false);
@@ -253,16 +236,17 @@ function jo_loadData() {
     .withFailureHandler(function() { prism_setReloading('jo-reloadBtn', false); })
     .prism_getJobOrderReports();
 }
- 
+
 function jo_setTab(tab, el) {
   jo_tab  = tab;
   jo_page = 1;
   document.querySelectorAll('.jo-tab').forEach(function(b){ b.classList.remove('active'); });
   el.classList.add('active');
-  document.getElementById('jo-status-chips').style.display = (tab === 'all') ? 'flex' : 'none';
+  var isAll = tab === 'all';
+  document.getElementById('jo-status-chips').style.display = isAll ? 'flex' : 'none';
   document.getElementById('jo-search').placeholder =
-    tab === 'damage'    ? 'Search roll ID or operator…' :
-    tab === 'testprint' ? 'Search roll ID or operator…' : 'Search JO or customer…';
+    tab === 'damage'    ? 'Search roll or customer…' :
+    tab === 'testprint' ? 'Search roll or operator…' : 'Search JO or customer…';
   jo_updateHeaders();
   jo_apply();
 }
@@ -270,11 +254,11 @@ function jo_setTab(tab, el) {
 function jo_updateHeaders() {
   var th = document.getElementById('jo-thead');
   if (jo_tab === 'damage') {
-    th.innerHTML = '<tr><th>Roll ID</th><th>JOs</th><th>Customer</th><th>Damage Length</th><th>Operator</th><th>Reason</th><th>Date</th></tr>';
+    th.innerHTML = '<tr><th>Roll</th><th>JO</th><th>Customer</th><th>Damage</th><th>Operator</th><th>Reason</th><th>Date</th></tr>';
   } else if (jo_tab === 'testprint') {
-    th.innerHTML = '<tr><th>Roll ID</th><th>Length Used</th><th>Operator</th><th>Notes</th><th>Date</th></tr>';
+    th.innerHTML = '<tr><th>Roll</th><th>Length</th><th>Operator</th><th>Notes</th><th>Date</th></tr>';
   } else {
-    th.innerHTML = '<tr><th>JO Number</th><th>Customer</th><th>Description</th><th>Size</th><th>Status</th><th>Roll</th><th>Date</th><th>Action</th></tr>';
+    th.innerHTML = '<tr><th>JO</th><th>Customer</th><th>Description</th><th>Size</th><th>Status</th><th>Roll</th><th>Date</th><th>Action</th></tr>';
   }
 }
 
@@ -291,11 +275,11 @@ function jo_apply() {
 
   if (jo_tab === 'damage') {
     jo_filtered = jo_damages.filter(function(r){
-      return !q || (r.rollId + ' ' + r.operator + ' ' + (r.plottingLink||'')).toLowerCase().indexOf(q) !== -1;
+      return !q || (r.rollId + ' ' + r.customer + ' ' + (r.joNumbers||[]).join(' ')).toLowerCase().indexOf(q) !== -1;
     });
   } else if (jo_tab === 'testprint') {
     jo_filtered = jo_testPrints.filter(function(r){
-      return !q || (r.rollId + ' ' + r.operator + ' ' + (r.plottingLink||'')).toLowerCase().indexOf(q) !== -1;
+      return !q || (r.rollId + ' ' + r.operator).toLowerCase().indexOf(q) !== -1;
     });
   } else {
     var src = jo_tab === 'completed'
@@ -316,41 +300,43 @@ function jo_apply() {
 function jo_renderPage() {
   var start = (jo_page - 1) * jo_pageSize;
   var slice = jo_filtered.slice(start, start + jo_pageSize);
-  var tb = document.getElementById('jo-tbody');
+  var tb    = document.getElementById('jo-tbody');
 
   if (!slice.length) {
-    var cols = (jo_tab === 'damage') ? 6 : (jo_tab === 'testprint') ? 5 : 8;
+    var cols = jo_tab === 'damage' ? 7 : jo_tab === 'testprint' ? 5 : 8;
     tb.innerHTML = '<tr><td colspan="' + cols + '" style="text-align:center;padding:40px;color:var(--p-faint);">No records found.</td></tr>';
     return;
   }
 
   var h = '';
+
   if (jo_tab === 'damage') {
     slice.forEach(function(r) {
-      var joTag = (r.joNumbers && r.joNumbers.length)
-        ? r.joNumbers.map(function(j){ return '<span class="jo-num" style="margin-right:3px;">'+jo_esc(j)+'</span>'; }).join('')
-        : '<span style="color:var(--p-faint);">—</span>';
-      var custTag = jo_esc(r.customer || '—');
+      var joTags = (r.joNumbers && r.joNumbers.length)
+        ? r.joNumbers.map(function(j){ return '<span class="jo-num">'+jo_esc(j)+'</span> '; }).join('')
+        : '—';
       h += '<tr class="dmg-row">'
         + '<td><span class="jo-roll">' + jo_esc(r.rollId) + '</span></td>'
-        + '<td>' + joTag + '</td>'
-        + '<td style="font-size:12px;font-weight:600;">' + custTag + '</td>'
+        + '<td>' + joTags + '</td>'
+        + '<td style="font-weight:600;">' + jo_esc(r.customer||'—') + '</td>'
         + '<td><span style="font-weight:700;color:#dc2626;">' + (r.lengthUsed||0) + ' ft</span></td>'
         + '<td style="font-size:11px;">' + jo_esc(r.operator) + '</td>'
         + '<td style="font-size:11px;color:var(--p-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + jo_esc(r.reason||'—') + '</td>'
         + '<td style="font-size:11px;color:var(--p-faint);white-space:nowrap;">' + jo_esc(r.date) + '</td>'
         + '</tr>';
     });
+
   } else if (jo_tab === 'testprint') {
     slice.forEach(function(r) {
       h += '<tr class="test-row">'
         + '<td><span class="jo-roll">' + jo_esc(r.rollId) + '</span></td>'
         + '<td><span style="font-weight:700;color:var(--p-amber);">' + (r.lengthUsed||0) + ' ft</span></td>'
         + '<td style="font-size:11px;">' + jo_esc(r.operator) + '</td>'
-        + '<td style="font-size:11px;color:var(--p-muted);max-width:220px;">' + jo_esc(r.plottingLink||'—') + '</td>'
-        + '<td style="font-size:11px;color:var(--p-faint);">' + jo_esc(r.dateUsed) + '</td>'
+        + '<td style="font-size:11px;color:var(--p-muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + jo_esc(r.plottingLink||'—') + '</td>'
+        + '<td style="font-size:11px;color:var(--p-faint);white-space:nowrap;">' + jo_esc(r.dateUsed) + '</td>'
         + '</tr>';
     });
+
   } else {
     slice.forEach(function(r) {
       var sc   = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
@@ -360,31 +346,43 @@ function jo_renderPage() {
           + (r.unit && r.unit.toLowerCase() !== 'ft' && r.widthFt ? ' (' + r.widthFt + ' × ' + r.heightFt + ' ft)' : '')
         : '—';
 
-      var action = '';
-      if (r.status === 'FOR_PLOTTING') {
-        action = '<button class="jo-action-btn jo-btn-plot" onclick="switchTab(\'plotting\')">✦ Plot</button>';
-      } else if (r.status === 'READY_TO_PRINT') {
-        action = '<button class="jo-action-btn jo-btn-printing" onclick="jo_updateStatus(\'' + jo_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
-      } else if (r.status === 'PRINTING') {
-        action = '<button class="jo-action-btn jo-btn-completed" onclick="jo_updateStatus(\'' + jo_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Done</button>';
-      }
+      var actions = '';
       if (r.plottingImageUrl) {
-        action = '<button class="jo-action-btn jo-btn-view" onclick="window.open(\'' + jo_esc(r.plottingImageUrl) + '\',\'_blank\')" style="margin-right:4px;">🖼</button>' + action;
+        actions += '<button class="jo-btn jo-btn-view" onclick="window.open(\'' + jo_esc(r.plottingImageUrl) + '\',\'_blank\')" title="View image" style="margin-right:4px;">'
+          + '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>'
+          + ' View</button>';
+      }
+      if (r.status === 'FOR_PLOTTING') {
+        actions += '<button class="jo-btn jo-btn-plot" onclick="jo_goPlot(\'' + jo_esc(r.joNumber) + '\')">✦ Plot</button>';
+      } else if (r.status === 'READY_TO_PRINT') {
+        actions += '<button class="jo-btn jo-btn-printing" onclick="jo_updateStatus(\'' + jo_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
+      } else if (r.status === 'PRINTING') {
+        actions += '<button class="jo-btn jo-btn-completed" onclick="jo_updateStatus(\'' + jo_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Done</button>';
       }
 
       h += '<tr>'
         + '<td><span class="jo-num">' + jo_esc(r.joNumber) + '</span></td>'
         + '<td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + jo_esc(r.customer) + '</td>'
-        + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--p-muted);font-size:11px;">' + jo_esc(r.jobDescription||'—') + '</td>'
+        + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--p-muted);font-size:11px;">' + jo_esc(r.jobDescription||'—') + '</td>'
         + '<td style="font-size:11px;white-space:nowrap;">' + size + '</td>'
         + '<td><span class="p-badge ' + sc + '">' + jo_esc(r.status||'FOR_PLOTTING') + '</span></td>'
         + '<td>' + jo_renderRolls(r.rollId) + '</td>'
         + '<td style="font-size:11px;color:var(--p-faint);white-space:nowrap;">' + jo_esc(r.dateCreated) + '</td>'
-        + '<td style="white-space:nowrap;">' + action + '</td>'
+        + '<td style="white-space:nowrap;">' + actions + '</td>'
         + '</tr>';
     });
   }
+
   tb.innerHTML = h;
+}
+
+function jo_goPlot(joNumber) {
+  if (typeof switchTab === 'function') switchTab('plotting');
+  setTimeout(function() {
+    if (typeof window.pp_selectJobForPlotting === 'function') {
+      window.pp_selectJobForPlotting(joNumber);
+    }
+  }, 300);
 }
 
 function jo_renderRolls(rollId) {
@@ -396,8 +394,7 @@ function jo_renderRolls(rollId) {
 }
 
 function jo_updateStatus(joNumber, newStatus, btn) {
-  btn.disabled = true;
-  btn.textContent = '…';
+  btn.disabled = true; btn.textContent = '…';
   google.script.run
     .withSuccessHandler(function(r) {
       if (r.success) {
@@ -407,7 +404,7 @@ function jo_updateStatus(joNumber, newStatus, btn) {
         jo_apply();
         prism_toast('success', joNumber + ' → ' + newStatus.replace(/_/g,' '));
       } else {
-        btn.disabled = false; btn.textContent = newStatus === 'PRINTING' ? '▶ Mark Printing' : '✓ Done';
+        btn.disabled = false; btn.textContent = '…';
         prism_toast('error', r.message);
       }
     })
@@ -423,12 +420,12 @@ function jo_renderPagination() {
   var el    = document.getElementById('jo-pagination-row');
   if (total <= 1) { el.innerHTML = ''; return; }
   var h = '';
-  h += '<button class="p-page-btn" onclick="jo_goPage(jo_page-1)" ' + (jo_page<=1?'disabled':'') + '>‹</button>';
-  var s = Math.max(1, jo_page-2), e = Math.min(total, jo_page+2);
-  if (s>1) h += '<button class="p-page-btn" onclick="jo_goPage(1)">1</button>' + (s>2?'<span style="padding:0 4px;color:var(--p-faint);">…</span>':'');
+  h += '<button class="p-page-btn" onclick="jo_goPage(jo_page-1)" '+(jo_page<=1?'disabled':'')+'>‹</button>';
+  var s = Math.max(1,jo_page-2), e = Math.min(total,jo_page+2);
+  if (s>1) h += '<button class="p-page-btn" onclick="jo_goPage(1)">1</button>'+(s>2?'<span style="padding:0 4px;color:var(--p-faint);">…</span>':'');
   for (var i=s;i<=e;i++) h += '<button class="p-page-btn'+(i===jo_page?' active':'')+'" onclick="jo_goPage('+i+')">'+i+'</button>';
-  if (e<total) h += (e<total-1?'<span style="padding:0 4px;color:var(--p-faint);">…</span>':'') + '<button class="p-page-btn" onclick="jo_goPage('+total+')">'+total+'</button>';
-  h += '<button class="p-page-btn" onclick="jo_goPage(jo_page+1)" ' + (jo_page>=total?'disabled':'') + '>›</button>';
+  if (e<total) h += (e<total-1?'<span style="padding:0 4px;color:var(--p-faint);">…</span>':'')+'<button class="p-page-btn" onclick="jo_goPage('+total+')">'+total+'</button>';
+  h += '<button class="p-page-btn" onclick="jo_goPage(jo_page+1)" '+(jo_page>=total?'disabled':'')+'>›</button>';
   h += '<span style="font-size:12px;color:var(--p-faint);font-weight:600;margin-left:4px;">Page ' + jo_page + ' of ' + total + '</span>';
   el.innerHTML = h;
 }
