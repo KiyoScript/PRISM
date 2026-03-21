@@ -210,6 +210,12 @@
       Layout: <strong id="pq-dmgPlotId" style="color:var(--p-text);"></strong>
     </p>
     <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">
+      Damage Length (ft) <span style="color:var(--p-red);">*</span>
+    </label>
+    <input id="pq-dmgLength" type="number" step="0.1" min="0.1" placeholder="e.g. 2.5"
+      style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;
+             padding:9px 12px;font-size:13px;background:var(--p-bg);color:var(--p-text);margin-bottom:12px;">
+    <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">
       Reason / Remarks
     </label>
     <textarea id="pq-dmgRemarks" rows="3" placeholder="e.g. Ink bleed, media jam, colour shift..." style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;
@@ -472,37 +478,41 @@ function pq_renderAll() {
     pq_damageTarget = pq_printing;
     document.getElementById('pq-dmgPlotId').textContent =
       plotId + ' (' + (pq_damageTarget.joNumbers || []).join(', ') + ')';
-    document.getElementById('pq-dmgRemarks').value = '';
+    document.getElementById('pq-dmgLength').value  = '';
+  document.getElementById('pq-dmgRemarks').value = '';
     document.getElementById('pq-damageModal').style.display = 'flex';
   }
   function pq_closeDamageModal() {
     document.getElementById('pq-damageModal').style.display = 'none';
     pq_damageTarget = null;
   }
-  function pq_submitDamage() {
-    if (!pq_damageTarget) return;
-    var remarks = document.getElementById('pq-dmgRemarks').value.trim();
-    var btn = document.getElementById('pq-dmgSubmitBtn');
-    btn.disabled = true; btn.textContent = 'Submitting...';
-    google.script.run
-      .withSuccessHandler(function (r) {
-        btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
-        pq_closeDamageModal();
-        if (r.success) { prism_toast('success', r.message); pq_load(); }
-        else prism_toast('error', r.message);
-      })
-      .withFailureHandler(function (e) {
-        btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
-        prism_toast('error', e.message);
-      })
-      .prism_declareDamageForPlot({
-        plotId: pq_damageTarget.plotId,
-        rollId: pq_damageTarget.rollId,
-        joNumbers: pq_damageTarget.joNumbers || [],
-        remarks: remarks
-      });
-  }
 
+  function pq_submitDamage() {
+  if (!pq_damageTarget) return;
+  var len     = parseFloat(document.getElementById('pq-dmgLength').value);
+  var remarks = document.getElementById('pq-dmgRemarks').value.trim();
+  if (!len || len <= 0) { prism_toast('error', 'Please enter a valid damage length.'); return; }
+  var btn = document.getElementById('pq-dmgSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting...';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
+      pq_closeDamageModal();
+      if (r.success) { prism_toast('success', r.message); pq_load(); }
+      else             prism_toast('error', r.message);
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
+      prism_toast('error', e.message);
+    })
+    .prism_declareDamageForPlot({
+      plotId:    pq_damageTarget.plotId,
+      rollId:    pq_damageTarget.rollId,
+      joNumbers: pq_damageTarget.joNumbers || [],
+      lengthUsed: len,
+      remarks:   remarks
+    });
+  }
   // ── Image modal ──────────────────────────────────────────────────────────────
   function pq_openImageModal(url) {
     document.getElementById('pq-imageModalImg').src = url;
