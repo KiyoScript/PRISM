@@ -311,14 +311,14 @@ function pq_renderAll() {
     h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
     h += '</div>';
     h += '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:4px;">' + pq_esc(p.rollId) + '</span>';
-    h += '<p style="font-size:11px;color:var(--p-muted);margin:0 0 8px;">Started: ' + pq_esc(p.date) + '</p>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-bottom:8px;">';
+    h += '<p style="font-size:11px;color:var(--p-muted);margin:0 0 6px;">Started: ' + pq_esc(p.date) + '</p>';
     if (p.pngUrl) {
       h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
         + ' style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--p-purple);'
         + 'text-decoration:none;background:var(--p-purple-lt);padding:4px 9px;border-radius:6px;'
-        + 'border:1px solid var(--p-purple-bd);">View Image &#8599;</a>';
+        + 'border:1px solid var(--p-purple-bd);margin-bottom:8px;">View Image &#8599;</a>';
     }
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-bottom:8px;">';
     h += '<button onclick="pq_openDoneModal()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;'
       + 'color:#166534;background:#dcfce7;padding:4px 9px;border-radius:6px;'
       + 'border:1px solid #86efac;cursor:pointer;">&#10003; Mark Done</button>';
