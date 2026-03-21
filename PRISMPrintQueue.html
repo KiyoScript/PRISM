@@ -500,6 +500,7 @@
   }
 
   // ── Full Roll Map renderer ───────────────────────────────────────────────────
+
   function pq_renderMap(plan) {
     var canvas = document.getElementById('pq-historyCanvas');
     var wrap = document.getElementById('pq-historyWrap');
@@ -507,10 +508,17 @@
 
     var rollId = plan.rollId;
     var rollWidth = parseFloat(plan.rollWidth) || 4.5;
-    var history = (pq_rollsHistory[rollId] || []).slice().sort(function (a, b) { return a.startAtFt - b.startAtFt; });
+    var history = (pq_rollsHistory[rollId] || []).slice().sort(function (a, b) {
+      return (parseFloat(a.startAtFt) || 0) - (parseFloat(b.startAtFt) || 0);
+    });
 
+    // Find total printed length
     var totalPrinted = 0;
-    history.forEach(function (s) { var e = parseFloat(s.endAtFt) || 0; if (e > totalPrinted) totalPrinted = e; });
+    history.forEach(function (s) {
+      var e = parseFloat(s.endAtFt) || 0;
+      if (e > totalPrinted) totalPrinted = e;
+    });
+
     var planLen = parseFloat(plan.lengthUsed) || 0;
     var totalLen = totalPrinted + planLen + 2;
 
@@ -526,75 +534,106 @@
     var ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // background
+    // Background
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(axisW, 0, bodyW, canvasH);
 
-    // axis ticks
+    // Axis ticks + grid lines
     ctx.fillStyle = '#94a3b8';
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.textAlign = 'right';
-    for (var ft = 0; ft <= totalLen; ft += 5) {
+    for (var ft = 0; ft <= Math.ceil(totalLen); ft += 5) {
       var ty = Math.round(ft * pxPerFt);
+      ctx.fillStyle = '#94a3b8';
       ctx.fillText(ft, axisW - 4, ty + 4);
-      ctx.strokeStyle = 'rgba(148,163,184,0.3)';
+      ctx.strokeStyle = 'rgba(148,163,184,0.25)';
       ctx.lineWidth = 0.5;
       ctx.beginPath(); ctx.moveTo(axisW, ty); ctx.lineTo(axisW + bodyW, ty); ctx.stroke();
     }
 
-    // history segments
+    // ── History segments ────────────────────────────────────────────────────────
     history.forEach(function (seg) {
       var sy = Math.round((parseFloat(seg.startAtFt) || 0) * pxPerFt);
       var ey = Math.round((parseFloat(seg.endAtFt) || 0) * pxPerFt);
       var sh = Math.max(2, ey - sy);
 
-      if (seg.isDamage || seg.isVoid) {
-        // striped amber = void/damage
+      if (seg.isTestPrint) {
+        // ── Test print — solid amber ──────────────────────────────────────────
+        ctx.fillStyle = 'rgba(245,158,11,0.30)';
+        ctx.fillRect(axisW, sy, bodyW, sh);
+        ctx.strokeStyle = 'rgba(245,158,11,0.7)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(axisW, sy, bodyW, sh);
+        if (sh > 12) {
+          ctx.fillStyle = '#92400e';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('TEST PRINT (' + seg.lengthUsed.toFixed(1) + 'ft)', axisW + 6, sy + 14);
+        }
+
+      } else if (seg.isDamage || seg.isVoid) {
+        // ── Damage / void — striped amber ─────────────────────────────────────
         ctx.save();
         ctx.beginPath(); ctx.rect(axisW, sy, bodyW, sh); ctx.clip();
-        ctx.fillStyle = 'rgba(245,158,11,0.18)';
+        ctx.fillStyle = 'rgba(245,158,11,0.15)';
         ctx.fillRect(axisW, sy, bodyW, sh);
-        ctx.strokeStyle = 'rgba(245,158,11,0.5)'; ctx.lineWidth = 0.5;
+        ctx.strokeStyle = 'rgba(245,158,11,0.45)'; ctx.lineWidth = 0.5;
         for (var xi = -sh; xi < bodyW + sh; xi += 10) {
           ctx.beginPath(); ctx.moveTo(axisW + xi, sy); ctx.lineTo(axisW + xi + sh, sy + sh); ctx.stroke();
         }
         ctx.restore();
-        ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillText('WASTE (' + ((parseFloat(seg.endAtFt) || 0) - (parseFloat(seg.startAtFt) || 0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
+        ctx.strokeStyle = 'rgba(245,158,11,0.6)'; ctx.lineWidth = 1;
+        ctx.strokeRect(axisW, sy, bodyW, sh);
+        if (sh > 12) {
+          ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText('WASTE (' + ((parseFloat(seg.endAtFt) || 0) - (parseFloat(seg.startAtFt) || 0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
+        }
+
       } else {
+        // ── Normal printed segment ────────────────────────────────────────────
         ctx.fillStyle = 'rgba(148,163,184,0.35)';
         ctx.fillRect(axisW, sy, bodyW, sh);
         ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.5;
         ctx.strokeRect(axisW, sy, bodyW, sh);
-        var label = 'prev · ' + (seg.joNumbers || []).join(', ');
-        if (sh > 14) {
+        var joLabel = (seg.joNumbers || []).join(', ');
+        if (sh > 12 && joLabel) {
           ctx.fillStyle = '#475569'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
-          ctx.fillText(label, axisW + 6, sy + 14);
+          ctx.fillText('prev · ' + joLabel, axisW + 6, sy + 14);
+          // JO number centered
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+          if (sh > 24) ctx.fillText(joLabel, axisW + bodyW * 0.5, sy + sh / 2 + 4);
         }
         pq_drawSegmentRows(ctx, seg, axisW, sy, bodyW, rollWidth, pxPerFt);
       }
     });
 
-    // current plan overlay
+    // ── Current plan overlay ───────────────────────────────────────────────────
     var planY = Math.round(totalPrinted * pxPerFt);
     var planH = Math.max(4, Math.round(planLen * pxPerFt));
-    ctx.fillStyle = 'rgba(99,102,241,0.25)';
-    ctx.fillRect(axisW, planY, bodyW, planH);
-    ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 2;
-    ctx.strokeRect(axisW, planY, bodyW, planH);
-    ctx.fillStyle = '#4338ca'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText('CURRENT PLAN', axisW + 6, planY + 14);
-    if (planLen > 0) {
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-      ctx.fillText((plan.joNumbers || []).join(', '), axisW + bodyW / 2, planY + planH / 2 + 4);
-    }
 
-    // continuation label
-    var contY = Math.round((totalPrinted + planLen) * pxPerFt);
+    // Green border for plan
+    ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 2;
+    ctx.strokeRect(axisW, planY, bodyW, planH);
+
+    // Purple fill for JO area
+    var contW = Math.round(bodyW * 0.35);
+    var joW = bodyW - contW;
+    ctx.fillStyle = 'rgba(99,102,241,0.25)';
+    ctx.fillRect(axisW, planY, joW, planH);
+
+    // Continuation area
     ctx.fillStyle = 'rgba(245,158,11,0.15)';
-    ctx.fillRect(axisW + Math.round(bodyW * 0.65), planY, Math.round(bodyW * 0.35), planH);
+    ctx.fillRect(axisW + joW, planY, contW, planH);
+
+    // Labels
+    if (planH > 14) {
+      ctx.fillStyle = '#3730a3'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('CURRENT PLAN', axisW + 6, planY + 14);
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      if (planH > 26) ctx.fillText((plan.joNumbers || []).join(', '), axisW + joW / 2, planY + planH / 2 + 4);
+    }
     ctx.fillStyle = '#b45309'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText('Continuation @ ' + (totalPrinted + planLen).toFixed(1) + 'ft', axisW + bodyW - 4, planY + 14);
+    ctx.fillText('Continuation @ ' + (totalPrinted + planLen).toFixed(1) + 'ft', axisW + bodyW - 6, planY + 14);
   }
 
   function pq_drawSegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPerFtY) {

@@ -2173,48 +2173,67 @@ function prism_markPrintingComplete(payload) {
   }
 }
 
+
 function prism_getPrintQueueData() {
   try {
     const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
     const plotLr = plotSh.getLastRow();
     const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
 
+    // ── Build a quick lookup: joNumber → current status from JobOrders sheet ──
+    const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr = joSh.getLastRow();
+    const joStatusMap = {};
+    if (joLr >= 2) {
+      joSh.getRange(2, 1, joLr - 1, 13).getValues().forEach(r => {
+        const jo = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
+        const st = String(r[JO_COL.STATUS] || '').trim();
+        if (jo) joStatusMap[jo] = st;
+      });
+    }
+
     const planned = [];
     const reprints = [];
     let printing = null;
     const rollsHistory = {};
 
+    const addHistory = (rollId, entry) => {
+      if (!rollsHistory[rollId]) rollsHistory[rollId] = [];
+      rollsHistory[rollId].push(entry);
+    };
+
     plotData.forEach(r => {
       const id = String(r[0]).trim();
       let j = {};
       try { j = JSON.parse(String(r[5] || '{}')); } catch (e) { }
-      if (!j.rollId || j.isVoid) return;
+      if (!j.rollId) return;
+      if (j.isVoid || j.status === 'VOIDED') return;
 
-      if (j.status === 'PLANNED') {
+      const rollId = j.rollId;
+      const joNumbers = Array.isArray(j.joNumbers) ? j.joNumbers : [];
+
+      // ── Determine effective status ──────────────────────────────────────────
+      // Legacy entries may still say PLANNED even though the job already printed.
+      // If ALL the JOs in this plot are PRINTING or COMPLETED in the JobOrders
+      // sheet, treat this plot as PRINTED history (backwards-compatible fix).
+      let effectiveStatus = j.status || 'PLANNED';
+
+      if (effectiveStatus === 'PLANNED' && joNumbers.length > 0) {
+        const allDone = joNumbers.every(jo => {
+          const st = joStatusMap[String(jo).trim().toUpperCase()] || '';
+          return st === JO_STATUS.PRINTING || st === JO_STATUS.COMPLETED;
+        });
+        if (allDone) effectiveStatus = 'PRINTED';
+      }
+
+      // ── Route by effective status ───────────────────────────────────────────
+      if (effectiveStatus === 'PRINTING') {
         const item = {
           plotId: id,
-          joNumbers: j.joNumbers || [],
-          rollId: j.rollId,
+          joNumbers,
+          rollId,
           rollWidth: parseFloat(j.rollWidth) || 0,
-          lengthUsed: j.lengthUsed || 0,
-          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          rows: j.rows || [],
-          isReprint: !!j.isReprint,
-          reprintCount: parseInt(j.reprintCount) || 0,
-          reprintOf: j.reprintOf || null
-        };
-        if (j.isReprint) reprints.push(item);
-        else planned.push(item);
-
-      } else if (j.status === 'PRINTING') {
-        // Only keep the most recent PRINTING entry (there should only ever be one)
-        const item = {
-          plotId: id,
-          joNumbers: j.joNumbers || [],
-          rollId: j.rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
-          lengthUsed: j.lengthUsed || 0,
+          lengthUsed: parseFloat(j.lengthUsed) || 0,
           date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
           pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
           rows: j.rows || [],
@@ -2224,24 +2243,92 @@ function prism_getPrintQueueData() {
         };
         if (!printing || item.startAtFt > printing.startAtFt) printing = item;
 
-      } else if (j.status === 'PRINTED' || j.isDamage) {
-        if (j.isVoid) return;
-        if (!rollsHistory[j.rollId]) rollsHistory[j.rollId] = [];
-        rollsHistory[j.rollId].push({
+      } else if (effectiveStatus === 'PRINTED' || j.isDamage) {
+        addHistory(rollId, {
           plotId: id,
-          rollId: j.rollId,
+          rollId,
           rollWidth: parseFloat(j.rollWidth) || 0,
-          startAtFt: j.startAtFt || 0,
-          endAtFt: j.endAtFt || 0,
-          lengthUsed: j.lengthUsed || 0,
-          joNumbers: j.joNumbers || [],
+          startAtFt: parseFloat(j.startAtFt) || 0,
+          endAtFt: parseFloat(j.endAtFt) || 0,
+          lengthUsed: parseFloat(j.lengthUsed) || 0,
+          joNumbers,
           isDamage: !!j.isDamage,
-          isVoid: !!j.isVoid,
-          damageCustomer: j.damageCustomer || (j.joNumbers || []).join(', '),
+          isVoid: false,
           rows: j.rows || [],
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || ''
+          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
+          isTestPrint: false
         });
+
+      } else if (effectiveStatus === 'PLANNED') {
+        // Genuinely waiting — not yet printed
+        const item = {
+          plotId: id,
+          joNumbers,
+          rollId,
+          rollWidth: parseFloat(j.rollWidth) || 0,
+          lengthUsed: parseFloat(j.lengthUsed) || 0,
+          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
+          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
+          rows: j.rows || [],
+          isReprint: !!j.isReprint,
+          reprintCount: parseInt(j.reprintCount) || 0,
+          reprintOf: j.reprintOf || null
+        };
+        if (j.isReprint) reprints.push(item);
+        else planned.push(item);
       }
+    });
+
+    // ── Add Test Print entries from LFP_Usage into rollsHistory ───────────────
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const usageLr = usageSh.getLastRow();
+    if (usageLr >= 2) {
+      usageSh.getRange(2, 1, usageLr - 1, 8).getValues().forEach(r => {
+        const joNum = String(r[USAGE_COL.JO_NUMBER] || '').trim();
+        if (joNum !== TEST_PRINT_MARKER) return;
+        const rollId = String(r[USAGE_COL.ROLL_ID] || '').trim();
+        const len = parseFloat(r[USAGE_COL.LENGTH_USED]) || 0;
+        if (!rollId || len <= 0) return;
+
+        // Find where this test print sits on the roll by scanning existing history
+        // Test prints consume from the current remaining length — we approximate
+        // their position by stacking them after PRINTED segments.
+        // Since we don't store startAtFt for test prints, we mark them specially
+        // and let the renderer stack them in order of date.
+        const dateRaw = r[USAGE_COL.DATE_USED];
+        addHistory(rollId, {
+          plotId: 'TEST-' + (dateRaw ? new Date(dateRaw).getTime() : Math.random()),
+          rollId,
+          rollWidth: parseFloat(r[USAGE_COL.WIDTH_USED]) || 0,
+          startAtFt: -1,   // signals "stack after last known segment"
+          endAtFt: -1,
+          lengthUsed: len,
+          joNumbers: [],
+          isDamage: false,
+          isVoid: false,
+          rows: [],
+          pngUrl: '',
+          isTestPrint: true,
+          operator: String(r[USAGE_COL.OPERATOR] || '').trim(),
+          dateMs: dateRaw ? new Date(dateRaw).getTime() : 0
+        });
+      });
+    }
+
+    // ── Resolve test print positions ───────────────────────────────────────────
+    // For each roll, sort all non-test-print segments by startAtFt, then stack
+    // test prints chronologically after the last known endAtFt.
+    Object.keys(rollsHistory).forEach(rollId => {
+      const segs = rollsHistory[rollId];
+      const real = segs.filter(s => !s.isTestPrint).sort((a, b) => a.startAtFt - b.startAtFt);
+      const tests = segs.filter(s => s.isTestPrint).sort((a, b) => a.dateMs - b.dateMs);
+      let cursor = real.length ? Math.max(...real.map(s => s.endAtFt)) : 0;
+      tests.forEach(t => {
+        t.startAtFt = cursor;
+        t.endAtFt = cursor + t.lengthUsed;
+        cursor = t.endAtFt;
+      });
+      rollsHistory[rollId] = [...real, ...tests].sort((a, b) => a.startAtFt - b.startAtFt);
     });
 
     return { success: true, planned, reprints, printing, rollsHistory };
