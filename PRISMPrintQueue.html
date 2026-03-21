@@ -685,7 +685,18 @@ function pq_renderAll() {
         ctx.strokeRect(pxc + 1, pyc + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
         if (pw > 34 && p_rh > 14) {
           ctx.fillStyle = '#334155'; ctx.font = 'bold 9px JetBrains Mono,monospace'; ctx.textAlign = 'center';
-          ctx.fillText(String(p.jo || p.joNumber || '').slice(0, 14), pxc + pw / 2, pyc + p_rh / 2 + 3);
+          var joLabel = String(p.jo || p.joNumber || '').slice(0, 14);
+          var dimLabel = (p.w || 0) + '×' + (p.h || 0) + 'ft';
+          if (p_rh > 28) {
+            // Enough room: JO on top line, dimensions below
+            ctx.fillText(joLabel, pxc + pw / 2, pyc + p_rh / 2 - 2);
+            ctx.font = '8px DM Sans,sans-serif';
+            ctx.fillStyle = '#64748b';
+            ctx.fillText(dimLabel, pxc + pw / 2, pyc + p_rh / 2 + 10);
+          } else {
+            // Tight: combine on one line
+            ctx.fillText(joLabel + ' ' + dimLabel, pxc + pw / 2, pyc + p_rh / 2 + 3);
+          }
         }
         if (p.dx === undefined) cx += pw;
       });
