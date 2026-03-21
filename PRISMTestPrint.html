@@ -151,26 +151,27 @@
       <!-- Results (hidden until preview) -->
       <div id="tp-results" style="display:none;">
 
-        <!-- Confirm panel — full width on top -->
-        <div id="tp-confirmPanel" style="display:none;margin-bottom:12px;">
-          <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">Confirm Test Print</p>
-          <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll and record it on the roll map.</p>
-          <button id="tp-confirmBtn" onclick="tp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
-            ✓ Confirm & Deduct from Roll
-          </button>
-        </div>
-
         <!-- Side by side: Visual left | Roll map right -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;">
 
-          <!-- Visual preview -->
-          <div class="p-card" style="padding:14px;overflow:hidden;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-              <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Visual Preview</p>
-              <span id="tp-canvasLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-amber);"></span>
+          <!-- Visual preview + confirm below -->
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="p-card" style="padding:14px;overflow:hidden;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Visual Preview</p>
+                <span id="tp-canvasLabel" style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--p-amber);"></span>
+              </div>
+              <div id="tp-canvasWrap">
+                <canvas id="tp-canvas"></canvas>
+              </div>
             </div>
-            <div id="tp-canvasWrap">
-              <canvas id="tp-canvas"></canvas>
+
+            <div id="tp-confirmPanel" style="display:none;">
+              <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">Confirm Test Print</p>
+              <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll and record it on the roll map.</p>
+              <button id="tp-confirmBtn" onclick="tp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
+                ✓ Confirm & Deduct from Roll
+              </button>
             </div>
           </div>
 
