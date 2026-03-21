@@ -464,7 +464,7 @@ function tp_drawHistoryMap() {
  
   var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 300);
   var wrapH   = Math.max(wrap.clientHeight || 500, 400);
-  var pxPerFt = 4; // fit roll into visible area
+  var pxPerFt = 10; // fit roll into visible area
   var axisW   = 36;
   var bodyW   = wrapW - axisW;
   var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
