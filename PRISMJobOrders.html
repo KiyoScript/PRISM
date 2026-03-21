@@ -1,36 +1,144 @@
-<!-- PRISMJobOrders.html v4 — Read-only view (JOs come from Job Web App) + Reload -->
+<!-- PRISMJobOrders.html v5 — Full redesign: viewport-fit, 4 report tabs -->
 <style>
   #tab-job-orders, #tab-job-orders * { color: var(--p-text); }
-  .jo3-row:hover td { background: #f6fbf8 !important; }
-  .jo3-roll { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--p-purple); }
+
+  #jo-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 52px);
+    padding: 0;
+    overflow: hidden;
+  }
+
+  #jo-topbar {
+    flex-shrink: 0;
+    padding: 16px 20px 0;
+    background: var(--p-bg);
+  }
+
+  #jo-tabs-row {
+    flex-shrink: 0;
+    display: flex;
+    gap: 0;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--p-border);
+    background: var(--p-bg);
+    overflow-x: auto;
+  }
+
+  .jo-tab {
+    padding: 10px 18px;
+    font-size: 12px;
+    font-weight: 700;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--p-muted);
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  .jo-tab.active { color: var(--p-green); border-bottom-color: var(--p-green); }
+  .jo-tab:hover:not(.active) { color: var(--p-text); }
+
+  #jo-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 20px 16px;
+  }
+
+  #jo-filter-row {
+    flex-shrink: 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  #jo-table-wrap {
+    flex: 1;
+    overflow: auto;
+    border-radius: 12px;
+    border: 1px solid var(--p-border);
+    background: var(--p-surface);
+  }
+
+  #jo-pagination-row {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 10px;
+    flex-wrap: wrap;
+  }
+
+  .jo-tbl { width: 100%; border-collapse: collapse; }
+  .jo-tbl thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 9px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--p-muted);
+    background: var(--p-bg);
+    border-bottom: 1px solid var(--p-border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  .jo-tbl tbody tr:hover td { background: #f6fbf8; }
+  .jo-tbl tbody td {
+    padding: 9px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid #f0f4f2;
+    vertical-align: middle;
+  }
+  .jo-tbl tbody tr:last-child td { border-bottom: none; }
+
+  .jo-num  { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--p-indigo); font-size: 12px; }
+  .jo-roll { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--p-purple); font-size: 11px; }
+
+  .st-FOR_PLOTTING   { background: #fef9c3; color: #854d0e; }
   .st-READY_TO_PRINT { background: #dbeafe; color: #1e40af; }
   .st-PRINTING       { background: #dcfce7; color: #166534; }
   .st-COMPLETED      { background: #f1f5f9; color: #64748b; }
-  .st-FOR_PLOTTING   { background: #fef9c3; color: #854d0e; }
-  .jo3-action-btn { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; border: none; cursor: pointer; white-space: nowrap; }
-  .jo3-btn-printing  { background: #dcfce7; color: #166534; }
-  .jo3-btn-completed { background: #f1f5f9; color: #374151; }
-  .jo3-btn-printing:hover  { background: #bbf7d0; }
-  .jo3-btn-completed:hover { background: #e5e7eb; }
-  .jo3-btn-plot { background: #f3e8ff; color: #6d28d9; }
-  .jo3-btn-plot:hover { background: #e9d5ff; }
-  .jo3-btn-view { background: #e0f2fe; color: #075985; }
-  .jo3-btn-view:hover { background: #bae6fd; }
-  .jo3-btn-amber { background: #fef3c7; color: #b45309; }
-  .jo3-btn-amber:hover { background: #fde68a; }
+
+  .jo-action-btn {
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .jo-btn-plot      { background: #f3e8ff; color: #6d28d9; }
+  .jo-btn-plot:hover { background: #e9d5ff; }
+  .jo-btn-printing  { background: #dcfce7; color: #166534; }
+  .jo-btn-completed { background: #f1f5f9; color: #374151; }
+  .jo-btn-view      { background: #e0f2fe; color: #075985; }
+
+  .dmg-row { background: rgba(239,68,68,0.04); }
+  .dmg-row:hover td { background: rgba(239,68,68,0.08) !important; }
+  .test-row { background: rgba(245,158,11,0.04); }
+  .test-row:hover td { background: rgba(245,158,11,0.08) !important; }
 </style>
 
-<div style="padding:20px 20px 40px;">
+<div id="jo-shell">
 
-  <!-- Page header -->
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
-    <div>
-      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Job Orders</h2>
-      <p style="font-size:13px;color:var(--p-muted);margin:0;">LFP job orders — auto-synced from Job Web App</p>
-    </div>
-    <div style="display:flex; gap:8px;">
-
-      <button id="jo3-reloadBtn" class="p-btn-reload" onclick="jo3_reload()">
+  <!-- Top bar -->
+  <div id="jo-topbar">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+      <div>
+        <h2 style="font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0 0 2px;">Job Orders</h2>
+        <p style="font-size:12px;color:var(--p-muted);margin:0;">LFP job orders — synced from Job Web App</p>
+      </div>
+      <button id="jo-reloadBtn" class="p-btn-reload" onclick="jo_reload()">
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -40,337 +148,299 @@
     </div>
   </div>
 
-  <!-- Info banner -->
-  <div class="p-alert p-alert-info" style="margin-bottom:16px;">
-    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px;">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    Job Orders are created in the Job Web App and automatically synced here. To add a new JO, submit from the Job Order System.
+  <!-- Tab row -->
+  <div id="jo-tabs-row">
+    <button class="jo-tab active" onclick="jo_setTab('all',this)">All Job Orders</button>
+    <button class="jo-tab" onclick="jo_setTab('completed',this)">Completed</button>
+    <button class="jo-tab" onclick="jo_setTab('damage',this)">Damage Report</button>
+    <button class="jo-tab" onclick="jo_setTab('testprint',this)">Test Print Report</button>
   </div>
 
-  <!-- Search + filter row -->
-  <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;align-items:center;">
-    <div class="p-search-wrap" style="flex:1;min-width:200px;">
-      <span class="icon">
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-        </svg>
-      </span>
-      <input type="text" id="jo3-search" class="p-input" placeholder="Search JO number or customer…" oninput="jo3_apply()">
+  <!-- Content area -->
+  <div id="jo-content">
+
+    <!-- Filter row -->
+    <div id="jo-filter-row">
+      <div class="p-search-wrap" style="flex:1;min-width:180px;">
+        <span class="icon">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+          </svg>
+        </span>
+        <input type="text" id="jo-search" class="p-input" placeholder="Search…" oninput="jo_apply()" style="font-size:12px;">
+      </div>
+
+      <!-- Status chips — only shown on All tab -->
+      <div id="jo-status-chips" style="display:flex;gap:6px;overflow-x:auto;">
+        <button class="fchip active" onclick="jo_setStatus('ALL',this)">All</button>
+        <button class="fchip" onclick="jo_setStatus('FOR_PLOTTING',this)">For Plotting</button>
+        <button class="fchip" onclick="jo_setStatus('READY_TO_PRINT',this)">Ready to Print</button>
+        <button class="fchip" onclick="jo_setStatus('PRINTING',this)">Printing</button>
+        <button class="fchip" onclick="jo_setStatus('COMPLETED',this)">Completed</button>
+      </div>
+
+      <p id="jo-count" style="font-size:12px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;flex-shrink:0;"></p>
     </div>
-    <p id="jo3-count" style="font-size:12px;color:var(--p-faint);font-weight:600;white-space:nowrap;margin:0;"></p>
-  </div>
 
-  <!-- Status filter chips -->
-  <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px;">
-    <button class="fchip active" onclick="jo3_setStatus('ALL',this)">All</button>
-    <button class="fchip" onclick="jo3_setStatus('FOR_PLOTTING',this)">For Plotting</button>
-    <button class="fchip" onclick="jo3_setStatus('READY_TO_PRINT',this)">Ready to Print</button>
-    <button class="fchip" onclick="jo3_setStatus('PRINTING',this)">Printing</button>
-    <button class="fchip" onclick="jo3_setStatus('COMPLETED',this)">Completed</button>
-  </div>
-
-  <!-- Desktop table -->
-  <div id="jo3-tableWrap" class="p-card" style="display:none;overflow:hidden;">
-    <div style="overflow-x:auto;">
-      <table class="p-table" style="min-width:700px;">
-        <thead>
+    <!-- Scrollable table -->
+    <div id="jo-table-wrap">
+      <table class="jo-tbl">
+        <thead id="jo-thead">
           <tr>
             <th>JO Number</th>
             <th>Customer</th>
             <th>Description</th>
-            <th>Category</th>
             <th>Size</th>
             <th>Status</th>
-            <th>Roll ID</th>
+            <th>Roll</th>
             <th>Date</th>
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="jo3-tbody">
+        <tbody id="jo-tbody">
           <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--p-faint);">Loading…</td></tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination -->
+    <div id="jo-pagination-row"></div>
+
   </div>
-
-  <!-- Mobile cards -->
-  <div id="jo3-cards" style="display:none;" class="space-y-3"></div>
-
-  <!-- Pagination -->
-  <div id="jo3-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
-
 </div>
 
-
-
 <script>
-var jo3_all = [], jo3_statusFilter = 'ALL';
-var jo3_page = 1, jo3_pageSize = 20;
-var jo3_filtered = [];
+var jo_tab        = 'all';
+var jo_statusFilter = 'ALL';
+var jo_page       = 1;
+var jo_pageSize   = 30;
+var jo_all        = [];
+var jo_damages    = [];
+var jo_testPrints = [];
+var jo_filtered   = [];
 
 function prism_init_job_orders() {
-  jo3_initLayout();
-  jo3_loadData();
+  jo_loadData();
 }
 
-function jo3_reload() {
-  prism_setReloading('jo3-reloadBtn', true);
-  jo3_loadData();
+function jo_reload() {
+  prism_setReloading('jo-reloadBtn', true);
+  jo_loadData();
 }
 
-function jo3_loadData() {
+function jo_loadData() {
+  prism_setReloading('jo-reloadBtn', true);
   google.script.run
     .withSuccessHandler(function(r) {
-      prism_setReloading('jo3-reloadBtn', false);
       if (r && r.success) {
-        jo3_all = (r.data || []).sort(function(a, b) {
+        jo_all = (r.data || []).sort(function(a,b){
           return new Date(b.dateCreated) - new Date(a.dateCreated);
         });
-        jo3_page = 1;
-        jo3_apply();
-      } else {
-        jo3_error((r && r.message) || 'Failed to load.');
+      }
+      jo_page = 1;
+      jo_apply();
+    })
+    .withFailureHandler(function() { prism_setReloading('jo-reloadBtn', false); })
+    .prism_getJobOrdersPublic();
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      prism_setReloading('jo-reloadBtn', false);
+      if (r && r.success) {
+        var all = r.data || [];
+        jo_damages    = all.filter(function(u){ return u.joNumber === 'DAMAGE'; });
+        jo_testPrints = all.filter(function(u){ return u.joNumber === 'TEST-PRINT'; });
+        if (jo_tab === 'damage' || jo_tab === 'testprint') jo_apply();
       }
     })
-    .withFailureHandler(function(e) {
-      prism_setReloading('jo3-reloadBtn', false);
-      jo3_error(e.message);
-    })
-    .prism_getJobOrdersPublic();
+    .withFailureHandler(function() { prism_setReloading('jo-reloadBtn', false); })
+    .prism_getUsageLog();
 }
 
-function jo3_initLayout() {
-  var mob = window.innerWidth < 640;
-  document.getElementById('jo3-tableWrap').style.display = mob ? 'none' : 'block';
-  document.getElementById('jo3-cards').style.display     = mob ? 'block' : 'none';
-}
-window.addEventListener('resize', jo3_initLayout);
-
-function jo3_setStatus(s, el) {
-  jo3_statusFilter = s;
-  document.querySelectorAll('#tab-job-orders .fchip').forEach(function(c) { c.classList.remove('active'); });
+function jo_setTab(tab, el) {
+  jo_tab  = tab;
+  jo_page = 1;
+  document.querySelectorAll('.jo-tab').forEach(function(b){ b.classList.remove('active'); });
   el.classList.add('active');
-  jo3_page = 1;
-  jo3_apply();
+  document.getElementById('jo-status-chips').style.display = (tab === 'all') ? 'flex' : 'none';
+  document.getElementById('jo-search').placeholder =
+    tab === 'damage'    ? 'Search roll ID or operator…' :
+    tab === 'testprint' ? 'Search roll ID or operator…' : 'Search JO or customer…';
+  jo_updateHeaders();
+  jo_apply();
 }
 
-function jo3_apply() {
-  var q = (document.getElementById('jo3-search').value || '').trim().toLowerCase();
-  jo3_filtered = jo3_all.filter(function(r) {
-    if (jo3_statusFilter !== 'ALL' && r.status !== jo3_statusFilter) return false;
-    if (q && (r.joNumber + ' ' + r.customer + ' ' + (r.jobDescription || '')).toLowerCase().indexOf(q) === -1) return false;
-    return true;
-  });
-
-  jo3_filtered.sort(function(a, b) {
-    if (jo3_statusFilter === 'READY_TO_PRINT' || jo3_statusFilter === 'PRINTING') {
-      // Ascending (First plotted = First in list)
-      var tA = a.plotDateMs || new Date(a.dateCreated).getTime();
-      var tB = b.plotDateMs || new Date(b.dateCreated).getTime();
-      return tA - tB;
-    }
-    // Descending for ALL, FOR_PLOTTING, COMPLETED
-    return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
-  });
-
-  document.getElementById('jo3-count').textContent = jo3_filtered.length + ' order' + (jo3_filtered.length !== 1 ? 's' : '');
-  jo3_renderPage();
-  jo3_renderPagination();
-}
-
-function jo3_renderPage() {
-  var start = (jo3_page - 1) * jo3_pageSize;
-  var slice = jo3_filtered.slice(start, start + jo3_pageSize);
-  jo3_renderTable(slice);
-  jo3_renderCards(slice);
-}
-
-function jo3_renderPagination() {
-  var total = Math.ceil(jo3_filtered.length / jo3_pageSize);
-  var el = document.getElementById('jo3-pagination');
-  if (total <= 1) { el.innerHTML = ''; return; }
-  var h = '';
-  h += '<button class="p-page-btn" onclick="jo3_goPage(jo3_page-1)" ' + (jo3_page <= 1 ? 'disabled' : '') + '>‹</button>';
-  var start = Math.max(1, jo3_page - 2), end = Math.min(total, jo3_page + 2);
-  if (start > 1) h += '<button class="p-page-btn" onclick="jo3_goPage(1)">1</button>' + (start > 2 ? '<span style="padding:0 4px;color:var(--p-faint);">…</span>' : '');
-  for (var i = start; i <= end; i++) {
-    h += '<button class="p-page-btn' + (i === jo3_page ? ' active' : '') + '" onclick="jo3_goPage(' + i + ')">' + i + '</button>';
+function jo_updateHeaders() {
+  var th = document.getElementById('jo-thead');
+  if (jo_tab === 'damage') {
+    th.innerHTML = '<tr><th>Roll ID</th><th>JOs</th><th>Damage Length</th><th>Operator</th><th>Reason</th><th>Date</th></tr>';
+  } else if (jo_tab === 'testprint') {
+    th.innerHTML = '<tr><th>Roll ID</th><th>Length Used</th><th>Operator</th><th>Notes</th><th>Date</th></tr>';
+  } else {
+    th.innerHTML = '<tr><th>JO Number</th><th>Customer</th><th>Description</th><th>Size</th><th>Status</th><th>Roll</th><th>Date</th><th>Action</th></tr>';
   }
-  if (end < total) h += (end < total - 1 ? '<span style="padding:0 4px;color:var(--p-faint);">…</span>' : '') + '<button class="p-page-btn" onclick="jo3_goPage(' + total + ')">' + total + '</button>';
-  h += '<button class="p-page-btn" onclick="jo3_goPage(jo3_page+1)" ' + (jo3_page >= total ? 'disabled' : '') + '>›</button>';
-  h += '<span style="font-size:12px;color:var(--p-faint);font-weight:600;margin-left:4px;">Page ' + jo3_page + ' of ' + total + '</span>';
-  el.innerHTML = h;
 }
 
-function jo3_goPage(p) {
-  var total = Math.ceil(jo3_filtered.length / jo3_pageSize);
-  if (p < 1 || p > total) return;
-  jo3_page = p;
-  jo3_renderPage();
-  jo3_renderPagination();
+function jo_setStatus(s, el) {
+  jo_statusFilter = s;
+  document.querySelectorAll('#jo-status-chips .fchip').forEach(function(c){ c.classList.remove('active'); });
+  el.classList.add('active');
+  jo_page = 1;
+  jo_apply();
 }
 
-function jo3_renderTable(data) {
-  var tb = document.getElementById('jo3-tbody');
-  if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--p-faint);">No records found.</td></tr>';
+function jo_apply() {
+  var q = (document.getElementById('jo-search').value || '').trim().toLowerCase();
+
+  if (jo_tab === 'damage') {
+    jo_filtered = jo_damages.filter(function(r){
+      return !q || (r.rollId + ' ' + r.operator + ' ' + (r.plottingLink||'')).toLowerCase().indexOf(q) !== -1;
+    });
+  } else if (jo_tab === 'testprint') {
+    jo_filtered = jo_testPrints.filter(function(r){
+      return !q || (r.rollId + ' ' + r.operator + ' ' + (r.plottingLink||'')).toLowerCase().indexOf(q) !== -1;
+    });
+  } else {
+    var src = jo_tab === 'completed'
+      ? jo_all.filter(function(r){ return r.status === 'COMPLETED'; })
+      : jo_all;
+    jo_filtered = src.filter(function(r){
+      if (jo_tab === 'all' && jo_statusFilter !== 'ALL' && r.status !== jo_statusFilter) return false;
+      if (q && (r.joNumber + ' ' + r.customer + ' ' + (r.jobDescription||'')).toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+
+  document.getElementById('jo-count').textContent = jo_filtered.length + ' record' + (jo_filtered.length !== 1 ? 's' : '');
+  jo_renderPage();
+  jo_renderPagination();
+}
+
+function jo_renderPage() {
+  var start = (jo_page - 1) * jo_pageSize;
+  var slice = jo_filtered.slice(start, start + jo_pageSize);
+  var tb = document.getElementById('jo-tbody');
+
+  if (!slice.length) {
+    var cols = (jo_tab === 'damage') ? 6 : (jo_tab === 'testprint') ? 5 : 8;
+    tb.innerHTML = '<tr><td colspan="' + cols + '" style="text-align:center;padding:40px;color:var(--p-faint);">No records found.</td></tr>';
     return;
   }
+
   var h = '';
-  data.forEach(function(r) {
-    var sc = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
-    var joUnit = (r.unit || 'ft').toUpperCase();
-    var size = (r.width && r.height)
-      ? r.width + ' × ' + r.height + ' ' + joUnit
-        + (r.unit && r.unit.toLowerCase() !== 'ft' && r.widthFt ? ' (' + r.widthFt + ' × ' + r.heightFt + ' ft)' : '')
-      : '—';
-    var actionBtn = '';
-    if (r.status === 'FOR_PLOTTING') {
-      actionBtn = '<button class="jo3-action-btn jo3-btn-plot" onclick="jo3_goToPlottingPlanner(\'' + jo3_esc(r.joNumber) + '\')">✦ Plot in Planner</button>';
-    } else if (r.status === 'READY_TO_PRINT') {
-      actionBtn = '<button class="jo3-action-btn jo3-btn-printing" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
-    } else if (r.status === 'PRINTING') {
-      actionBtn = '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;">'
-        + '<button class="jo3-action-btn jo3-btn-completed" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>'
-        + '<button class="jo3-action-btn jo3-btn-amber" onclick="jo3_goToPlottingPlannerReprint(\'' + jo3_esc(r.joNumber) + '\')">⚠ Declare Damage</button>'
-        + '</div>';
-    }
-    if (r.plottingImageUrl) {
-      actionBtn = '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;">'
-        + '<button class="jo3-action-btn jo3-btn-view" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingImageUrl) + '\')">🖼 View Image</button>'
-        + (actionBtn || '')
-        + '</div>';
-    }
-    h += '<tr class="jo3-row">'
-      + '<td><span class="mono" style="font-weight:700;color:var(--p-indigo);">' + jo3_esc(r.joNumber) + '</span></td>'
-      + '<td style="font-weight:600;">' + jo3_esc(r.customer) + '</td>'
-      + '<td style="max-width:180px;color:var(--p-muted);font-size:12px;">' + jo3_esc(r.jobDescription || '—') + '</td>'
-      + '<td><span class="p-badge badge-slate">' + jo3_esc(r.category || '—') + '</span></td>'
-      + '<td style="font-size:12px;color:var(--p-muted);">' + size + '</td>'
-      + '<td><span class="p-badge ' + sc + '">' + jo3_esc(r.status || 'FOR_PLOTTING') + '</span></td>'
-      + '<td>' + jo3_renderRolls(r.rollId) + '</td>'
-      + '<td style="font-size:11px;color:var(--p-faint);">' + jo3_esc(r.dateCreated) + '</td>'
-      + '<td>' + actionBtn + '</td>'
-      + '</tr>';
-  });
+  if (jo_tab === 'damage') {
+    slice.forEach(function(r) {
+      h += '<tr class="dmg-row">'
+        + '<td><span class="jo-roll">' + jo_esc(r.rollId) + '</span></td>'
+        + '<td style="font-size:11px;color:var(--p-muted);">' + jo_esc(r.joNumber) + '</td>'
+        + '<td><span style="font-weight:700;color:#dc2626;">' + (r.lengthUsed||0) + ' ft</span></td>'
+        + '<td style="font-size:11px;">' + jo_esc(r.operator) + '</td>'
+        + '<td style="font-size:11px;color:var(--p-muted);max-width:200px;">' + jo_esc(r.plottingLink||'—') + '</td>'
+        + '<td style="font-size:11px;color:var(--p-faint);">' + jo_esc(r.dateUsed) + '</td>'
+        + '</tr>';
+    });
+  } else if (jo_tab === 'testprint') {
+    slice.forEach(function(r) {
+      h += '<tr class="test-row">'
+        + '<td><span class="jo-roll">' + jo_esc(r.rollId) + '</span></td>'
+        + '<td><span style="font-weight:700;color:var(--p-amber);">' + (r.lengthUsed||0) + ' ft</span></td>'
+        + '<td style="font-size:11px;">' + jo_esc(r.operator) + '</td>'
+        + '<td style="font-size:11px;color:var(--p-muted);max-width:220px;">' + jo_esc(r.plottingLink||'—') + '</td>'
+        + '<td style="font-size:11px;color:var(--p-faint);">' + jo_esc(r.dateUsed) + '</td>'
+        + '</tr>';
+    });
+  } else {
+    slice.forEach(function(r) {
+      var sc   = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
+      var unit = (r.unit || 'ft').toUpperCase();
+      var size = (r.width && r.height)
+        ? r.width + ' × ' + r.height + ' ' + unit
+          + (r.unit && r.unit.toLowerCase() !== 'ft' && r.widthFt ? ' (' + r.widthFt + ' × ' + r.heightFt + ' ft)' : '')
+        : '—';
+
+      var action = '';
+      if (r.status === 'FOR_PLOTTING') {
+        action = '<button class="jo-action-btn jo-btn-plot" onclick="switchTab(\'plotting\')">✦ Plot</button>';
+      } else if (r.status === 'READY_TO_PRINT') {
+        action = '<button class="jo-action-btn jo-btn-printing" onclick="jo_updateStatus(\'' + jo_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
+      } else if (r.status === 'PRINTING') {
+        action = '<button class="jo-action-btn jo-btn-completed" onclick="jo_updateStatus(\'' + jo_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Done</button>';
+      }
+      if (r.plottingImageUrl) {
+        action = '<button class="jo-action-btn jo-btn-view" onclick="window.open(\'' + jo_esc(r.plottingImageUrl) + '\',\'_blank\')" style="margin-right:4px;">🖼</button>' + action;
+      }
+
+      h += '<tr>'
+        + '<td><span class="jo-num">' + jo_esc(r.joNumber) + '</span></td>'
+        + '<td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + jo_esc(r.customer) + '</td>'
+        + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--p-muted);font-size:11px;">' + jo_esc(r.jobDescription||'—') + '</td>'
+        + '<td style="font-size:11px;white-space:nowrap;">' + size + '</td>'
+        + '<td><span class="p-badge ' + sc + '">' + jo_esc(r.status||'FOR_PLOTTING') + '</span></td>'
+        + '<td>' + jo_renderRolls(r.rollId) + '</td>'
+        + '<td style="font-size:11px;color:var(--p-faint);white-space:nowrap;">' + jo_esc(r.dateCreated) + '</td>'
+        + '<td style="white-space:nowrap;">' + action + '</td>'
+        + '</tr>';
+    });
+  }
   tb.innerHTML = h;
 }
 
-function jo3_renderCards(data) {
-  var el = document.getElementById('jo3-cards');
-  if (!data.length) {
-    el.innerHTML = '<div class="p-card" style="padding:32px;text-align:center;color:var(--p-faint);font-size:13px;">No records found.</div>';
-    return;
-  }
-  var h = '';
-  data.forEach(function(r) {
-    var sc = 'p-badge st-' + (r.status || 'FOR_PLOTTING');
-    var joUnit = (r.unit || 'ft').toUpperCase();
-    var size = (r.width && r.height)
-      ? r.width + ' × ' + r.height + ' ' + joUnit
-        + (r.unit && r.unit.toLowerCase() !== 'ft' && r.widthFt ? ' (' + r.widthFt + ' × ' + r.heightFt + ' ft)' : '')
-      : '';
-    var actionHtml = '';
-    if (r.plottingImageUrl) {
-      actionHtml += '<button class="jo3-action-btn jo3-btn-view" style="width:100%;margin-top:8px;" onclick="jo3_viewPlot(\'' + jo3_esc(r.plottingImageUrl) + '\')">🖼 View Image</button>';
-    }
-    if (r.status === 'FOR_PLOTTING') {
-      actionHtml += '<button class="jo3-action-btn jo3-btn-plot" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_goToPlottingPlanner(\'' + jo3_esc(r.joNumber) + '\')">✦ Plot in Planner</button>';
-    } else if (r.status === 'READY_TO_PRINT') {
-      actionHtml += '<button class="jo3-action-btn jo3-btn-printing" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'PRINTING\',this)">▶ Mark Printing</button>';
-    } else if (r.status === 'PRINTING') {
-      actionHtml += '<button class="jo3-action-btn jo3-btn-completed" style="width:100%;' + (actionHtml ? 'margin-top:8px;' : '') + '" onclick="jo3_updateStatus(\'' + jo3_esc(r.joNumber) + '\',\'COMPLETED\',this)">✓ Mark Completed</button>';
-      actionHtml += '<button class="jo3-action-btn jo3-btn-amber" style="width:100%;margin-top:8px;" onclick="jo3_goToPlottingPlannerReprint(\'' + jo3_esc(r.joNumber) + '\')">⚠ Declare Damage</button>';
-    }
-    h += '<div class="p-card" style="padding:14px;">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">'
-      + '<span class="mono" style="font-weight:700;color:var(--p-indigo);font-size:13px;">' + jo3_esc(r.joNumber) + '</span>'
-      + '<span class="p-badge ' + sc + '">' + jo3_esc(r.status || 'FOR_PLOTTING') + '</span>'
-      + '</div>'
-      + '<p style="font-weight:700;font-size:14px;margin:0 0 4px;">' + jo3_esc(r.customer) + '</p>'
-      + (r.jobDescription ? '<p style="font-size:12px;color:var(--p-muted);margin:0 0 8px;">' + jo3_esc(r.jobDescription) + '</p>' : '')
-      + '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;">'
-      + (r.category ? '<span class="p-badge badge-slate">' + jo3_esc(r.category) + '</span>' : '')
-      + (size ? '<span style="font-size:11px;color:var(--p-muted);">' + size + '</span>' : '')
-      + (r.rollId ? jo3_renderRollsInline(r.rollId) : '')
-      + '</div>'
-      + actionHtml
-      + '</div>';
-  });
-  el.innerHTML = h;
-}
-
-function jo3_viewPlot(url) {
-  if (!url) return;
-  window.open(url, '_blank');
-}
-
-/* ── Render Roll IDs — handles single or comma-separated multi-roll ── */
-function jo3_renderRolls(rollId) {
+function jo_renderRolls(rollId) {
   if (!rollId || !rollId.trim()) return '<span style="color:var(--p-faint);">—</span>';
-  return rollId.split(',').map(function(id) {
+  return rollId.split(',').map(function(id){
     id = id.trim();
-    return id ? '<span class="jo3-roll" style="display:inline-block;margin:1px 3px 1px 0;">' + jo3_esc(id) + '</span>' : '';
+    return id ? '<span class="jo-roll" style="margin-right:3px;">' + jo_esc(id) + '</span>' : '';
   }).join('');
 }
 
-function jo3_renderRollsInline(rollId) {
-  if (!rollId || !rollId.trim()) return '';
-  var ids = rollId.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
-  if (!ids.length) return '';
-  return ids.map(function(id) {
-    return '<span class="jo3-roll" style="display:inline-block;margin:1px 3px 1px 0;">Roll: ' + jo3_esc(id) + '</span>';
-  }).join('');
-}
-
-function jo3_updateStatus(joNumber, newStatus, btn) {
-  var label = newStatus === 'PRINTING' ? '▶ Mark Printing' : '✓ Mark Completed';
+function jo_updateStatus(joNumber, newStatus, btn) {
   btn.disabled = true;
-  btn.textContent = 'Updating…';
+  btn.textContent = '…';
   google.script.run
     .withSuccessHandler(function(r) {
       if (r.success) {
-        prism_toast('success', joNumber + ' → ' + newStatus.replace(/_/g, ' '));
-        for (var i = 0; i < jo3_all.length; i++) {
-          if (jo3_all[i].joNumber === joNumber) { jo3_all[i].status = newStatus; break; }
+        for (var i = 0; i < jo_all.length; i++) {
+          if (jo_all[i].joNumber === joNumber) { jo_all[i].status = newStatus; break; }
         }
-        jo3_apply();
+        jo_apply();
+        prism_toast('success', joNumber + ' → ' + newStatus.replace(/_/g,' '));
       } else {
-        btn.disabled = false;
-        btn.textContent = label;
+        btn.disabled = false; btn.textContent = newStatus === 'PRINTING' ? '▶ Mark Printing' : '✓ Done';
         prism_toast('error', r.message);
       }
     })
     .withFailureHandler(function(e) {
-      btn.disabled = false;
-      btn.textContent = label;
+      btn.disabled = false; btn.textContent = '…';
       prism_toast('error', e.message);
     })
     .prism_updateJOStatus(joNumber, newStatus);
 }
 
-function jo3_goToPlottingPlanner(joNumber) {
-  switchTab('plotting');
+function jo_renderPagination() {
+  var total = Math.ceil(jo_filtered.length / jo_pageSize);
+  var el    = document.getElementById('jo-pagination-row');
+  if (total <= 1) { el.innerHTML = ''; return; }
+  var h = '';
+  h += '<button class="p-page-btn" onclick="jo_goPage(jo_page-1)" ' + (jo_page<=1?'disabled':'') + '>‹</button>';
+  var s = Math.max(1, jo_page-2), e = Math.min(total, jo_page+2);
+  if (s>1) h += '<button class="p-page-btn" onclick="jo_goPage(1)">1</button>' + (s>2?'<span style="padding:0 4px;color:var(--p-faint);">…</span>':'');
+  for (var i=s;i<=e;i++) h += '<button class="p-page-btn'+(i===jo_page?' active':'')+'" onclick="jo_goPage('+i+')">'+i+'</button>';
+  if (e<total) h += (e<total-1?'<span style="padding:0 4px;color:var(--p-faint);">…</span>':'') + '<button class="p-page-btn" onclick="jo_goPage('+total+')">'+total+'</button>';
+  h += '<button class="p-page-btn" onclick="jo_goPage(jo_page+1)" ' + (jo_page>=total?'disabled':'') + '>›</button>';
+  h += '<span style="font-size:12px;color:var(--p-faint);font-weight:600;margin-left:4px;">Page ' + jo_page + ' of ' + total + '</span>';
+  el.innerHTML = h;
 }
 
-function jo3_goToPlottingPlannerReprint(joNumber) {
-  if (typeof switchTab === 'function') switchTab('plotting');
-  setTimeout(function() {
-    if (typeof window.pp_selectForReprint === 'function') {
-      window.pp_selectForReprint(joNumber);
-    }
-  }, 300);
+function jo_goPage(p) {
+  var total = Math.ceil(jo_filtered.length / jo_pageSize);
+  if (p<1||p>total) return;
+  jo_page = p;
+  jo_renderPage();
+  jo_renderPagination();
+  document.getElementById('jo-table-wrap').scrollTop = 0;
 }
 
-function jo3_error(msg) {
-  document.getElementById('jo3-tbody').innerHTML =
-    '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--p-red);">Error: ' + jo3_esc(msg) + '</td></tr>';
-}
-
-
-
-function jo3_esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function jo_esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
