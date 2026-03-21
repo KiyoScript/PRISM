@@ -376,51 +376,62 @@ function tp_drawCanvas() {
   var wrap   = document.getElementById('tp-canvasWrap');
   var canvas = document.getElementById('tp-canvas');
   var ctx    = canvas.getContext('2d');
- 
+
   var rollWidth = parseFloat(L.roll.width) || 4.5;
   var lu        = parseFloat(L.lengthUsed) || 0;
-  var wrapW     = Math.max((wrap.clientWidth || 400) - 8, 200);
-  var pxPerFt   = wrapW / rollWidth;
-  var stripH    = Math.max(60, Math.min(120, Math.round(lu * pxPerFt)));
-  var axisH     = 28;
- 
-  canvas.width  = wrapW;
-  canvas.height = stripH + axisH;
-  canvas.style.width  = wrapW + 'px';
+  var dpr       = window.devicePixelRatio || 1;
+
+  // Layout: length = horizontal axis, width = vertical axis
+  var wrapW  = Math.max((wrap.clientWidth || 400) - 8, 200);
+  var pxPerFt = wrapW / lu;                                   // scale to fill full width
+  var stripW  = wrapW;
+  var stripH  = Math.max(60, Math.min(150, Math.round(rollWidth * pxPerFt * 0.35)));
+  var axisH   = 24;
+
+  canvas.width        = stripW * dpr;
+  canvas.height       = (stripH + axisH) * dpr;
+  canvas.style.width  = stripW + 'px';
   canvas.style.height = (stripH + axisH) + 'px';
- 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
- 
+  ctx.scale(dpr, dpr);
+
+  ctx.clearRect(0, 0, stripW, stripH + axisH);
+
+  // Fill background
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, wrapW, stripH);
- 
+  ctx.fillRect(0, 0, stripW, stripH);
+
+  // Test print strip
   ctx.fillStyle = 'rgba(245,158,11,0.28)';
-  ctx.fillRect(1, 1, wrapW - 2, stripH - 2);
+  ctx.fillRect(1, 1, stripW - 2, stripH - 2);
   ctx.strokeStyle = 'rgba(217,119,6,0.8)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 3]);
-  ctx.strokeRect(1, 1, wrapW - 2, stripH - 2);
+  ctx.strokeRect(1, 1, stripW - 2, stripH - 2);
   ctx.setLineDash([]);
- 
+
+  // Center label
   ctx.fillStyle = '#92400e';
   ctx.font = 'bold 12px DM Sans, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('TEST PRINT  ' + lu + ' ft  x  ' + rollWidth + 'ft wide', wrapW / 2, stripH / 2 + 5);
- 
+  ctx.fillText('TEST PRINT  ' + lu + ' ft  ×  ' + rollWidth + 'ft wide', stripW / 2, stripH / 2 + 5);
+
+  // Start/end ft labels
   ctx.fillStyle = '#64748b';
   ctx.font = '10px DM Sans, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(L.currentStart.toFixed(1) + 'ft', 4, 12);
   ctx.textAlign = 'right';
-  ctx.fillText(L.currentStart.toFixed(1) + 'ft', wrapW - 4, 12);
-  ctx.fillText(L.currentEnd.toFixed(1)   + 'ft', wrapW - 4, stripH - 4);
- 
+  ctx.fillText(L.currentEnd.toFixed(1) + 'ft', stripW - 4, 12);
+
+  // Bottom axis
   ctx.strokeStyle = '#9db5ae'; ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(0, stripH + 1); ctx.lineTo(wrapW, stripH + 1);
+  ctx.moveTo(0, stripH + 1); ctx.lineTo(stripW, stripH + 1);
   ctx.stroke();
   ctx.fillStyle = '#374151'; ctx.font = '10px DM Sans, sans-serif';
-  ctx.textAlign = 'left';   ctx.fillText('0', 2, stripH + 14);
-  ctx.textAlign = 'center'; ctx.fillText(rollWidth + 'ft wide', wrapW / 2, stripH + 14);
-  ctx.textAlign = 'right';  ctx.fillText(rollWidth + 'ft', wrapW - 2, stripH + 14);
+  ctx.textAlign = 'left';   ctx.fillText('0', 2, stripH + 16);
+  ctx.textAlign = 'center'; ctx.fillText(lu + 'ft length', stripW / 2, stripH + 16);
+  ctx.textAlign = 'right';  ctx.fillText(lu + 'ft', stripW - 2, stripH + 16);
 }
 
 /* ══════════════════════════════════════════
@@ -452,18 +463,21 @@ function tp_drawHistoryMap() {
   var totalLen   = Math.max(rollOrigLen, totalPrinted + planLen + 2);
  
   var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 300);
-  var pxPerFt = 22;
+  var wrapH   = Math.max(wrap.clientHeight || 500, 400);
+  var pxPerFt = Math.min(8, (wrapH - 60) / totalLen); // fit roll into visible area
   var axisW   = 36;
   var bodyW   = wrapW - axisW;
   var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
- 
-  canvas.width  = wrapW;
-  canvas.height = canvasH;
-  canvas.style.width  = '100%';
-  canvas.style.height = 'auto';
- 
+  var dpr     = window.devicePixelRatio || 1;
+
+  canvas.width        = wrapW * dpr;
+  canvas.height       = canvasH * dpr;
+  canvas.style.width  = wrapW + 'px';
+  canvas.style.height = canvasH + 'px';
+
   var ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, wrapW, canvasH);
  
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(axisW, 0, bodyW, canvasH);
