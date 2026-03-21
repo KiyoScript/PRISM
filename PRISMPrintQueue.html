@@ -305,30 +305,29 @@ function pq_renderAll() {
     var customerLabel = (p.customers && p.customers.length)
     ? p.customers.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ')
     : (p.joNumbers||[]).join(', ');
-      var h = '<div class="pq-printing-card">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
-      h += '<span style="font-weight:800;font-size:15px;color:var(--p-text);">' + pq_esc(customerLabel) + '</span>';
-      h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
-      h += '</div>';
-      h += '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:6px;">' + pq_esc(p.rollId) + '</span>';
-      h += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 6px;">Started: ' + pq_esc(p.date) + '</p>';
+    var h = '<div class="pq-printing-card">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">';
+    h += '<span style="font-weight:800;font-size:15px;color:var(--p-text);">' + pq_esc(customerLabel) + '</span>';
+    h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
+    h += '</div>';
+    h += '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:4px;">' + pq_esc(p.rollId) + '</span>';
+    h += '<p style="font-size:11px;color:var(--p-muted);margin:0 0 8px;">Started: ' + pq_esc(p.date) + '</p>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">';
     if (p.pngUrl) {
       h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
-        + ' style="display:inline-block;font-size:11px;font-weight:700;color:var(--p-purple);'
-        + 'text-decoration:none;background:var(--p-purple-lt);padding:4px 8px;border-radius:6px;'
-        + 'border:1px solid var(--p-purple-bd);margin-bottom:8px;">View Image &#8599;</a> ';
+        + ' style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--p-purple);'
+        + 'text-decoration:none;background:var(--p-purple-lt);padding:4px 9px;border-radius:6px;'
+        + 'border:1px solid var(--p-purple-bd);">View Image &#8599;</a>';
     }
-    h += '<div style="font-size:11px;color:var(--p-faint);margin-bottom:12px;">JOs: <span style="color:var(--p-text);font-weight:600;">'
-      + pq_esc((p.joNumbers || []).join(', ')) + '</span></div>';
-    // Action buttons
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;">';
-    h += '<button onclick="pq_openDoneModal()" style="display:inline-block;font-size:11px;font-weight:700;'
-      + 'color:#166534;text-decoration:none;background:#dcfce7;padding:4px 8px;border-radius:6px;'
+    h += '<button onclick="pq_openDoneModal()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;'
+      + 'color:#166534;background:#dcfce7;padding:4px 9px;border-radius:6px;'
       + 'border:1px solid #86efac;cursor:pointer;">&#10003; Mark Done</button>';
-    h += '<button onclick="pq_openDamageModal(\'' + pq_esc(p.plotId) + '\')" style="display:inline-block;'
-      + 'font-size:11px;font-weight:700;color:#dc2626;text-decoration:none;background:rgba(239,68,68,0.1);'
-      + 'padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);cursor:pointer;">&#9888; Declare Damage</button>';
+    h += '<button onclick="pq_openDamageModal(\'' + pq_esc(p.plotId) + '\')" style="display:inline-flex;align-items:center;gap:4px;'
+      + 'font-size:11px;font-weight:700;color:#dc2626;background:rgba(239,68,68,0.1);'
+      + 'padding:4px 9px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);cursor:pointer;">&#9888; Declare Damage</button>';
     h += '</div>';
+    h += '<div style="font-size:11px;color:var(--p-faint);">JOs: <span style="color:var(--p-text);font-weight:600;">'
+      + pq_esc((p.joNumbers||[]).join(', ')) + '</span></div>';
     h += '</div>';
     slot.innerHTML = h;
   }
@@ -548,12 +547,13 @@ function pq_renderAll() {
 
     var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 500);
     var pxPerFt = 22;
-    var axisW = 36;
-    var bodyW = wrapW - axisW;
-    var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
+    var axisW   = 36;
+    var bodyW   = wrapW - axisW;
+    var topPad  = 20;
+    var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60 + topPad);
 
     canvas.style.width  = '100%';
-  canvas.style.height = 'auto';
+    canvas.style.height = 'auto';
     canvas.width = wrapW;
     canvas.height = canvasH;
 
@@ -569,7 +569,7 @@ function pq_renderAll() {
     ctx.font = '10px JetBrains Mono, monospace';
     ctx.textAlign = 'right';
     for (var ft = 0; ft <= Math.ceil(totalLen); ft += 5) {
-      var ty = Math.round(ft * pxPerFt);
+      var ty = Math.round(ft * pxPerFt) + topPad;
       ctx.fillStyle = '#94a3b8';
       ctx.fillText(ft, axisW - 4, ty + 4);
       ctx.strokeStyle = 'rgba(148,163,184,0.25)';
@@ -579,8 +579,8 @@ function pq_renderAll() {
 
     // ── History segments ────────────────────────────────────────────────────────
     history.forEach(function (seg) {
-      var sy = Math.round((parseFloat(seg.startAtFt) || 0) * pxPerFt);
-      var ey = Math.round((parseFloat(seg.endAtFt) || 0) * pxPerFt);
+      var sy = Math.round((parseFloat(seg.startAtFt) || 0) * pxPerFt) + topPad;
+      var ey = Math.round((parseFloat(seg.endAtFt) || 0) * pxPerFt) + topPad;
       var sh = Math.max(2, ey - sy);
 
       if (seg.isTestPrint) {
@@ -638,7 +638,7 @@ function pq_renderAll() {
     });
 
     // ── Current plan overlay ───────────────────────────────────────────────────
-    var planY = Math.round(totalPrinted * pxPerFt);
+    var planY = Math.round(totalPrinted * pxPerFt) + topPad;
     var planH = Math.max(4, Math.round(planLen * pxPerFt));
 
     // Green border for plan
