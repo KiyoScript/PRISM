@@ -179,7 +179,7 @@
           <div class="p-card" style="padding:14px;overflow:hidden;">
             <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 6px;">Full Roll Map</p>
             <p id="tp-historyMeta" style="font-size:12px;color:var(--p-muted);margin:0 0 10px;"></p>
-            <div id="tp-historyWrap" style="background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;overflow:auto;padding:16px;min-height:300px;">
+            <div id="tp-historyWrap" style="background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;overflow:auto;padding:16px;min-height:500px;max-height:700px;">
               <canvas id="tp-historyCanvas" style="max-width:100%;display:block;margin:0 auto;"></canvas>
             </div>
           </div>
@@ -464,7 +464,7 @@ function tp_drawHistoryMap() {
  
   var wrapW   = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 300);
   var wrapH   = Math.max(wrap.clientHeight || 500, 400);
-  var pxPerFt = Math.min(8, (wrapH - 60) / totalLen); // fit roll into visible area
+  var pxPerFt = 4; // fit roll into visible area
   var axisW   = 36;
   var bodyW   = wrapW - axisW;
   var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
