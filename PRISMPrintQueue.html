@@ -71,21 +71,6 @@
 
 <div style="padding:20px 20px 40px;">
 
-  <!-- Header -->
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
-    <div>
-      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Print Queue</h2>
-      <p style="font-size:13px;color:var(--p-muted);margin:0;">Physical queue management and permanent roll mapping.</p>
-    </div>
-    <button id="pq-reloadBtn" class="p-btn-reload" onclick="pq_reload()">
-      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      Reload Queue
-    </button>
-  </div>
-
   <!-- Two-column layout -->
   <div style="display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;">
 
@@ -252,12 +237,10 @@
   function prism_init_print_queue() { pq_load(); }
 
   function pq_reload() {
-    prism_setReloading('pq-reloadBtn', true);
     pq_load();
   }
 
   function pq_load() {
-    prism_setReloading('pq-reloadBtn', true);
     document.getElementById('pq-list').innerHTML =
       '<div style="text-align:center;padding:30px 20px;color:var(--p-faint);font-size:13px;">Fetching layouts...</div>';
     pq_selectedLayout = null;
@@ -265,13 +248,11 @@
     document.getElementById('pq-rollMeta').textContent = 'Select a layout from the queue to view its destination roll.';
 
     var cvs = document.getElementById('pq-historyCanvas');
-    var ctx = cvs.getContext('2d');
-    ctx.clearRect(0, 0, cvs.width, cvs.height);
-    cvs.width = 300; cvs.height = 80;
+    cvs.style.display = 'none';
+    document.getElementById('pq-noSelection').style.display = 'flex';
 
     google.script.run
       .withSuccessHandler(function (r) {
-        prism_setReloading('pq-reloadBtn', false);
         if (r.success) {
           pq_planned = r.planned || [];
           pq_reprints = r.reprints || [];
@@ -286,7 +267,6 @@
         }
       })
       .withFailureHandler(function (e) {
-        prism_setReloading('pq-reloadBtn', false);
         prism_toast('error', e.message);
       })
       .prism_getPrintQueueData();
@@ -559,7 +539,7 @@
     // Try to find original roll length from history segment metadata
     var rollOrigLen = parseFloat(plan.rollOrigLen || plan.originalLength) || 0;
     if (!rollOrigLen) {
-      history.forEach(function(s) {
+      history.forEach(function (s) {
         var orig = parseFloat(s.rollOriginalLength || s.origLen || s.rollLength) || 0;
         if (orig > rollOrigLen) rollOrigLen = orig;
         // Also infer from startAtFt + remaining if available
@@ -649,7 +629,6 @@
         ctx.strokeStyle = 'rgba(239,68,68,0.6)'; ctx.lineWidth = 1;
         ctx.strokeRect(axisW, sy, bodyW, sh);
         if (sh > 12) {
-          ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
           ctx.fillStyle = '#dc2626'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
           ctx.fillText('DAMAGE (' + ((parseFloat(seg.endAtFt) || 0) - (parseFloat(seg.startAtFt) || 0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
         }

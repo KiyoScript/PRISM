@@ -511,9 +511,12 @@ function switchTab(t) {
     document.getElementById('sidebarOverlay').style.display = 'none';
   }
   var fn = 'prism_init_' + t.replace(/-/g, '_');
-  if (!initializedTabs[t] && typeof window[fn] === 'function') {
-    initializedTabs[t] = true;
-    window[fn]();
+  if (typeof window[fn] === 'function') {
+    if (!initializedTabs[t]) initializedTabs[t] = true;
+    if (t === 'print-queue' || !initializedTabs[t + '_ran']) {
+      initializedTabs[t + '_ran'] = true;
+      window[fn]();
+    }
   }
 }
 document.querySelectorAll('.nav-link').forEach(function(l) {
