@@ -260,8 +260,9 @@ var pq_joCustomerMap  = {};
           pq_planned = r.planned || [];
           pq_reprints = r.reprints || [];
           pq_printing = r.printing || null;
-          pq_rollsHistory = r.rollsHistory || {};
-          pq_renderAll();
+          pq_rollsHistory  = r.rollsHistory  || {};
+        pq_joCustomerMap = r.joCustomerMap || {};
+        pq_renderAll();
         } else {
           prism_toast('error', r.message);
           document.getElementById('pq-list').innerHTML =
@@ -611,12 +612,16 @@ function pq_renderAll() {
         ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.5;
         ctx.strokeRect(axisW, sy, bodyW, sh);
         var joLabel = (seg.joNumbers || []).join(', ');
-        if (sh > 12 && joLabel) {
+        var custLabel = (seg.joNumbers || []).map(function(jo) {
+          return pq_joCustomerMap[String(jo).trim().toUpperCase()] || jo;
+        }).filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
+        if (sh > 12) {
           ctx.fillStyle = '#475569'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
-          ctx.fillText('prev · ' + joLabel, axisW + 6, sy + 14);
-          // JO number centered
-          ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-          if (sh > 24) ctx.fillText(joLabel, axisW + bodyW * 0.5, sy + sh / 2 + 4);
+          ctx.fillText(custLabel || joLabel, axisW + 6, sy + 14);
+          if (sh > 24 && custLabel) {
+            ctx.fillStyle = '#64748b'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(joLabel, axisW + 6, sy + 26);
+          }
         }
         pq_drawSegmentRows(ctx, seg, axisW, sy, bodyW, rollWidth, pxPerFt);
       }
