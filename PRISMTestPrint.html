@@ -190,18 +190,6 @@
     </div><!-- /right panel -->
 
   </div><!-- /tp-grid -->
-
-  <!-- History log -->
-  <div class="p-card" style="padding:18px;margin-top:20px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0;">Test Print History</p>
-      <span id="tp-logCount" style="font-size:11px;color:var(--p-faint);font-weight:600;"></span>
-    </div>
-    <div id="tp-logList">
-      <div style="text-align:center;padding:24px;font-size:13px;color:var(--p-faint);">Loading…</div>
-    </div>
-  </div>
-
 </div><!-- /padding wrapper -->
 
 <script>
@@ -211,7 +199,6 @@
 var tp_rolls       = [];
 var tp_settings    = {};
 var tp_selRoll     = null;
-var tp_allLogs     = [];
 var tp_rollHistory = {};
 var tp_layout      = null; // { roll, lengthUsed, currentStart, currentEnd }
 
@@ -245,13 +232,6 @@ function tp_loadData() {
     })
     .withFailureHandler(function() { prism_setReloading('tp-reloadBtn', false); })
     .prism_getInitData();
-
-  google.script.run
-    .withSuccessHandler(function(r) {
-      if (r && r.success) { tp_allLogs = r.data || []; tp_renderLog(); }
-    })
-    .withFailureHandler(function() {})
-    .prism_getTestPrintLog();
 }
 
 function tp_loadRollHistory() {
@@ -595,14 +575,7 @@ function tp_confirm() {
         document.getElementById('tp-confirmPanel').style.display = 'none';
         tp_resetStats();
         tp_renderRolls(tp_rolls);
-        // Reload log + history
         tp_loadRollHistory();
-        google.script.run
-          .withSuccessHandler(function(r2) {
-            if (r2 && r2.success) { tp_allLogs = r2.data || []; tp_renderLog(); }
-          })
-          .withFailureHandler(function() {})
-          .prism_getTestPrintLog();
       } else { prism_toast('error', r.message); }
     })
     .withFailureHandler(function(e) {
@@ -612,36 +585,4 @@ function tp_confirm() {
     .prism_recordTestPrint({ rollId: rid, lengthUsed: lu, notes: notes });
 }
 
-/* ══════════════════════════════════════════
-   HISTORY LOG
-══════════════════════════════════════════ */
-function tp_renderLog() {
-  var el    = document.getElementById('tp-logList');
-  var count = document.getElementById('tp-logCount');
-  count.textContent = tp_allLogs.length + ' record' + (tp_allLogs.length !== 1 ? 's' : '');
-  if (!tp_allLogs.length) {
-    el.innerHTML = '<div style="text-align:center;padding:24px;font-size:13px;color:var(--p-faint);">No test prints recorded yet.</div>';
-    return;
-  }
-  var h = '';
-  tp_allLogs.forEach(function(r) {
-    h += '<div class="tp-log-row">'
-      + '<div style="flex:1;">'
-      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">'
-      + '<span class="mono" style="font-weight:700;font-size:12px;color:var(--p-purple);">' + tp_esc(r.rollId) + '</span>'
-      + '<span class="tp-badge-test">TEST PRINT</span>'
-      + '<span style="font-size:11px;color:var(--p-faint);">' + tp_esc(r.dateUsed) + '</span>'
-      + '</div>'
-      + '<div style="display:flex;gap:12px;font-size:12px;color:var(--p-muted);">'
-      + '<span><strong style="color:var(--p-amber);">' + r.lengthUsed + ' ft</strong> consumed</span>'
-      + '<span>by ' + tp_esc(r.operator) + '</span>'
-      + '</div>'
-      + (r.notes ? '<p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;font-style:italic;">' + tp_esc(r.notes) + '</p>' : '')
-      + '</div>'
-      + '</div>';
-  });
-  el.innerHTML = h;
-}
-
-function tp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
