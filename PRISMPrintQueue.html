@@ -275,10 +275,17 @@
   }
 
   // ── Render both panels ──────────────────────────────────────────────────────
-  function pq_renderAll() {
-    pq_renderPrintingSlot();
-    pq_renderWaitingList();
+function pq_renderAll() {
+  pq_renderPrintingSlot();
+  pq_renderWaitingList();
+  if (pq_printing) {
+    document.getElementById('pq-rollMeta').innerHTML =
+      'Roll: <strong class="mono" style="color:var(--p-green);">'
+      + pq_esc(pq_printing.rollId) + '</strong>'
+      + ' &mdash; Currently printing. Mark done or declare damage when finished.';
+    pq_renderMap(pq_printing);
   }
+}
 
   function pq_renderPrintingSlot() {
     var slot = document.getElementById('pq-printing-slot');
