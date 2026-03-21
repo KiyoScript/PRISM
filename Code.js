@@ -932,12 +932,14 @@ function prism_declareDamageForPlot(payload) {
     if (damageLength <= 0)
       return { success: false, message: 'Damage length must be greater than 0.' };
 
-    // 2. Flip PRINTING → PRINTED so the JO's print stays on the roll map
-    targetJson.status = 'PRINTED';
+    // 2. Void the PRINTING entry — JO print is removed from roll map (will reprint)
+    targetJson.status    = 'VOIDED';
+    targetJson.isVoid    = true;
+    targetJson.voidReason = 'Damage declared: ' + (payload.remarks || '');
     plotSh.getRange(targetRowIdx, 6).setValue(JSON.stringify(targetJson));
 
     // 3. Write a DAMAGE block immediately after the printed segment
-    const damageStart = printEnd;
+    const damageStart = printStart;
     const damageEnd   = damageStart + damageLength;
     const damageId    = 'DMG-' + today.getTime();
     const damageObj   = {
@@ -957,9 +959,9 @@ function prism_declareDamageForPlot(payload) {
       damageId, 'DAMAGE', '', user.email, today, JSON.stringify(damageObj)
     ]]);
 
-    // 4. Deduct BOTH the print length and damage length from the roll
-    //    (markPrintingComplete was never called, so neither has been deducted yet)
-    const totalDeduct = printLength + damageLength;
+    // 4. Deduct only the damage length from the roll
+    //    The JO print is voided so its material is accounted for by the damage block
+    const totalDeduct = damageLength;
     const rollSh  = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
     const rollLr  = rollSh.getLastRow();
     if (rollLr >= 2) {
@@ -974,37 +976,6 @@ function prism_declareDamageForPlot(payload) {
         );
       });
     }
-
-    // 5. Write usage log entries for the JO print consumption
-    const usageSh  = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const planRows = Array.isArray(targetJson.rows) ? targetJson.rows : [];
-    const joLengths = {};
-    planRows.forEach(row => {
-      const rowJOs = {};
-      (row.pieces || []).forEach(p => {
-        rowJOs[String(p.joNumber || p.jo || '').trim().toUpperCase()] = true;
-      });
-      Object.keys(rowJOs).forEach(jo => {
-        if (!jo) return;
-        joLengths[jo] = (joLengths[jo] || 0) + (parseFloat(row.rowH) || 0);
-      });
-    });
-    if (!Object.keys(joLengths).length && joNumbers.length) {
-      const perJO = printLength / joNumbers.length;
-      joNumbers.forEach(jo => { joLengths[jo] = perJO; });
-    }
-    Object.keys(joLengths).forEach(jo => {
-      const len = joLengths[jo];
-      if (len <= 0) return;
-      usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
-        'USE-' + today.getTime() + '-' + jo + '-' + rollId,
-        jo, rollId,
-        targetJson.rollWidth || 0,
-        len, user.email,
-        targetJson.plottingLink || '',
-        today
-      ]]);
-    });
 
     // 6. Write a REPRINT PLANNED entry — continues after damage block (damageEnd)
     const reprintId    = 'PLT-RPT-' + today.getTime();
@@ -2294,18 +2265,19 @@ function prism_getPrintQueueData() {
 
       } else if (effectiveStatus === 'PRINTED' || j.isDamage) {
         addHistory(rollId, {
-          plotId: id,
+          plotId:         id,
           rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
-          startAtFt: parseFloat(j.startAtFt) || 0,
-          endAtFt: parseFloat(j.endAtFt) || 0,
-          lengthUsed: parseFloat(j.lengthUsed) || 0,
+          rollWidth:      parseFloat(j.rollWidth)  || 0,
+          startAtFt:      parseFloat(j.startAtFt)  || 0,
+          endAtFt:        parseFloat(j.endAtFt)     || 0,
+          lengthUsed:     parseFloat(j.lengthUsed)  || 0,
           joNumbers,
-          isDamage: !!j.isDamage,
-          isVoid: false,
-          rows: j.rows || [],
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          isTestPrint: false
+          isDamage:       !!j.isDamage,
+          isVoid:         false,
+          rows:           j.rows || [],
+          pngUrl:         r[2] || j.plottingLink || j.pngUrl || '',
+          isTestPrint:    false,
+          dateMs:         r[4] ? new Date(r[4]).getTime() : 0
         });
 
       } else if (effectiveStatus === 'PLANNED') {
@@ -2364,20 +2336,25 @@ function prism_getPrintQueueData() {
       });
     }
 
-    // ── Resolve test print positions ───────────────────────────────────────────
-    // For each roll, sort all non-test-print segments by startAtFt, then stack
-    // test prints chronologically after the last known endAtFt.
     Object.keys(rollsHistory).forEach(rollId => {
-      const segs = rollsHistory[rollId];
-      const real = segs.filter(s => !s.isTestPrint).sort((a, b) => a.startAtFt - b.startAtFt);
-      const tests = segs.filter(s => s.isTestPrint).sort((a, b) => a.dateMs - b.dateMs);
-      let cursor = real.length ? Math.max(...real.map(s => s.endAtFt)) : 0;
-      tests.forEach(t => {
-        t.startAtFt = cursor;
-        t.endAtFt = cursor + t.lengthUsed;
-        cursor = t.endAtFt;
+      const segs  = rollsHistory[rollId];
+      const real  = segs.filter(s => !s.isTestPrint).sort((a,b) => a.startAtFt - b.startAtFt);
+      const tests = segs.filter(s => s.isTestPrint).sort((a,b) => a.dateMs - b.dateMs);
+      let cursor = 0;
+      const allByDate = [
+        ...real.map(s => ({ ...s, _isReal: true })),
+        ...tests.map(s => ({ ...s, _isReal: false }))
+      ].sort((a, b) => (a.dateMs || 0) - (b.dateMs || 0));
+
+      allByDate.forEach(seg => {
+        if (!seg._isReal) {
+          seg.startAtFt = cursor;
+          seg.endAtFt   = cursor + seg.lengthUsed;
+        }
+        cursor = Math.max(cursor, seg.endAtFt || 0);
       });
-      rollsHistory[rollId] = [...real, ...tests].sort((a, b) => a.startAtFt - b.startAtFt);
+
+      rollsHistory[rollId] = allByDate.sort((a,b) => a.startAtFt - b.startAtFt);
     });
 
     return { success: true, planned, reprints, printing, rollsHistory, joCustomerMap };
