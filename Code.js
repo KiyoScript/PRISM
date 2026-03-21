@@ -1676,87 +1676,57 @@ function prism_confirmPlotLayout(payload) {
         throw new Error('Roll "' + rollId + '" does not have enough remaining length.');
     });
 
-    const settings = prism_getSettings_();
     const rollSnapshots = {};
     Object.keys(rollUsageById).forEach(rollId => {
-      const entry = rollMap[rollId];
-      const remaining = parseFloat(entry.row[ROLL_COL.REMAINING_LENGTH]) || 0;
-      const rollWidth = parseFloat(entry.row[ROLL_COL.WIDTH]) || 0;
-      const originalLength = parseFloat(entry.row[ROLL_COL.ORIGINAL_LENGTH]) || 0;
-      const newRemaining = Math.max(0, remaining - rollUsageById[rollId]);
-      const newRollStatus = (newRemaining === 0 && settings.auto_consume_on_zero === 'true')
-        ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
-
-      rollSh.getRange(entry.rowIdx, ROLL_COL.REMAINING_LENGTH + 1).setValue(newRemaining);
-      rollSh.getRange(entry.rowIdx, ROLL_COL.STATUS + 1).setValue(newRollStatus);
-
+      const entry          = rollMap[rollId];
+      const remaining      = parseFloat(entry.row[ROLL_COL.REMAINING_LENGTH]) || 0;
+      const rollWidth      = parseFloat(entry.row[ROLL_COL.WIDTH])            || 0;
+      const originalLength = parseFloat(entry.row[ROLL_COL.ORIGINAL_LENGTH])  || 0;
+      // No setValue calls — roll sheet is NOT touched during plotting
       rollSnapshots[rollId] = {
-        width: rollWidth,
+        width:          rollWidth,
         originalLength: originalLength,
-        startAtFt: Math.max(0, originalLength - remaining),
-        endAtFt: Math.max(0, originalLength - newRemaining),
-        newRemaining: newRemaining,
-        newStatus: newRollStatus
+        startAtFt:      Math.max(0, originalLength - remaining),
+        endAtFt:        Math.max(0, originalLength - remaining) + rollUsageById[rollId],
+        newRemaining:   Math.max(0, remaining - rollUsageById[rollId]),
+        newStatus:      ROLL_STATUS.OPEN
       };
     });
 
-    // ── Write usage by JO and by roll ──
-    const today = new Date();
-    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
-    const joLr = joSh.getLastRow();
-    const joData = joLr >= 2 ? joSh.getRange(2, 1, joLr - 1, 13).getValues() : [];
-
-    // Calculate per-JO length used from all layout rows and each roll plan.
-    const joLengths = {};
+    const today         = new Date();
+    const joSh          = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr          = joSh.getLastRow();
+    const joData        = joLr >= 2 ? joSh.getRange(2, 1, joLr - 1, 13).getValues() : [];
+    const totalLengthUsed = rollPlans.reduce((s, p) => s + (parseFloat(p.lengthUsed) || 0), 0);
+ 
+    // Calculate per-roll JO membership (still needed to assign Roll IDs to JOs)
     const joRollLengths = {};
-
     rollPlans.forEach(plan => {
-      const planRows = Array.isArray(plan.rows) ? plan.rows : [];
-      planRows.forEach(row => {
-        const rowJOs = {};
-        (row.pieces || []).forEach(p => { rowJOs[String(p.joNumber || '').trim().toUpperCase()] = true; });
-        Object.keys(rowJOs).forEach(jo => {
+      (Array.isArray(plan.rows) ? plan.rows : []).forEach(row => {
+        (Array.isArray(row.pieces) ? row.pieces : []).forEach(p => {
+          const jo = String(p.joNumber || '').trim().toUpperCase();
           if (!jo) return;
-          const rowH = parseFloat(row.rowH || 0) || 0;
-          joLengths[jo] = (joLengths[jo] || 0) + rowH;
           if (!joRollLengths[jo]) joRollLengths[jo] = {};
-          joRollLengths[jo][plan.rollId] = (joRollLengths[jo][plan.rollId] || 0) + rowH;
+          joRollLengths[jo][plan.rollId] = true;
         });
       });
     });
-
-    const totalLengthUsed = rollPlans.reduce((s, p) => s + (parseFloat(p.lengthUsed) || 0), 0);
-    if (!Object.keys(joLengths).length) {
-      const perJO = payload.joNumbers.length ? (totalLengthUsed / payload.joNumbers.length) : 0;
-      payload.joNumbers.forEach(jo => {
-        const key = String(jo || '').trim().toUpperCase();
-        if (!key) return;
-        joLengths[key] = perJO;
-        joRollLengths[key] = joRollLengths[key] || {};
-        joRollLengths[key][rollPlans[0].rollId] = perJO;
-      });
-    }
-
+ 
     payload.joNumbers.forEach(joRaw => {
       const joNumber = String(joRaw || '').trim().toUpperCase();
       if (!joNumber) return;
-
-      // Write one usage row per JO per roll where this JO consumed length.
-      // Update JO: append all rollIds + set READY_TO_PRINT.
       joData.forEach((r, i) => {
-        if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() === joNumber) {
-          const existingRolls = String(r[JO_COL.ROLL_ID] || '')
-            .split(',').map(x => x.trim()).filter(Boolean);
-          Object.keys(joRollLengths[joNumber] || {}).forEach(rollId => {
-            if (rollId && !existingRolls.includes(rollId)) existingRolls.push(rollId);
-          });
-          joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
-          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
-          if (effectivePlottingLink) {
-            joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
-          }
-        }
+        if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() !== joNumber) return;
+        // Append roll IDs
+        const existingRolls = String(r[JO_COL.ROLL_ID] || '')
+          .split(',').map(x => x.trim()).filter(Boolean);
+        Object.keys(joRollLengths[joNumber] || {}).forEach(rollId => {
+          if (rollId && !existingRolls.includes(rollId)) existingRolls.push(rollId);
+        });
+        joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
+        joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
+        if (effectivePlottingLink)
+          joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
       });
     });
 
@@ -1807,22 +1777,18 @@ function prism_confirmPlotLayout(payload) {
       by: user.email
     });
 
-    const consumedRolls = Object.keys(rollSnapshots).filter(id => {
-      return rollSnapshots[id].newStatus === ROLL_STATUS.CONSUMED;
-    });
-
     return {
       success: true,
       message: 'Layout confirmed! ' + payload.joNumbers.length
-        + ' JO(s) -> READY_TO_PRINT. Total roll used: ' + totalLengthUsed.toFixed(1) + 'ft across '
-        + rollPlans.length + ' roll plan(s).'
-        + (consumedRolls.length ? (' Consumed: ' + consumedRolls.join(', ') + '.') : ''),
+        + ' JO(s) set to READY_TO_PRINT. '
+        + totalLengthUsed.toFixed(1) + 'ft planned across '
+        + rollPlans.length + ' roll(s). Roll deducted when printing is marked done.',
       plottingLink: effectivePlottingLink || '',
       savedPlots: Object.keys(savedPlotsByRollId).map(rollId => ({
-        rollId: rollId,
+        rollId:       rollId,
         fileBaseName: savedPlotsByRollId[rollId].fileBaseName,
-        pngUrl: savedPlotsByRollId[rollId].pngUrl,
-        folderUrl: savedPlotsByRollId[rollId].folderUrl
+        pngUrl:       savedPlotsByRollId[rollId].pngUrl,
+        folderUrl:    savedPlotsByRollId[rollId].folderUrl
       }))
     };
 
