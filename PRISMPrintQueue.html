@@ -1,81 +1,142 @@
-<!-- PRISMPrintQueue.html -->
+<!-- PRISMPrintQueue.html v5 — Redesigned: printing slot + waiting queue + damage flow -->
 <style>
-  #tab-print-queue, #tab-print-queue * { color: var(--p-text); }
-  #tab-print-queue .text-white * { color: #fff; }
-
-  .pq-layout-body {
-    display: grid;
-    grid-template-columns: 360px minmax(0, 1fr);
-    align-items: flex-start;
-    gap: 20px;
+  #tab-print-queue,
+  #tab-print-queue * {
+    color: var(--p-text);
   }
-  @media (max-width: 900px) {
-    .pq-layout-body { grid-template-columns: 1fr; }
+
+  .pq-slot-empty {
+    border: 2px dashed var(--p-border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    color: var(--p-faint);
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--p-bg);
+  }
+
+  .pq-printing-card {
+    border: 2px solid var(--p-green);
+    background: var(--p-green-lt);
+    border-radius: 12px;
+    padding: 14px 16px;
   }
 
   .pq-queue-card {
     background: var(--p-surface);
     border: 1px solid var(--p-border);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-    transition: all 0.2s;
+    border-radius: 10px;
+    padding: 12px 14px;
     cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+    margin-bottom: 8px;
   }
-  .pq-queue-card:hover { border-color: var(--p-purple-bd); background: var(--p-purple-lt); }
-  .pq-queue-card.active { border-color: var(--p-purple); background: var(--p-purple-lt); box-shadow: 0 0 0 3px rgba(124,58,237,0.1); }
 
+  .pq-queue-card:last-child {
+    margin-bottom: 0;
+  }
+
+  .pq-queue-card:hover {
+    border-color: var(--p-purple);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, .08);
+  }
+
+  .pq-queue-card.active {
+    border-color: var(--p-purple);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
+  }
+
+  .pq-queue-card.locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .pq-reprint-card {
+    border-color: #dc2626;
+    background: rgba(239, 68, 68, 0.04);
+  }
+
+  .pq-reprint-card:hover {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .08);
+  }
+
+  .pq-reprint-card.active {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .12);
+  }
 </style>
 
-<div style="padding:24px 28px 40px;max-width:1400px;margin:0 auto;width:100%;">
+<div style="padding:20px 20px 40px;">
 
   <!-- Header -->
-  <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:24px;">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;">
     <div>
-      <h2 style="font-size:24px;font-weight:800;letter-spacing:-.02em;margin:0 0 4px;color:var(--p-text);">Print Queue</h2>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Print Queue</h2>
       <p style="font-size:13px;color:var(--p-muted);margin:0;">Physical queue management and permanent roll mapping.</p>
     </div>
-    <div style="display:flex;gap:10px;">
-      <button class="p-btn-reload" id="pq-reloadBtn" onclick="pq_load()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-        </svg>
-        Reload Queue
-      </button>
-    </div>
+    <button id="pq-reloadBtn" class="p-btn-reload" onclick="pq_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Reload Queue
+    </button>
   </div>
 
-  <div class="pq-layout-body">
-    
-    <!-- LEFT PANEL: Planned Layouts Queue -->
-    <div>
-      <div class="p-card" style="padding:20px;min-height:75vh;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <p class="p-section-title" style="margin:0;">Waiting in Queue (<span id="pq-count">0</span>)</p>
-        </div>
-        
-        <div id="pq-list">
-          <!-- Queue cards plotted here -->
-          <div style="text-align:center;padding:40px 20px;color:var(--p-faint);font-size:13px;">Loading print queue...</div>
+  <!-- Two-column layout -->
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start;">
+
+    <!-- LEFT: Queue panels -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- PRINTING IN QUEUE slot -->
+      <div class="p-card" style="padding:16px;">
+        <p
+          style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--p-green);margin:0 0 10px;">
+          Printing in queue</p>
+        <div id="pq-printing-slot">
+          <div class="pq-slot-empty">No print in queue</div>
         </div>
       </div>
+
+      <!-- WAITING IN QUEUE list -->
+      <div class="p-card" style="padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p
+            style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--p-muted);margin:0;">
+            Waiting in queue (<span id="pq-count">0</span>)
+          </p>
+        </div>
+        <div id="pq-list">
+          <div style="text-align:center;padding:30px 20px;color:var(--p-faint);font-size:13px;">Loading print queue...
+          </div>
+        </div>
+      </div>
+
     </div>
 
-    <!-- RIGHT PANEL: Full Roll Map Timeline -->
+    <!-- RIGHT: Roll map -->
     <div>
       <div class="p-card" style="padding:20px;min-height:75vh;display:flex;flex-direction:column;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <div>
             <p class="p-section-title" style="margin:0 0 4px;">Physical Roll Map</p>
-            <p style="font-size:12px;color:var(--p-muted);margin:0;" id="pq-rollMeta">Select a layout from the queue to view its destination roll.</p>
+            <p style="font-size:12px;color:var(--p-muted);margin:0;" id="pq-rollMeta">Select a layout from the queue to
+              view its destination roll.</p>
           </div>
-          <button id="pq-printBtn" class="p-btn p-btn-purple" style="background:var(--p-purple);display:none;font-size:14px;padding:10px 20px;" onclick="pq_startPrinting()">
-            ▶ Start Printing
+          <button id="pq-printBtn" class="p-btn p-btn-purple"
+            style="background:var(--p-purple);display:none;font-size:14px;padding:10px 20px;"
+            onclick="pq_startPrinting()">
+            &#9654; Start Printing
           </button>
         </div>
-
-        <div id="pq-historyWrap" style="flex:1;background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;overflow:auto;position:relative;padding:16px;text-align:center;min-height:500px;">
-          <canvas id="pq-historyCanvas" style="max-width:100%;display:block;margin:0 auto;box-shadow:var(--p-shadow);border-radius:4px;"></canvas>
+        <div id="pq-historyWrap" style="flex:1;background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px;
+                 overflow:auto;position:relative;padding:16px;text-align:center;min-height:500px;">
+          <canvas id="pq-historyCanvas" style="max-width:100%;display:block;margin:0 auto;
+            box-shadow:var(--p-shadow);border-radius:4px;"></canvas>
         </div>
       </div>
     </div>
@@ -84,458 +145,484 @@
 </div>
 
 <!-- Image Preview Modal -->
-<div id="pq-imageModal" onclick="pq_closeImageModal()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
-  <div onclick="event.stopPropagation()" style="position:relative;max-width:90vw;max-height:90vh;background:#111;border-radius:12px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.5);">
-    <button onclick="pq_closeImageModal()" style="position:absolute;top:10px;right:12px;background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:700;z-index:1;">✕ Close</button>
-    <img id="pq-imageModalImg" src="" style="display:block;max-width:90vw;max-height:85vh;object-fit:contain;" />
+<div id="pq-imageModal" onclick="pq_closeImageModal()" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()" style="position:relative;max-width:90vw;max-height:90vh;background:var(--p-surface);
+           border-radius:12px;overflow:hidden;padding:10px;">
+    <img id="pq-imageModalImg" src="" style="max-width:100%;max-height:85vh;display:block;border-radius:8px;">
+    <button onclick="pq_closeImageModal()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.5);color:#fff;
+             border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;">✕</button>
   </div>
 </div>
 
 <!-- Start Printing Confirm Modal -->
-<div id="pq-confirmModal" onclick="pq_closeConfirmModal()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
-  <div onclick="event.stopPropagation()" style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:440px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.4);">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-      <div style="width:40px;height:40px;border-radius:10px;background:var(--p-purple-lt);display:flex;align-items:center;justify-content:center;font-size:20px;">🖨️</div>
-      <div>
-        <p style="font-weight:800;font-size:16px;margin:0;color:var(--p-text);">Start Printing?</p>
-        <p style="font-size:12px;color:var(--p-muted);margin:0;">This action is permanent</p>
-      </div>
-    </div>
-    <p style="font-size:13px;color:var(--p-text);margin:0 0 8px;">You are about to send layout:</p>
-    <p id="pq-confirmPlotId" style="font-family:monospace;font-weight:700;font-size:13px;color:var(--p-purple);background:var(--p-purple-lt);padding:6px 10px;border-radius:8px;margin:0 0 8px;">—</p>
-    <p style="font-size:13px;color:var(--p-text);margin:0 0 16px;">to roll <strong id="pq-confirmRollId" style="color:var(--p-purple);">—</strong>.<br><span style="color:var(--p-muted);font-size:12px;">This will append the layout to the Roll Map permanently and mark the JOs as <strong>PRINTING</strong>.</span></p>
+<div id="pq-confirmModal" onclick="pq_closeConfirmModal()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.65);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()"
+    style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:420px;width:100%;">
+    <p style="font-weight:800;font-size:16px;margin:0 0 8px;">Confirm Start Printing</p>
+    <p style="font-size:13px;color:var(--p-muted);margin:0 0 16px;">
+      Plot <strong id="pq-confirmPlotId"></strong> on roll
+      <strong id="pq-confirmRollId"></strong> will be recorded on the
+      Roll Map permanently and mark the JOs as <strong>PRINTING</strong>.
+    </p>
     <div style="display:flex;gap:10px;justify-content:flex-end;">
-      <button onclick="pq_closeConfirmModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
-      <button onclick="pq_doStartPrinting()" style="background:var(--p-purple);color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">▶ Confirm &amp; Print</button>
+      <button onclick="pq_closeConfirmModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);
+               border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="pq_doStartPrinting()" style="background:var(--p-purple);color:#fff;border:none;border-radius:8px;
+               padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">&#9654; Confirm &amp; Print</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mark Done Confirm Modal -->
+<div id="pq-doneModal" onclick="pq_closeDoneModal()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.65);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()"
+    style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:420px;width:100%;">
+    <p style="font-weight:800;font-size:16px;margin:0 0 8px;">Mark as Done?</p>
+    <p style="font-size:13px;color:var(--p-muted);margin:0 0 16px;">
+      This will mark the JOs as <strong>COMPLETED</strong> and clear the printing slot.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="pq_closeDoneModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);
+               border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="pq_doMarkDone()" style="background:var(--p-green);color:#fff;border:none;border-radius:8px;
+               padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">&#10003; Confirm Done</button>
     </div>
   </div>
 </div>
 
 <!-- Declare Damage Modal -->
-<div id="pq-damageModal" onclick="pq_closeDamageModal()" style="display:none;position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,0.65);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
-  <div onclick="event.stopPropagation()" style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:460px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.4);">
+<div id="pq-damageModal" onclick="pq_closeDamageModal()" style="display:none;position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,0.65);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()"
+    style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:460px;width:100%;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-      <div style="width:40px;height:40px;border-radius:10px;background:rgba(239,68,68,0.12);display:flex;align-items:center;justify-content:center;font-size:20px;">⚠️</div>
+      <div style="width:40px;height:40px;border-radius:10px;background:rgba(239,68,68,0.12);
+                  display:flex;align-items:center;justify-content:center;font-size:20px;">&#9888;&#xFE0F;</div>
       <div>
         <p style="font-weight:800;font-size:16px;margin:0;color:var(--p-text);">Declare Damage</p>
         <p style="font-size:12px;color:var(--p-muted);margin:0;">This will void the print and create a reprint entry</p>
       </div>
     </div>
-    <p style="font-size:12px;color:var(--p-muted);margin:0 0 14px;">Layout: <strong id="pq-dmgPlotId" style="color:var(--p-text);"></strong></p>
-    <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">Damage Length (ft) <span style="color:var(--p-red);">*</span></label>
-    <input id="pq-dmgLength" type="number" step="0.1" min="0.1" placeholder="e.g. 2.5"
-      style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;padding:9px 12px;font-size:13px;background:var(--p-bg);color:var(--p-text);margin-bottom:12px;">
-    <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">Reason / Remarks</label>
-    <textarea id="pq-dmgRemarks" rows="2" placeholder="e.g. Ink bleed, media jam..."
-      style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;padding:9px 12px;font-size:13px;background:var(--p-bg);color:var(--p-text);resize:vertical;margin-bottom:16px;"></textarea>
+    <p style="font-size:12px;color:var(--p-muted);margin:0 0 14px;">
+      Layout: <strong id="pq-dmgPlotId" style="color:var(--p-text);"></strong>
+    </p>
+    <label style="font-size:12px;font-weight:600;color:var(--p-text);display:block;margin-bottom:4px;">
+      Reason / Remarks
+    </label>
+    <textarea id="pq-dmgRemarks" rows="3" placeholder="e.g. Ink bleed, media jam, colour shift..." style="width:100%;box-sizing:border-box;border:1px solid var(--p-border);border-radius:8px;
+             padding:9px 12px;font-size:13px;background:var(--p-bg);color:var(--p-text);
+             resize:vertical;margin-bottom:16px;"></textarea>
     <div style="display:flex;gap:10px;justify-content:flex-end;">
-      <button onclick="pq_closeDamageModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
-      <button id="pq-dmgSubmitBtn" onclick="pq_submitDamage()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">⚠ Confirm Damage</button>
+      <button onclick="pq_closeDamageModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);
+               border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button id="pq-dmgSubmitBtn" onclick="pq_submitDamage()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;
+               padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">&#9888; Confirm Damage</button>
     </div>
   </div>
 </div>
 
 <script>
-var pq_planned = [];
-var pq_reprints = [];
-var pq_rollsHistory = {};
-var pq_selectedLayout = null;
-var pq_damageTarget = null; // layout being declared for damage
+  var pq_planned = [];   // READY_TO_PRINT (waiting)
+  var pq_reprints = [];   // reprint items (waiting)
+  var pq_printing = null; // currently PRINTING item (single slot)
+  var pq_rollsHistory = {};
+  var pq_selectedLayout = null;
+  var pq_damageTarget = null;
 
-function prism_init_print_queue() {
-  pq_load();
-}
+  function prism_init_print_queue() { pq_load(); }
 
-function pq_load() {
-  prism_setReloading('pq-reloadBtn', true);
-  document.getElementById('pq-list').innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--p-faint);font-size:13px;"><div class="p-skel" style="width:120px;height:20px;margin-bottom:10px;"></div><br>Fetching layouts...</div>';
-  pq_selectedLayout = null;
-  document.getElementById('pq-printBtn').style.display = 'none';
-  document.getElementById('pq-rollMeta').textContent = 'Select a layout from the queue to view its destination roll.';
-  
-  var cvs = document.getElementById('pq-historyCanvas');
-  var ctx = cvs.getContext('2d');
-  ctx.clearRect(0,0,cvs.width,cvs.height);
-  cvs.width = 300; cvs.height = 80;
-
-  google.script.run
-    .withSuccessHandler(function(r) {
-      prism_setReloading('pq-reloadBtn', false);
-      if(r.success) {
-        pq_planned = r.planned || [];
-        pq_reprints = r.reprints || [];
-        pq_rollsHistory = r.rollsHistory || {};
-        pq_renderQueue();
-      } else {
-        prism_toast('error', r.message);
-        document.getElementById('pq-list').innerHTML = '<div style="color:var(--p-red);text-align:center;padding:20px;font-size:13px;">Error loading queue.</div>';
-      }
-    })
-    .withFailureHandler(function(e) {
-      prism_setReloading('pq-reloadBtn', false);
-      prism_toast('error', e.message);
-    })
-    .prism_getPrintQueueData();
-}
-
-function pq_renderQueue() {
-  var list = document.getElementById('pq-list');
-  document.getElementById('pq-count').textContent = pq_planned.length;
-
-  var html = '';
-
-  // ── Waiting in Queue ──────────────────────────────────────────
-  if (!pq_planned.length) {
-    html += '<div style="text-align:center;padding:30px 20px;color:var(--p-faint);font-size:13px;">No layouts waiting in queue.</div>';
-  } else {
-    pq_planned.forEach(function(p) {
-      html += pq_buildCard(p, false);
-    });
+  function pq_reload() {
+    prism_setReloading('pq-reloadBtn', true);
+    pq_load();
   }
 
-  // ── Reprints Section ──────────────────────────────────────────
-  if (pq_reprints.length) {
-    html += '<div style="margin:18px 0 10px;display:flex;align-items:center;gap:8px;">';
-    html += '<span style="flex:1;height:1px;background:rgba(239,68,68,0.25);"></span>';
-    html += '<span style="font-size:11px;font-weight:700;color:#dc2626;letter-spacing:.04em;">&#9888;&#xFE0E; REPRINTS (' + pq_reprints.length + ')</span>';
-    html += '<span style="flex:1;height:1px;background:rgba(239,68,68,0.25);"></span>';
-    html += '</div>';
-    pq_reprints.forEach(function(p) {
-      html += pq_buildCard(p, true);
-    });
-  }
+  function pq_load() {
+    prism_setReloading('pq-reloadBtn', true);
+    document.getElementById('pq-list').innerHTML =
+      '<div style="text-align:center;padding:30px 20px;color:var(--p-faint);font-size:13px;">Fetching layouts...</div>';
+    pq_selectedLayout = null;
+    document.getElementById('pq-printBtn').style.display = 'none';
+    document.getElementById('pq-rollMeta').textContent = 'Select a layout from the queue to view its destination roll.';
 
-  list.innerHTML = html;
-}
+    var cvs = document.getElementById('pq-historyCanvas');
+    var ctx = cvs.getContext('2d');
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    cvs.width = 300; cvs.height = 80;
 
-function pq_buildCard(p, isReprint) {
-  var allLayouts = pq_planned.concat(pq_reprints);
-  var act = (pq_selectedLayout && pq_selectedLayout.plotId === p.plotId) ? ' active' : '';
-  var rStyle = isReprint
-    ? 'border-color:#dc2626;background:rgba(239,68,68,0.04);'
-    : '';
-  var h = '<div class="pq-queue-card' + act + '" style="' + rStyle + '" onclick="pq_selectLayout(\'' + pq_esc(p.plotId) + '\')">';
-  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">';
-  h += '<span class="mono" style="font-weight:800;font-size:13px;color:' + (isReprint ? '#dc2626' : 'var(--p-purple)') + ';">' + pq_esc(p.rollId) + '</span>';
-  var badge = isReprint
-    ? '<span class="p-badge" style="background:rgba(239,68,68,0.15);color:#dc2626;border:1px solid rgba(239,68,68,0.3);">&#128472; Reprint #' + (p.reprintCount||1) + '</span>'
-    : '<span class="p-badge badge-purple">' + (p.lengthUsed||0).toFixed(1) + ' ft</span>';
-  h += badge;
-  h += '</div>';
-  h += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 8px;">' + (isReprint ? 'Originally plotted: ' : 'Created: ') + pq_esc(p.date) + '</p>';
-  if (p.pngUrl) {
-    h += '<a href="' + p.pngUrl + '" target="_blank" onclick="event.stopPropagation();" style="display:inline-block;font-size:11px;font-weight:700;color:var(--p-purple);text-decoration:none;background:var(--p-purple-lt);padding:4px 8px;border-radius:6px;border:1px solid var(--p-purple-bd);margin-bottom:8px;">View Image ↗</a>';
-  }
-  h += '<div style="font-size:11px;color:var(--p-faint);line-height:1.4;">JOs: <span style="color:var(--p-text);font-weight:500;">' + pq_esc((p.joNumbers||[]).join(', ')) + '</span></div>';
-  if (!isReprint) {
-    h += '<div style="margin-top:8px;">';
-    h += '<button onclick="event.stopPropagation();pq_openDamageModal(\'' + pq_esc(p.plotId) + '\')" style="font-size:11px;font-weight:600;color:#dc2626;cursor:pointer;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:3px 8px;">⚠ Declare Damage</button>';
-    h += '</div>';
-  }
-  h += '</div>';
-  return h;
-}
-
-function pq_selectLayout(plotId) {
-  pq_selectedLayout = null;
-  var allLayouts = pq_planned.concat(pq_reprints);
-  for(var i=0; i<allLayouts.length; i++) {
-    if(allLayouts[i].plotId === plotId) { pq_selectedLayout = allLayouts[i]; break; }
-  }
-  pq_renderQueue(); // update active state
-  if(!pq_selectedLayout) return;
-
-  var isReprint = !!pq_selectedLayout.isReprint;
-  var metaColor = isReprint ? '#dc2626' : 'var(--p-purple)';
-  var metaHint  = isReprint
-    ? ' &mdash; <span style="color:#dc2626;font-size:11px;">&#8634; Reprint #' + (pq_selectedLayout.reprintCount||1) + ' &mdash; will continue after damage block</span>'
-    : ' &mdash; This layout will be appended exactly where the map currently ends.';
-  document.getElementById('pq-rollMeta').innerHTML =
-    'Roll: <strong class="mono" style="color:' + metaColor + ';">' + pq_esc(pq_selectedLayout.rollId) + '</strong>' + metaHint;
-  document.getElementById('pq-printBtn').style.display = 'block';
-  document.getElementById('pq-printBtn').style.background = isReprint ? '#dc2626' : 'var(--p-purple)';
-  document.getElementById('pq-printBtn').textContent = isReprint ? '▶ Reprint Now' : '▶ Start Printing';
-
-  pq_renderMap(pq_selectedLayout);
-}
-
-function pq_openDamageModal(plotId) {
-  var allLayouts = pq_planned.concat(pq_reprints);
-  pq_damageTarget = null;
-  for(var i=0; i<allLayouts.length; i++) {
-    if(allLayouts[i].plotId === plotId) { pq_damageTarget = allLayouts[i]; break; }
-  }
-  if(!pq_damageTarget) return;
-  document.getElementById('pq-dmgPlotId').textContent = plotId + ' (' + (pq_damageTarget.joNumbers||[]).join(', ') + ')';
-  document.getElementById('pq-dmgLength').value = '';
-  document.getElementById('pq-dmgRemarks').value = '';
-  document.getElementById('pq-damageModal').style.display = 'flex';
-}
-
-function pq_closeDamageModal() {
-  document.getElementById('pq-damageModal').style.display = 'none';
-  pq_damageTarget = null;
-}
-
-function pq_submitDamage() {
-  if(!pq_damageTarget) return;
-  var len = parseFloat(document.getElementById('pq-dmgLength').value);
-  if(!len || len <= 0) { prism_toast('error', 'Please enter a valid damage length.'); return; }
-  var remarks = document.getElementById('pq-dmgRemarks').value.trim();
-
-  var btn = document.getElementById('pq-dmgSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Submitting...';
-
-  google.script.run
-    .withSuccessHandler(function(r) {
-      btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
-      pq_closeDamageModal();
-      if(r.success) {
-        prism_toast('success', r.message);
-        pq_load();
-      } else {
-        prism_toast('error', r.message);
-      }
-    })
-    .withFailureHandler(function(e) {
-      btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
-      prism_toast('error', e.message);
-    })
-    .prism_declareDamageForPlot({
-      plotId: pq_damageTarget.plotId,
-      rollId: pq_damageTarget.rollId,
-      joNumbers: pq_damageTarget.joNumbers || [],
-      lengthUsed: len,
-      remarks: remarks
-    });
-}
-
-
-// ── Full Roll Map Renderer (mirrors pp_renderHistoryMap) ──────────────────────
-function pq_renderMap(plan) {
-  var canvas = document.getElementById('pq-historyCanvas');
-  var wrap   = document.getElementById('pq-historyWrap');
-  if (!canvas || !wrap) return;
-
-  // Use the already-loaded rollsHistory (PRINTED + DAMAGE only — no PLANNED)
-  // This is pre-filtered by prism_getPrintQueueData so PLANNED entries never
-  // appear as history blocks.
-  var history = (pq_rollsHistory[plan.rollId] || []).slice();
-  pq_drawFullRollMap(plan, history, canvas, wrap);
-}
-
-
-function pq_drawFullRollMap(plan, prior, canvas, wrap) {
-  prior.sort(function(a,b){ return (a.startAtFt||0) - (b.startAtFt||0); });
-
-  var rollWidth  = parseFloat(plan.rollWidth) || 4.5;
-  var totalLen   = parseFloat(plan.lengthUsed) || 0;
-  var lastEnd    = 0;
-  prior.forEach(function(s) { var e=parseFloat(s.endAtFt); if(isFinite(e)&&e>lastEnd) lastEnd=e; });
-  var currentStart = lastEnd;
-  var currentEnd   = currentStart + totalLen;
-
-  // Use same scale as pp_renderHistoryMap
-  var rollLen = Math.max(164, currentEnd + 20);
-  prior.forEach(function(s){ var e=parseFloat(s.endAtFt); if(isFinite(e)&&e>rollLen) rollLen=e+10; });
-
-  var AX_L   = 46;
-  var AX_B   = 36;
-  var bodyW  = Math.max((wrap.clientWidth || 500) - AX_L - 28, 220);
-  var bodyH  = Math.max(980, Math.round(rollLen * 14));
-
-  canvas.width  = bodyW + AX_L + 8;
-  canvas.height = bodyH + AX_B + 8;
-  canvas.style.width  = canvas.width  + 'px';
-  canvas.style.height = canvas.height + 'px';
-
-  var ctx = canvas.getContext('2d');
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  var x0 = AX_L, y0 = 6;
-  var pxPerFtY = bodyH / rollLen;
-
-  // Background
-  ctx.fillStyle = '#eef2f7'; ctx.fillRect(x0, y0, bodyW, bodyH);
-  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5; ctx.strokeRect(x0, y0, bodyW, bodyH);
-
-  // ── Draw history segments ────────────────────────────────────────────────────
-  prior.forEach(function(seg, i) {
-    var sy = y0 + Math.round((seg.startAtFt || 0) * pxPerFtY);
-    var sh = Math.max(2, Math.round((seg.lengthUsed || 0) * pxPerFtY));
-    if (sy > y0 + bodyH) return;
-
-    if (Array.isArray(seg.rows) && seg.rows.length && !seg.isDamage) {
-      // Draw piece-level detail (same as pp_drawHistorySegmentRows)
-      pq_drawHistoryRows(ctx, seg, x0, sy, bodyW, rollWidth, pxPerFtY);
-      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
-      ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
-    } else if (seg.isDamage) {
-      ctx.fillStyle = 'rgba(245,158,11,0.3)';
-      ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
-      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
-      ctx.save(); ctx.strokeStyle='rgba(245,158,11,0.6)'; ctx.lineWidth=1.5; ctx.beginPath();
-      for(var xi=x0; xi<x0+bodyW+sh; xi+=10) { ctx.moveTo(xi,sy); ctx.lineTo(xi-sh,sy+sh); }
-      ctx.stroke(); ctx.restore();
-    } else {
-      ctx.fillStyle = i%2 ? 'rgba(99,102,241,0.18)' : 'rgba(20,184,166,0.18)';
-      ctx.fillRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
-      ctx.strokeStyle = 'rgba(71,85,105,0.25)'; ctx.strokeRect(x0+1, sy, bodyW-2, Math.max(1,sh-2));
-    }
-    if (sh > 14) {
-      ctx.fillStyle='#334155'; ctx.font='10px DM Sans,sans-serif'; ctx.textAlign='left';
-      var tag = seg.isDamage ? 'WASTE ('+(seg.lengthUsed||0).toFixed(1)+'ft)' : 'prev · '+(seg.joNumbers||[]).slice(0,2).join(', ');
-      ctx.fillText(tag, x0+6, sy+12);
-    }
-  });
-
-  // ── Draw current planned layout ──────────────────────────────────────────────
-  var cy = y0 + Math.round(currentStart * pxPerFtY);
-  if (plan.rows && plan.rows.length) {
-    plan.rows.forEach(function(r) {
-      var rh = Math.max(2, Math.round((parseFloat(r.rowH)||0) * pxPerFtY));
-      var cx2 = x0;
-      (r.pieces || []).forEach(function(p) {
-        var pw = Math.max(1, Math.round(((parseFloat(p.w)||0) / rollWidth) * bodyW));
-        var ph = parseFloat(p.h) || parseFloat(r.rowH) || 0;
-        var p_rh = Math.max(2, Math.round(ph * pxPerFtY));
-        if (p_rh > rh) p_rh = rh;
-        var px2 = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx2 - x0));
-        var py2 = cy + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
-        ctx.fillStyle = (p.color || '#4f46e5') + 'cc';
-        ctx.fillRect(px2+1, py2+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
-        ctx.strokeStyle = p.color || '#4f46e5'; ctx.lineWidth = 1;
-        ctx.strokeRect(px2+1, py2+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
-        if (pw > 30 && p_rh > 12) {
-          ctx.fillStyle='#fff'; ctx.font='bold 9px JetBrains Mono,monospace'; ctx.textAlign='center';
-          ctx.fillText(String(p.jo||p.joNumber||'').slice(0,14), px2+pw/2, py2+p_rh/2+3);
+    google.script.run
+      .withSuccessHandler(function (r) {
+        prism_setReloading('pq-reloadBtn', false);
+        if (r.success) {
+          pq_planned = r.planned || [];
+          pq_reprints = r.reprints || [];
+          pq_printing = r.printing || null;
+          pq_rollsHistory = r.rollsHistory || {};
+          pq_renderAll();
+        } else {
+          prism_toast('error', r.message);
+          document.getElementById('pq-list').innerHTML =
+            '<div style="color:var(--p-red);text-align:center;padding:20px;font-size:13px;">Error loading queue.</div>';
         }
-        if (p.dx === undefined) cx2 += pw;
-      });
-      if ((parseFloat(r.wasteW)||0) > 0.02) {
-        var ww = Math.max(1, Math.round(((parseFloat(r.wasteW)||0) / rollWidth) * bodyW));
-        ctx.fillStyle = 'rgba(245,158,11,0.30)';
-        ctx.fillRect(cx2+1, cy+1, Math.max(1,ww-2), Math.max(1,rh-2));
-      }
-      cy += rh;
-    });
+      })
+      .withFailureHandler(function (e) {
+        prism_setReloading('pq-reloadBtn', false);
+        prism_toast('error', e.message);
+      })
+      .prism_getPrintQueueData();
   }
 
-  // ── CURRENT PLAN green border ───────────────────────────────────────────────
-  var planY = y0 + Math.round(currentStart * pxPerFtY);
-  var planH = Math.max(2, Math.round(totalLen * pxPerFtY));
-  ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2;
-  ctx.strokeRect(x0+1, planY+1, bodyW-2, Math.max(1,planH-2));
-  ctx.fillStyle='#065f46'; ctx.font='bold 10px DM Sans,sans-serif'; ctx.textAlign='left';
-  ctx.fillText('CURRENT PLAN', x0+6, Math.max(16, planY+12));
-  if (currentStart > 0.05) {
-    ctx.strokeStyle='rgba(5,150,105,0.65)'; ctx.lineWidth=1; ctx.setLineDash([6,4]);
-    ctx.beginPath(); ctx.moveTo(x0, planY); ctx.lineTo(x0+bodyW, planY); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle='#047857'; ctx.font='bold 10px DM Sans,sans-serif'; ctx.textAlign='right';
-    ctx.fillText('Continuation @ '+currentStart.toFixed(1)+'ft', x0+bodyW-6, Math.max(14, planY-6));
+  // ── Render both panels ──────────────────────────────────────────────────────
+  function pq_renderAll() {
+    pq_renderPrintingSlot();
+    pq_renderWaitingList();
   }
 
-  // ── Left axis ───────────────────────────────────────────────────────────────
-  ctx.fillStyle='#64748b'; ctx.font='10px DM Sans,sans-serif'; ctx.textAlign='right';
-  for (var ft=0; ft<=rollLen; ft+=5) {
-    var yy = y0 + Math.round(ft * pxPerFtY);
-    ctx.fillText(ft, x0-6, yy+3);
-    ctx.strokeStyle='rgba(148,163,184,0.18)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(x0+bodyW,yy); ctx.stroke();
-  }
-
-  // ── Bottom width axis ───────────────────────────────────────────────────────
-  var by = y0 + bodyH + 18;
-  ctx.strokeStyle='#9db5ae'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(x0,by); ctx.lineTo(x0+bodyW,by); ctx.stroke();
-  ctx.fillStyle='#374151'; ctx.font='bold 10px DM Sans,sans-serif';
-  ctx.textAlign='left';   ctx.fillText('0', x0, by+12);
-  ctx.textAlign='center'; ctx.fillText(rollWidth+'ft wide', x0+bodyW/2, by+12);
-  ctx.textAlign='right';  ctx.fillText(rollWidth+'ft', x0+bodyW, by+12);
-
-  // Scroll to current plan
-  setTimeout(function() { wrap.scrollTop = Math.max(0, planY - 120); }, 50);
-}
-
-function pq_drawHistoryRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPerFtY) {
-  var rows = Array.isArray(seg.rows) ? seg.rows : [];
-  var y = startY;
-  rows.forEach(function(r) {
-    var rh = Math.max(2, Math.round((parseFloat(r.rowH)||0) * pxPerFtY));
-    var cx = x0;
-    (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
-      var pw = Math.max(1, Math.round(((parseFloat(p.w)||0) / rollWidth) * bodyW));
-      var ph = parseFloat(p.h) || parseFloat(r.rowH) || 0;
-      var p_rh = Math.max(2, Math.round(ph * pxPerFtY));
-      if (p_rh > rh) p_rh = rh;
-      var pxc = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx - x0));
-      var pyc = y + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
-      ctx.fillStyle = 'rgba(148,163,184,0.33)';
-      ctx.fillRect(pxc+1, pyc+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
-      ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
-      ctx.strokeRect(pxc+1, pyc+1, Math.max(1,pw-2), Math.max(1,p_rh-2));
-      if (pw > 34 && p_rh > 14) {
-        ctx.fillStyle='#334155'; ctx.font='bold 9px JetBrains Mono,monospace'; ctx.textAlign='center';
-        ctx.fillText(String(p.jo||p.joNumber||p.customer||'').slice(0,14), pxc+pw/2, pyc+p_rh/2+3);
-      }
-      if (p.dx === undefined) cx += pw;
-    });
-    var wasteW = parseFloat(r.wasteW) || 0;
-    if (wasteW > 0.02) {
-      var ww = Math.max(1, Math.round((wasteW / rollWidth) * bodyW));
-      ctx.fillStyle = 'rgba(245,158,11,0.20)';
-      ctx.fillRect(cx+1, y+1, Math.max(1,ww-2), Math.max(1,rh-2));
-      ctx.strokeStyle = 'rgba(245,158,11,0.35)'; ctx.strokeRect(cx+1, y+1, Math.max(1,ww-2), Math.max(1,rh-2));
+  function pq_renderPrintingSlot() {
+    var slot = document.getElementById('pq-printing-slot');
+    if (!pq_printing) {
+      slot.innerHTML = '<div class="pq-slot-empty">No print in queue</div>';
+      return;
     }
-    y += rh;
-  });
-}
+    var p = pq_printing;
+    var h = '<div class="pq-printing-card">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
+    h += '<span class="mono" style="font-weight:800;font-size:14px;color:var(--p-green);">' + pq_esc(p.rollId) + '</span>';
+    h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
+    h += '</div>';
+    h += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 6px;">Started: ' + pq_esc(p.date) + '</p>';
+    if (p.pngUrl) {
+      h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
+        + ' style="display:inline-block;font-size:11px;font-weight:700;color:var(--p-purple);'
+        + 'text-decoration:none;background:var(--p-purple-lt);padding:4px 8px;border-radius:6px;'
+        + 'border:1px solid var(--p-purple-bd);margin-bottom:8px;">View Image &#8599;</a> ';
+    }
+    h += '<div style="font-size:11px;color:var(--p-faint);margin-bottom:12px;">JOs: <span style="color:var(--p-text);font-weight:600;">'
+      + pq_esc((p.joNumbers || []).join(', ')) + '</span></div>';
+    // Action buttons
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    h += '<button onclick="pq_openDoneModal()" style="flex:1;background:var(--p-green);color:#fff;border:none;'
+      + 'border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;">&#10003; Mark Done</button>';
+    h += '<button onclick="pq_openDamageModal(\'' + pq_esc(p.plotId) + '\')" style="flex:1;background:rgba(239,68,68,0.1);'
+      + 'color:#dc2626;border:1px solid rgba(239,68,68,0.3);border-radius:8px;'
+      + 'padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;">&#9888; Declare Damage</button>';
+    h += '</div>';
+    h += '</div>';
+    slot.innerHTML = h;
+  }
 
-function pq_startPrinting() {
-  if(!pq_selectedLayout) return;
-  document.getElementById('pq-confirmPlotId').textContent = pq_selectedLayout.plotId;
-  document.getElementById('pq-confirmRollId').textContent = pq_selectedLayout.rollId;
-  document.getElementById('pq-confirmModal').style.display = 'flex';
-}
+  function pq_renderWaitingList() {
+    var list = document.getElementById('pq-list');
+    var isLocked = !!pq_printing;
+    var allWaiting = pq_planned.concat(pq_reprints);
 
-function pq_closeConfirmModal() {
-  document.getElementById('pq-confirmModal').style.display = 'none';
-}
+    document.getElementById('pq-count').textContent = allWaiting.length;
 
-function pq_doStartPrinting() {
-  if(!pq_selectedLayout) return;
-  pq_closeConfirmModal();
-  var btn = document.getElementById('pq-printBtn');
-  btn.disabled = true; btn.textContent = 'Recording Print...';
+    if (!allWaiting.length) {
+      list.innerHTML = '<div style="text-align:center;padding:30px 20px;color:var(--p-faint);font-size:13px;">No layouts waiting in queue.</div>';
+      return;
+    }
 
-  google.script.run
-    .withSuccessHandler(function(r) {
-      btn.disabled = false; btn.textContent = '▶ Start Printing';
-      if(r.success) {
-        prism_toast('success', r.message);
-        pq_load();
+    var html = '';
+
+    if (isLocked) {
+      html += '<div style="margin-bottom:10px;padding:8px 12px;background:var(--p-amber-lt);'
+        + 'border:1px solid var(--p-amber-bd);border-radius:8px;font-size:12px;color:var(--p-amber);">'
+        + '&#128274; Printing in progress — queue is locked until current job is done or declared damage.</div>';
+    }
+
+    pq_planned.forEach(function (p) { html += pq_buildWaitingCard(p, false, isLocked); });
+
+    if (pq_reprints.length) {
+      html += '<div style="margin:12px 0 8px;display:flex;align-items:center;gap:8px;">';
+      html += '<span style="flex:1;height:1px;background:rgba(239,68,68,0.25);"></span>';
+      html += '<span style="font-size:11px;font-weight:700;color:#dc2626;letter-spacing:.04em;">REPRINTS (' + pq_reprints.length + ')</span>';
+      html += '<span style="flex:1;height:1px;background:rgba(239,68,68,0.25);"></span>';
+      html += '</div>';
+      pq_reprints.forEach(function (p) { html += pq_buildWaitingCard(p, true, isLocked); });
+    }
+
+    list.innerHTML = html;
+  }
+
+  function pq_buildWaitingCard(p, isReprint, isLocked) {
+    var act = (!isLocked && pq_selectedLayout && pq_selectedLayout.plotId === p.plotId) ? ' active' : '';
+    var repClass = isReprint ? ' pq-reprint-card' : '';
+    var lockClass = isLocked ? ' locked' : '';
+    var onclick = isLocked ? '' : ' onclick="pq_selectWaiting(\'' + pq_esc(p.plotId) + '\')"';
+
+    var h = '<div class="pq-queue-card' + repClass + lockClass + act + '"' + onclick + '>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">';
+    h += '<span class="mono" style="font-weight:800;font-size:13px;color:' + (isReprint ? '#dc2626' : 'var(--p-purple)') + ';">'
+      + pq_esc(p.rollId) + '</span>';
+
+    var badge = isReprint
+      ? '<span class="p-badge" style="background:rgba(239,68,68,0.15);color:#dc2626;border:1px solid rgba(239,68,68,0.3);">&#8634; Reprint #' + (p.reprintCount || 1) + '</span>'
+      : '<span class="p-badge badge-purple">' + (p.lengthUsed || 0).toFixed(1) + ' ft</span>';
+    h += badge + '</div>';
+
+    h += '<p style="font-size:12px;color:var(--p-muted);margin:0 0 6px;">'
+      + (isReprint ? 'Originally plotted: ' : 'Created: ') + pq_esc(p.date) + '</p>';
+    if (p.pngUrl) {
+      h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
+        + ' style="display:inline-block;font-size:11px;font-weight:700;color:var(--p-purple);'
+        + 'text-decoration:none;background:var(--p-purple-lt);padding:4px 8px;border-radius:6px;'
+        + 'border:1px solid var(--p-purple-bd);margin-bottom:6px;">View Image &#8599;</a>';
+    }
+    h += '<div style="font-size:11px;color:var(--p-faint);">JOs: <span style="color:var(--p-text);font-weight:500;">'
+      + pq_esc((p.joNumbers || []).join(', ')) + '</span></div>';
+    h += '</div>';
+    return h;
+  }
+
+  // ── Select a waiting card → show roll map + Start Printing button ────────────
+  function pq_selectWaiting(plotId) {
+    if (pq_printing) return;
+    pq_selectedLayout = null;
+    var all = pq_planned.concat(pq_reprints);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].plotId === plotId) { pq_selectedLayout = all[i]; break; }
+    }
+    pq_renderWaitingList();
+    if (!pq_selectedLayout) return;
+
+    var isReprint = !!pq_selectedLayout.isReprint;
+    document.getElementById('pq-rollMeta').innerHTML =
+      'Roll: <strong class="mono" style="color:' + (isReprint ? '#dc2626' : 'var(--p-purple)') + ';">'
+      + pq_esc(pq_selectedLayout.rollId) + '</strong>'
+      + (isReprint
+        ? ' &mdash; <span style="color:#dc2626;font-size:11px;">&#8634; Reprint — will continue after last valid print</span>'
+        : ' &mdash; This layout will be appended exactly where the map currently ends.');
+
+    var btn = document.getElementById('pq-printBtn');
+    btn.style.display = 'block';
+    btn.style.background = isReprint ? '#dc2626' : 'var(--p-purple)';
+    btn.textContent = isReprint ? '▶ Reprint Now' : '▶ Start Printing';
+
+    pq_renderMap(pq_selectedLayout);
+  }
+
+  // ── Start Printing flow ──────────────────────────────────────────────────────
+  function pq_startPrinting() {
+    if (!pq_selectedLayout) return;
+    document.getElementById('pq-confirmPlotId').textContent = pq_selectedLayout.plotId;
+    document.getElementById('pq-confirmRollId').textContent = pq_selectedLayout.rollId;
+    document.getElementById('pq-confirmModal').style.display = 'flex';
+  }
+  function pq_closeConfirmModal() {
+    document.getElementById('pq-confirmModal').style.display = 'none';
+  }
+  function pq_doStartPrinting() {
+    if (!pq_selectedLayout) return;
+    pq_closeConfirmModal();
+    var btn = document.getElementById('pq-printBtn');
+    btn.disabled = true; btn.textContent = 'Recording...';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        btn.textContent = pq_selectedLayout && pq_selectedLayout.isReprint ? '▶ Reprint Now' : '▶ Start Printing';
+        if (r.success) { prism_toast('success', r.message); pq_load(); }
+        else prism_toast('error', r.message);
+      })
+      .withFailureHandler(function (e) {
+        btn.disabled = false; btn.textContent = '▶ Start Printing';
+        prism_toast('error', e.message);
+      })
+      .prism_startPrintingLayout({ plotId: pq_selectedLayout.plotId });
+  }
+
+  // ── Mark Done flow ───────────────────────────────────────────────────────────
+  function pq_openDoneModal() {
+    document.getElementById('pq-doneModal').style.display = 'flex';
+  }
+  function pq_closeDoneModal() {
+    document.getElementById('pq-doneModal').style.display = 'none';
+  }
+  function pq_doMarkDone() {
+    if (!pq_printing) return;
+    pq_closeDoneModal();
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (r.success) { prism_toast('success', r.message); pq_load(); }
+        else prism_toast('error', r.message);
+      })
+      .withFailureHandler(function (e) { prism_toast('error', e.message); })
+      .prism_markPrintingComplete({ plotId: pq_printing.plotId });
+  }
+
+  // ── Declare Damage flow ──────────────────────────────────────────────────────
+  function pq_openDamageModal(plotId) {
+    if (!pq_printing || pq_printing.plotId !== plotId) return;
+    pq_damageTarget = pq_printing;
+    document.getElementById('pq-dmgPlotId').textContent =
+      plotId + ' (' + (pq_damageTarget.joNumbers || []).join(', ') + ')';
+    document.getElementById('pq-dmgRemarks').value = '';
+    document.getElementById('pq-damageModal').style.display = 'flex';
+  }
+  function pq_closeDamageModal() {
+    document.getElementById('pq-damageModal').style.display = 'none';
+    pq_damageTarget = null;
+  }
+  function pq_submitDamage() {
+    if (!pq_damageTarget) return;
+    var remarks = document.getElementById('pq-dmgRemarks').value.trim();
+    var btn = document.getElementById('pq-dmgSubmitBtn');
+    btn.disabled = true; btn.textContent = 'Submitting...';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
+        pq_closeDamageModal();
+        if (r.success) { prism_toast('success', r.message); pq_load(); }
+        else prism_toast('error', r.message);
+      })
+      .withFailureHandler(function (e) {
+        btn.disabled = false; btn.textContent = '⚠ Confirm Damage';
+        prism_toast('error', e.message);
+      })
+      .prism_declareDamageForPlot({
+        plotId: pq_damageTarget.plotId,
+        rollId: pq_damageTarget.rollId,
+        joNumbers: pq_damageTarget.joNumbers || [],
+        remarks: remarks
+      });
+  }
+
+  // ── Image modal ──────────────────────────────────────────────────────────────
+  function pq_openImageModal(url) {
+    document.getElementById('pq-imageModalImg').src = url;
+    document.getElementById('pq-imageModal').style.display = 'flex';
+  }
+  function pq_closeImageModal() {
+    document.getElementById('pq-imageModal').style.display = 'none';
+    document.getElementById('pq-imageModalImg').src = '';
+  }
+
+  // ── Full Roll Map renderer ───────────────────────────────────────────────────
+  function pq_renderMap(plan) {
+    var canvas = document.getElementById('pq-historyCanvas');
+    var wrap = document.getElementById('pq-historyWrap');
+    if (!canvas || !wrap) return;
+
+    var rollId = plan.rollId;
+    var rollWidth = parseFloat(plan.rollWidth) || 4.5;
+    var history = (pq_rollsHistory[rollId] || []).slice().sort(function (a, b) { return a.startAtFt - b.startAtFt; });
+
+    var totalPrinted = 0;
+    history.forEach(function (s) { var e = parseFloat(s.endAtFt) || 0; if (e > totalPrinted) totalPrinted = e; });
+    var planLen = parseFloat(plan.lengthUsed) || 0;
+    var totalLen = totalPrinted + planLen + 2;
+
+    var wrapW = Math.max(wrap.clientWidth - 48, 300);
+    var pxPerFt = 22;
+    var axisW = 36;
+    var bodyW = wrapW - axisW;
+    var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60);
+
+    canvas.width = wrapW;
+    canvas.height = canvasH;
+
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // background
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(axisW, 0, bodyW, canvasH);
+
+    // axis ticks
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    for (var ft = 0; ft <= totalLen; ft += 5) {
+      var ty = Math.round(ft * pxPerFt);
+      ctx.fillText(ft, axisW - 4, ty + 4);
+      ctx.strokeStyle = 'rgba(148,163,184,0.3)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(axisW, ty); ctx.lineTo(axisW + bodyW, ty); ctx.stroke();
+    }
+
+    // history segments
+    history.forEach(function (seg) {
+      var sy = Math.round((parseFloat(seg.startAtFt) || 0) * pxPerFt);
+      var ey = Math.round((parseFloat(seg.endAtFt) || 0) * pxPerFt);
+      var sh = Math.max(2, ey - sy);
+
+      if (seg.isDamage || seg.isVoid) {
+        // striped amber = void/damage
+        ctx.save();
+        ctx.beginPath(); ctx.rect(axisW, sy, bodyW, sh); ctx.clip();
+        ctx.fillStyle = 'rgba(245,158,11,0.18)';
+        ctx.fillRect(axisW, sy, bodyW, sh);
+        ctx.strokeStyle = 'rgba(245,158,11,0.5)'; ctx.lineWidth = 0.5;
+        for (var xi = -sh; xi < bodyW + sh; xi += 10) {
+          ctx.beginPath(); ctx.moveTo(axisW + xi, sy); ctx.lineTo(axisW + xi + sh, sy + sh); ctx.stroke();
+        }
+        ctx.restore();
+        ctx.fillStyle = '#92400e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('WASTE (' + ((parseFloat(seg.endAtFt) || 0) - (parseFloat(seg.startAtFt) || 0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
       } else {
-        prism_toast('error', r.message);
+        ctx.fillStyle = 'rgba(148,163,184,0.35)';
+        ctx.fillRect(axisW, sy, bodyW, sh);
+        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.5;
+        ctx.strokeRect(axisW, sy, bodyW, sh);
+        var label = 'prev · ' + (seg.joNumbers || []).join(', ');
+        if (sh > 14) {
+          ctx.fillStyle = '#475569'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+          ctx.fillText(label, axisW + 6, sy + 14);
+        }
+        pq_drawSegmentRows(ctx, seg, axisW, sy, bodyW, rollWidth, pxPerFt);
       }
-    })
-    .withFailureHandler(function(e) {
-      btn.disabled = false; btn.textContent = '▶ Start Printing';
-      prism_toast('error', e.message);
-    })
-    .prism_startPrintingLayout({ plotId: pq_selectedLayout.plotId });
-}
+    });
 
-function pq_openImageModal(url) {
-  document.getElementById('pq-imageModalImg').src = url;
-  document.getElementById('pq-imageModal').style.display = 'flex';
-}
+    // current plan overlay
+    var planY = Math.round(totalPrinted * pxPerFt);
+    var planH = Math.max(4, Math.round(planLen * pxPerFt));
+    ctx.fillStyle = 'rgba(99,102,241,0.25)';
+    ctx.fillRect(axisW, planY, bodyW, planH);
+    ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 2;
+    ctx.strokeRect(axisW, planY, bodyW, planH);
+    ctx.fillStyle = '#4338ca'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('CURRENT PLAN', axisW + 6, planY + 14);
+    if (planLen > 0) {
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.fillText((plan.joNumbers || []).join(', '), axisW + bodyW / 2, planY + planH / 2 + 4);
+    }
 
-function pq_closeImageModal() {
-  document.getElementById('pq-imageModal').style.display = 'none';
-  document.getElementById('pq-imageModalImg').src = '';
-}
+    // continuation label
+    var contY = Math.round((totalPrinted + planLen) * pxPerFt);
+    ctx.fillStyle = 'rgba(245,158,11,0.15)';
+    ctx.fillRect(axisW + Math.round(bodyW * 0.65), planY, Math.round(bodyW * 0.35), planH);
+    ctx.fillStyle = '#b45309'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('Continuation @ ' + (totalPrinted + planLen).toFixed(1) + 'ft', axisW + bodyW - 4, planY + 14);
+  }
 
-function pq_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function pq_drawSegmentRows(ctx, seg, x0, startY, bodyW, rollWidth, pxPerFtY) {
+    var rows = Array.isArray(seg.rows) ? seg.rows : [];
+    var y = startY;
+    rows.forEach(function (r) {
+      var rh = Math.max(2, Math.round((parseFloat(r.rowH) || 0) * pxPerFtY));
+      var cx = x0;
+      (Array.isArray(r.pieces) ? r.pieces : []).forEach(function (p) {
+        var pw = Math.max(1, Math.round(((parseFloat(p.w) || 0) / rollWidth) * bodyW));
+        var p_rh = Math.max(2, Math.min(rh, Math.round((parseFloat(p.h) || parseFloat(r.rowH) || 0) * pxPerFtY)));
+        var pxc = x0 + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx - x0));
+        var pyc = y + (p.dy !== undefined ? Math.round(p.dy * pxPerFtY) : 0);
+        ctx.fillStyle = 'rgba(148,163,184,0.33)';
+        ctx.fillRect(pxc + 1, pyc + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+        ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
+        ctx.strokeRect(pxc + 1, pyc + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+        if (pw > 34 && p_rh > 14) {
+          ctx.fillStyle = '#334155'; ctx.font = 'bold 9px JetBrains Mono,monospace'; ctx.textAlign = 'center';
+          ctx.fillText(String(p.jo || p.joNumber || '').slice(0, 14), pxc + pw / 2, pyc + p_rh / 2 + 3);
+        }
+        if (p.dx === undefined) cx += pw;
+      });
+      y += rh;
+    });
+  }
+
+  function pq_esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 </script>
