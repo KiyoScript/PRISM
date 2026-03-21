@@ -49,8 +49,35 @@ const USAGE_COL = {
 
 // Plotting_Log  A-F
 const PLOT_COL = {
-  PLOT_ID: 0, JO_NUMBER: 1, PLOTTING_LINK: 2,
-  OPERATOR: 3, DATE_PLOTTED: 4, REMARKS: 5
+  PLOT_ID:     0,
+  TYPE:        1,
+  ROLL_ID:     2,
+  JO_NUMBERS:  3,
+  STATUS:      4,
+  START_FT:    5,
+  END_FT:      6,
+  LENGTH_FT:   7,
+  IS_VOID:     8,
+  IS_REPRINT:  9,
+  PNG_URL:     10,
+  OPERATOR:    11,
+  DATE_PLOTTED:12,
+  REMARKS:     13
+};
+
+const PLOT_TYPE = {
+  PLOT:       'PLOT',
+  DAMAGE:     'DAMAGE',
+  TEST_PRINT: 'TEST_PRINT',
+  REPRINT:    'REPRINT'
+};
+ 
+const PLOT_STATUS = {
+  PLANNED:  'PLANNED',
+  PRINTING: 'PRINTING',
+  PRINTED:  'PRINTED',
+  VOIDED:   'VOIDED',
+  DAMAGED:  'DAMAGED'
 };
 
 // ============================================================
@@ -105,8 +132,7 @@ function prism_bootstrap() {
     { name: PRISM_SHEETS.LFP_MATERIALS, headers: ['MaterialCode', 'MaterialName', 'Width', 'StandardLength', 'Supplier', 'CostPerRoll'] },
     { name: PRISM_SHEETS.LFP_ROLLS, headers: ['RollID', 'MaterialCode', 'Width', 'OriginalLength', 'RemainingLength', 'Status', 'DateReceived', 'DateOpened', 'OpenedBy'] },
     { name: PRISM_SHEETS.LFP_USAGE, headers: ['UsageID', 'JO_Number', 'RollID', 'WidthUsed', 'LengthUsed', 'Operator', 'PlottingLink', 'DateUsed'] },
-    { name: PRISM_SHEETS.PLOTTING_LOG, headers: ['PlotID', 'JO_Number', 'PlottingSheetLink', 'Operator', 'DatePlotted', 'Remarks'] },
-    { name: PRISM_SHEETS.AUDIT, headers: ['DateTime', 'Action', 'User', 'Role', 'PayloadJSON'] },
+    { name: PRISM_SHEETS.PLOTTING_LOG, headers: ['PlotID','Type','RollID','JONumbers','Status','StartFt','EndFt','LengthFt','IsVoid','IsReprint','PngUrl','Operator','DatePlotted','Remarks'] },{ name: PRISM_SHEETS.AUDIT, headers: ['DateTime', 'Action', 'User', 'Role', 'PayloadJSON'] },
     { name: PRISM_SHEETS.SETTINGS, headers: ['SettingKey', 'SettingValue'] }
   ];
   schemas.forEach(s => {
@@ -155,6 +181,58 @@ function prism_fmtShort_(val) {
   } catch (e) { return ''; }
 }
 
+function prism_writePlotRow_(plotSh, {
+  plotId, type, rollId, joNumbers = [], status,
+  startFt = 0, endFt = 0, lengthFt = 0,
+  isVoid = false, isReprint = false,
+  pngUrl = '', operator, date, remarks = {}
+}) {
+  plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 14).setValues([[
+    plotId,
+    type,
+    rollId,
+    joNumbers.join(', '),
+    status,
+    startFt,
+    endFt,
+    lengthFt,
+    isVoid,
+    isReprint,
+    pngUrl,
+    operator,
+    date,
+    JSON.stringify(remarks)
+  ]]);
+}
+
+
+function prism_readPlotRows_(plotSh) {
+  const lr = plotSh.getLastRow();
+  if (lr < 2) return [];
+  return plotSh.getRange(2, 1, lr - 1, 14).getValues()
+    .filter(r => String(r[PLOT_COL.PLOT_ID] || '').trim())
+    .map((r, i) => {
+      let remarks = {};
+      try { remarks = JSON.parse(String(r[PLOT_COL.REMARKS] || '{}')); } catch(e) {}
+      return {
+        _rowIdx:    i + 2,
+        plotId:     String(r[PLOT_COL.PLOT_ID]     || '').trim(),
+        type:       String(r[PLOT_COL.TYPE]         || '').trim(),
+        rollId:     String(r[PLOT_COL.ROLL_ID]      || '').trim(),
+        joNumbers:  String(r[PLOT_COL.JO_NUMBERS]   || '').split(',').map(x=>x.trim()).filter(Boolean),
+        status:     String(r[PLOT_COL.STATUS]        || '').trim(),
+        startFt:    parseFloat(r[PLOT_COL.START_FT]) || 0,
+        endFt:      parseFloat(r[PLOT_COL.END_FT])   || 0,
+        lengthFt:   parseFloat(r[PLOT_COL.LENGTH_FT])|| 0,
+        isVoid:     r[PLOT_COL.IS_VOID] === true || String(r[PLOT_COL.IS_VOID]).toLowerCase() === 'true',
+        isReprint:  r[PLOT_COL.IS_REPRINT] === true || String(r[PLOT_COL.IS_REPRINT]).toLowerCase() === 'true',
+        pngUrl:     String(r[PLOT_COL.PNG_URL]       || '').trim(),
+        operator:   String(r[PLOT_COL.OPERATOR]      || '').trim(),
+        date:       r[PLOT_COL.DATE_PLOTTED],
+        remarks
+      };
+    });
+}
 // ============================================================
 //  ROLE & PERMISSION
 // ============================================================
@@ -167,7 +245,6 @@ function prism_getUserInfo_() {
       const role = String(data[i][0] || '').trim();
       const emails = String(data[i][1] || '').replace(/"/g, '').toLowerCase().split(',').map(e => e.trim()).filter(Boolean);
       const abilities = String(data[i][2] || '').replace(/"/g, '').toLowerCase().split(',').map(a => a.trim()).filter(Boolean);
-      const latestPlotAssets = prism_getLatestPlotAssetsByJO_();
       if (emails.includes(email)) return { email, role, abilities };
     }
     return { email, role: 'No Role', abilities: [] };
@@ -641,39 +718,28 @@ function prism_recordTestPrint(payload) {
     ]]);
 
     // ── Write to Plotting_Log so test print appears on the roll map ──
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
-
-    // Find the furthest end position on this roll across all non-voided entries
-    let maxEnd = 0;
-    plotData.forEach(r => {
-      try {
-        const j = JSON.parse(String(r[5] || '{}'));
-        if (j.rollId === payload.rollId && !j.isVoid) {
-          const e = parseFloat(j.endAtFt) || 0;
-          if (e > maxEnd) maxEnd = e;
-        }
-      } catch (e) { }
+    const plotSh2   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows2 = prism_readPlotRows_(plotSh2);
+    let maxEnd2 = 0;
+    plotRows2.forEach(r => {
+      if (r.rollId === payload.rollId && !r.isVoid && r.endFt > maxEnd2) maxEnd2 = r.endFt;
     });
-
-    const testPlotId = 'TEST-PLT-' + today.getTime();
-    const testPlotObj = {
-      type: 'TEST_PRINT',
-      status: 'PRINTED',
-      isTestPrint: true,
-      rollId: payload.rollId,
-      rollWidth: rollWidth,
-      startAtFt: maxEnd,
-      endAtFt: maxEnd + lengthUsed,
-      lengthUsed: lengthUsed,
+    prism_writePlotRow_(plotSh2, {
+      plotId:    'TEST-PLT-' + today.getTime(),
+      type:      PLOT_TYPE.TEST_PRINT,
+      rollId:    payload.rollId,
       joNumbers: [],
-      notes: payload.notes || '',
-      createdBy: user.email
-    };
-    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
-      testPlotId, 'TEST_PRINT', '', user.email, today, JSON.stringify(testPlotObj)
-    ]]);
+      status:    PLOT_STATUS.PRINTED,
+      startFt:   maxEnd2,
+      endFt:     maxEnd2 + lengthUsed,
+      lengthFt:  lengthUsed,
+      isVoid:    false,
+      isReprint: false,
+      pngUrl:    '',
+      operator:  user.email,
+      date:      today,
+      remarks:   { notes: payload.notes || '', rollWidth: rollWidth }
+    });
 
     prism_audit_('PRISM_TEST_PRINT', {
       rollId: payload.rollId,
@@ -833,58 +899,45 @@ function prism_declareDamage(payload) {
       today
     ]]);
 
-    // ── Find and Void previous aborted plot in Plotting_Log ──
+// ── Find and void previous PLANNED plot in Plotting_Log ──
     const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    if (plotLr >= 2) {
-      const plotData = plotSh.getRange(2, 6, plotLr - 1, 1).getValues();
-      for (let i = plotData.length - 1; i >= 0; i--) {
-        const jStr = String(plotData[i][0]).trim();
-        if (jStr.startsWith('{')) {
-          try {
-            const obj = JSON.parse(jStr);
-            if (obj.rollId === payload.rollId && !obj.isDamage && !obj.isVoid && obj.type === 'ROLL_PLAN') {
-              const objJos = obj.joNumbers || [];
-              if (targets.some(t => objJos.includes(t))) {
-                obj.isVoid = true;
-                obj.voidReason = 'Replaced by Damage ' + lengthUsed + 'ft';
-                plotSh.getRange(i + 2, 6).setValue(JSON.stringify(obj));
-                break;
-              }
-            }
-          } catch (e) { }
-        }
+    const plotRows = prism_readPlotRows_(plotSh);
+    for (let i = plotRows.length - 1; i >= 0; i--) {
+      const row = plotRows[i];
+      if (row.rollId === payload.rollId &&
+          !row.isVoid &&
+          row.type === PLOT_TYPE.PLOT &&
+          row.joNumbers.some(jo => targets.includes(jo.toUpperCase()))) {
+        plotSh.getRange(row._rowIdx, PLOT_COL.IS_VOID + 1).setValue(true);
+        plotSh.getRange(row._rowIdx, PLOT_COL.STATUS  + 1).setValue(PLOT_STATUS.VOIDED);
+        break;
       }
     }
-
-    // ── Write to Plotting_Log for visual map ──
-    const plotId = 'PLT-DAM-' + today.getTime();
-
+ 
+    // ── Write DAMAGE block to Plotting_Log ──
     const startAtFt = Math.max(0, originalLength - remaining);
-    const endAtFt = startAtFt + lengthUsed;
-
-    const remarksObj = {
-      type: "ROLL_PLAN",
-      isDamage: true,
-      rollId: payload.rollId,
-      rollWidth: rollWidth,
-      originalLength: originalLength,
-      startAtFt: startAtFt,
-      endAtFt: endAtFt,
-      lengthUsed: lengthUsed,
+    const endAtFt   = startAtFt + lengthUsed;
+ 
+    prism_writePlotRow_(plotSh, {
+      plotId:    'PLT-DAM-' + today.getTime(),
+      type:      PLOT_TYPE.DAMAGE,
+      rollId:    payload.rollId,
       joNumbers: payload.joNumbers || [],
-      createdBy: user.email,
-      damageReason: payload.remarks || ''
-    };
-
-    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
-      plotId,
-      'DAMAGE',
-      '', // No link for damage
-      user.email,
-      today,
-      JSON.stringify(remarksObj)
-    ]]);
+      status:    PLOT_STATUS.PRINTED,
+      startFt:   startAtFt,
+      endFt:     endAtFt,
+      lengthFt:  lengthUsed,
+      isVoid:    false,
+      isReprint: false,
+      pngUrl:    '',
+      operator:  user.email,
+      date:      today,
+      remarks: {
+        rollWidth:      rollWidth,
+        originalLength: originalLength,
+        damageReason:   payload.remarks || ''
+      }
+    });
 
     // ── Revert affected JOs back to FOR_PLOTTING ──
     let affectedCount = 0;
@@ -930,138 +983,101 @@ function prism_declareDamage(payload) {
 //  reverts JOs to FOR_PLOTTING, writes a REPRINT entry.
 // ============================================================
 function prism_declareDamageForPlot(payload) {
-  // payload: { plotId, rollId, joNumbers, lengthUsed (damage ft), remarks }
   try {
     const user = prism_getUserInfo_();
     if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
       return { success: false, message: 'Access denied.' };
-
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    if (plotLr < 2) return { success: false, message: 'No plot records found.' };
-    const plotData = plotSh.getRange(2, 1, plotLr - 1, 6).getValues();
-
-    // 1. Find the PRINTING entry
-    let targetRowIdx = -1, targetJson = null;
-    for (let i = 0; i < plotData.length; i++) {
-      const id = String(plotData[i][0]).trim();
-      if (id !== payload.plotId) continue;
-      try {
-        const obj = JSON.parse(String(plotData[i][5] || '{}'));
-        if (obj.status === 'PRINTING' && !obj.isVoid) {
-          targetRowIdx = i + 2;
-          targetJson = obj;
-        }
-      } catch (e) { }
-      break;
-    }
-    if (!targetRowIdx || !targetJson)
+ 
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+    const target   = plotRows.find(r => r.plotId === payload.plotId);
+ 
+    if (!target || target.status !== PLOT_STATUS.PRINTING || target.isVoid)
       return { success: false, message: 'PRINTING entry not found or already voided.' };
-
-    const rollId = targetJson.rollId || payload.rollId;
-    const joNumbers = targetJson.joNumbers || payload.joNumbers || [];
-    const today = new Date();
-    const printLength = parseFloat(targetJson.lengthUsed) || 0;
-    const printStart = parseFloat(targetJson.startAtFt) || 0;
-    const printEnd = printStart + printLength;
+ 
+    const rollId       = target.rollId;
+    const joNumbers    = target.joNumbers;
+    const today        = new Date();
+    const printLength  = target.lengthFt;
+    const printStart   = target.startFt;
     const damageLength = parseFloat(payload.lengthUsed) || 0;
+ 
     if (damageLength <= 0)
-      return { success: false, message: 'Damage length must be greater than 0.' };
-
-    // 2. Void the PRINTING entry — JO print is removed from roll map (will reprint)
-    targetJson.status = 'VOIDED';
-    targetJson.isVoid = true;
-    targetJson.voidReason = 'Damage declared: ' + (payload.remarks || '');
-    plotSh.getRange(targetRowIdx, 6).setValue(JSON.stringify(targetJson));
-
-    // 3. Write a DAMAGE block immediately after the printed segment
-    const damageStart = printStart;
-    const damageEnd = damageStart + damageLength;
-    const damageId = 'DMG-' + today.getTime();
-    const damageObj = {
-      type: 'DAMAGE',
-      status: 'PRINTED',
-      isDamage: true,
-      rollId: rollId,
-      rollWidth: parseFloat(targetJson.rollWidth) || 0,
-      startAtFt: damageStart,
-      endAtFt: damageEnd,
-      lengthUsed: damageLength,
-      joNumbers: joNumbers,
-      damageReason: payload.remarks || '',
-      createdBy: user.email
-    };
-    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
-      damageId, 'DAMAGE', '', user.email, today, JSON.stringify(damageObj)
-    ]]);
-
-    // 4. Deduct only the damage length from the roll
-    //    The JO print is voided so its material is accounted for by the damage block
-    const totalDeduct = damageLength;
-    const rollSh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
-    const rollLr = rollSh.getLastRow();
-    if (rollLr >= 2) {
-      const rollData = rollSh.getRange(2, 1, rollLr - 1, 9).getValues();
-      rollData.forEach((r, i) => {
-        if (String(r[ROLL_COL.ROLL_ID]).trim() !== rollId) return;
-        const cur = parseFloat(r[ROLL_COL.REMAINING_LENGTH]) || 0;
-        const next = Math.max(0, cur - totalDeduct);
-        rollSh.getRange(i + 2, ROLL_COL.REMAINING_LENGTH + 1).setValue(next);
-        rollSh.getRange(i + 2, ROLL_COL.STATUS + 1).setValue(
-          next <= 0 ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN
-        );
+      return { success: false, message: 'Damage length must be > 0.' };
+ 
+    // 1. Void the PRINTING entry
+    plotSh.getRange(target._rowIdx, PLOT_COL.STATUS  + 1).setValue(PLOT_STATUS.VOIDED);
+    plotSh.getRange(target._rowIdx, PLOT_COL.IS_VOID + 1).setValue(true);
+ 
+    // 2. Write DAMAGE block
+    const damageId  = 'DMG-' + today.getTime();
+    prism_writePlotRow_(plotSh, {
+      plotId:    damageId,
+      type:      PLOT_TYPE.DAMAGE,
+      rollId,
+      joNumbers,
+      status:    PLOT_STATUS.PRINTED,
+      startFt:   printStart,
+      endFt:     printStart + damageLength,
+      lengthFt:  damageLength,
+      isVoid:    false,
+      isReprint: false,
+      pngUrl:    '',
+      operator:  user.email,
+      date:      today,
+      remarks: { damageReason: payload.remarks || '' }
+    });
+ 
+    // 3. Deduct damage length from roll
+    const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollData = rollSh.getRange(2, 1, rollSh.getLastRow() - 1, 9).getValues();
+    rollData.forEach((r, i) => {
+      if (String(r[ROLL_COL.ROLL_ID]).trim() !== rollId) return;
+      const cur  = parseFloat(r[ROLL_COL.REMAINING_LENGTH]) || 0;
+      const next = Math.max(0, cur - damageLength);
+      rollSh.getRange(i + 2, ROLL_COL.REMAINING_LENGTH + 1).setValue(next);
+      rollSh.getRange(i + 2, ROLL_COL.STATUS + 1).setValue(next <= 0 ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN);
+    });
+ 
+    // 4. Write REPRINT entry (continues after damage block)
+    const reprintId    = 'PLT-RPT-' + today.getTime();
+    const reprintCount = (parseInt(target.remarks.reprintCount) || 0) + 1;
+    prism_writePlotRow_(plotSh, {
+      plotId:    reprintId,
+      type:      PLOT_TYPE.REPRINT,
+      rollId,
+      joNumbers,
+      status:    PLOT_STATUS.PLANNED,
+      startFt:   printStart + damageLength,
+      endFt:     printStart + damageLength + printLength,
+      lengthFt:  printLength,
+      isVoid:    false,
+      isReprint: true,
+      pngUrl:    target.pngUrl || '',
+      operator:  user.email,
+      date:      today,
+      remarks: Object.assign({}, target.remarks, {
+        reprintOf:       payload.plotId,
+        reprintCount:    reprintCount,
+        reprintAnchorFt: printStart + damageLength
+      })
+    });
+ 
+    // 5. Revert JOs to READY_TO_PRINT
+    if (joNumbers.length) {
+      const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+      const joData = joSh.getRange(2, 1, joSh.getLastRow() - 1, 13).getValues();
+      joData.forEach((r, i) => {
+        if (joNumbers.includes(String(r[JO_COL.JO_NUMBER]).trim().toUpperCase()))
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
       });
     }
-
-    // 6. Write a REPRINT PLANNED entry — continues after damage block (damageEnd)
-    const reprintId = 'PLT-RPT-' + today.getTime();
-    const reprintCount = (parseInt(targetJson.reprintCount) || 0) + 1;
-    const reprintObj = Object.assign({}, targetJson, {
-      plotId: reprintId,
-      status: 'PLANNED',
-      isVoid: false,
-      voidReason: undefined,
-      isReprint: true,
-      reprintCount: reprintCount,
-      reprintOf: payload.plotId,
-      reprintAnchorFt: damageEnd,  // reprint starts after damage block
-      startAtFt: damageEnd,
-      endAtFt: damageEnd + printLength,
-      createdAt: today.toISOString()
-    });
-    plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
-      reprintId, 'REPRINT',
-      targetJson.pngUrl || '',
-      user.email, today,
-      JSON.stringify(reprintObj)
-    ]]);
-
-    // 7. Revert JOs to READY_TO_PRINT (layout still exists, just needs reprinting)
-    if (joNumbers.length) {
-      const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
-      const joLr = joSh.getLastRow();
-      if (joLr >= 2) {
-        const joData = joSh.getRange(2, 1, joLr - 1, 13).getValues();
-        const targets = joNumbers.map(jn => String(jn).trim().toUpperCase());
-        joData.forEach((r, i) => {
-          if (targets.includes(String(r[JO_COL.JO_NUMBER]).trim().toUpperCase()))
-            joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
-        });
-      }
-    }
-
+ 
     prism_audit_('PRISM_DECLARE_DAMAGE_FOR_PLOT', {
-      plotId: payload.plotId, rollId, joNumbers,
-      printLength, damageLength, totalDeduct,
-      remarks: payload.remarks || '', reprintId, by: user.email
+      plotId: payload.plotId, rollId, joNumbers, damageLength, by: user.email
     });
-
-    return {
-      success: true,
-      message: `Damage declared. ${printLength}ft printed + ${damageLength}ft damage recorded. Reprint added to queue.`,
-      reprintId
-    };
-  } catch (e) {
+    return { success: true, message: `Damage declared. ${damageLength}ft recorded. Reprint added to queue.`, reprintId };
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
@@ -1102,42 +1118,33 @@ function prism_getAllJobOrders_() {
     })
     .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
 }
-
+ 
 function prism_getLatestPlotAssetsByJO_() {
-  const sh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-  const lr = sh.getLastRow();
   const out = {};
-  if (lr < 2) return out;
-
-  const rows = sh.getRange(2, 1, lr - 1, 6).getValues();
-  rows.forEach(r => {
-    const rawRemarks = String(r[PLOT_COL.REMARKS] || '').trim();
-    if (!rawRemarks || rawRemarks.charAt(0) !== '{') return;
-
-    let parsed;
-    try { parsed = JSON.parse(rawRemarks); } catch (e) { return; }
-    if (!parsed || parsed.type !== 'ROLL_PLAN') return;
-
-    const joNumbers = Array.isArray(parsed.joNumbers) ? parsed.joNumbers : [];
-    if (!joNumbers.length) return;
-
-    const dateRaw = r[PLOT_COL.DATE_PLOTTED];
-    const dateMs = dateRaw ? new Date(dateRaw).getTime() : 0;
-    joNumbers.forEach(jo => {
-      const key = String(jo || '').trim().toUpperCase();
-      if (!key) return;
-      if (!out[key] || dateMs >= (out[key].dateMs || 0)) {
-        out[key] = {
-          dateMs: dateMs,
-          pngUrl: String(parsed.pngUrl || parsed.plottingLink || '').trim(),
-          folderUrl: String(parsed.folderUrl || '').trim(),
-          rollId: String(parsed.rollId || '').trim()
-        };
-      }
+  try {
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+ 
+    plotRows.forEach(row => {
+      if (row.type !== PLOT_TYPE.PLOT || row.isVoid) return;
+      const dateMs = row.date ? new Date(row.date).getTime() : 0;
+      row.joNumbers.forEach(jo => {
+        const key = String(jo||'').trim().toUpperCase();
+        if (!key) return;
+        if (!out[key] || dateMs >= (out[key].dateMs || 0)) {
+          out[key] = {
+            dateMs,
+            pngUrl:    row.pngUrl,
+            folderUrl: row.remarks.folderUrl || '',
+            rollId:    row.rollId
+          };
+        }
+      });
     });
-  });
+  } catch(e) {}
   return out;
 }
+ 
 function prism_getJobOrdersPublic() {
   try { return { success: true, data: prism_getAllJobOrders_() }; }
   catch (e) { return { success: false, message: e.message }; }
@@ -1275,50 +1282,77 @@ function prism_submitPlottingLog(payload) {
     const user = prism_getUserInfo_();
     if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
       return { success: false, message: 'Access denied.' };
-    if (!payload.joNumber) return { success: false, message: 'JO Number required.' };
-    if (!payload.plottingLink) return { success: false, message: 'Plotting link required.' };
-    const today = new Date();
+    if (!payload.joNumber)
+      return { success: false, message: 'JO Number required.' };
+    if (!payload.plottingLink)
+      return { success: false, message: 'Plotting link required.' };
+ 
+    const today  = new Date();
     const plotId = 'PLT-' + today.getTime();
-    const sh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    sh.getRange(sh.getLastRow() + 1, 1, 1, 6).setValues([[
-      plotId, payload.joNumber.trim().toUpperCase(), payload.plottingLink,
-      user.email, today, payload.remarks || ''
-    ]]);
-    // Update JO → PLOTTED + save link
+    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+ 
+    prism_writePlotRow_(plotSh, {
+      plotId,
+      type:      PLOT_TYPE.PLOT,
+      rollId:    payload.rollId || '',
+      joNumbers: [payload.joNumber.trim().toUpperCase()],
+      status:    PLOT_STATUS.PLANNED,
+      startFt:   0,
+      endFt:     0,
+      lengthFt:  0,
+      isVoid:    false,
+      isReprint: false,
+      pngUrl:    payload.plottingLink || '',
+      operator:  user.email,
+      date:      today,
+      remarks:   { notes: payload.remarks || '' }
+    });
+ 
+    // Update JO plotting link
     const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
-    const lr = joSh.getLastRow();
+    const lr   = joSh.getLastRow();
     if (lr >= 2) {
       const data = joSh.getRange(2, 1, lr - 1, 13).getValues();
       data.forEach((r, i) => {
         if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() === payload.joNumber.trim().toUpperCase()) {
           joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(payload.plottingLink);
           if (String(r[JO_COL.STATUS]).trim() === JO_STATUS.FOR_PLOTTING)
-            joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.PLOTTED);
+            joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
         }
       });
     }
+ 
     prism_audit_('PRISM_SUBMIT_PLOT', { joNumber: payload.joNumber, by: user.email });
     return { success: true, message: 'Plotting log saved for ' + payload.joNumber, plotId };
-  } catch (e) { return { success: false, message: e.message }; }
+  } catch(e) { return { success: false, message: e.message }; }
 }
+
+
 function prism_getPlottingLog() {
   try {
-    const sh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const lr = sh.getLastRow();
-    if (lr < 2) return { success: true, data: [] };
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+ 
     return {
-      success: true, data: sh.getRange(2, 1, lr - 1, 6).getValues()
-        .filter(r => r[PLOT_COL.PLOT_ID])
-        .map(r => ({
-          plotId: String(r[PLOT_COL.PLOT_ID]).trim(),
-          joNumber: String(r[PLOT_COL.JO_NUMBER]).trim(),
-          plottingLink: String(r[PLOT_COL.PLOTTING_LINK]).trim(),
-          operator: String(r[PLOT_COL.OPERATOR]).trim(),
-          datePlotted: prism_fmtShort_(r[PLOT_COL.DATE_PLOTTED]),
-          remarks: String(r[PLOT_COL.REMARKS] || '').trim()
-        }))
+      success: true,
+      data: plotRows.map(r => ({
+        plotId:      r.plotId,
+        type:        r.type,
+        rollId:      r.rollId,
+        joNumbers:   r.joNumbers.join(', '),
+        status:      r.status,
+        startFt:     r.startFt,
+        endFt:       r.endFt,
+        lengthFt:    r.lengthFt,
+        isVoid:      r.isVoid,
+        isReprint:   r.isReprint,
+        pngUrl:      r.pngUrl,
+        operator:    r.operator,
+        datePlotted: r.date ? prism_fmtShort_(new Date(r.date)) : '',
+        remarks:     JSON.stringify(r.remarks)
+      }))
     };
-  } catch (e) { return { success: false, message: e.message }; }
+  } catch(e) { return { success: false, message: e.message }; }
 }
 
 function prism_compactRollRows_(rows) {
@@ -1340,150 +1374,52 @@ function prism_compactRollRows_(rows) {
 function prism_getRollPlotHistoryMap(rollIds) {
   try {
     const wanted = (Array.isArray(rollIds) ? rollIds : [])
-      .map(x => String(x || '').trim())
-      .filter(Boolean);
+      .map(x => String(x||'').trim()).filter(Boolean);
+    if (!wanted.length) return { success: true, data: {} };
+ 
     const wantedSet = {};
     wanted.forEach(id => { wantedSet[id] = true; });
-
     const out = {};
     wanted.forEach(id => { out[id] = []; });
-
-    const rollMeta = {};
-    const rollSh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
-    const rollLr = rollSh.getLastRow();
-    if (rollLr >= 2) {
-      rollSh.getRange(2, 1, rollLr - 1, 9).getValues().forEach(r => {
-        const rollId = String(r[ROLL_COL.ROLL_ID] || '').trim();
-        if (!rollId || !wantedSet[rollId]) return;
-        rollMeta[rollId] = {
-          width: parseFloat(r[ROLL_COL.WIDTH]) || 0,
-          originalLength: parseFloat(r[ROLL_COL.ORIGINAL_LENGTH]) || 0,
-          remainingLength: parseFloat(r[ROLL_COL.REMAINING_LENGTH]) || 0
-        };
+ 
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+ 
+    plotRows.forEach(row => {
+      if (!wantedSet[row.rollId]) return;
+      if (row.isVoid) return;
+      if (row.status !== PLOT_STATUS.PRINTED &&
+          row.type   !== PLOT_TYPE.DAMAGE    &&
+          row.type   !== PLOT_TYPE.TEST_PRINT) return;
+ 
+      out[row.rollId].push({
+        plotId:      row.plotId,
+        rollId:      row.rollId,
+        rollWidth:   parseFloat(row.remarks.rollWidth) || 0,
+        originalLength: parseFloat(row.remarks.originalLength) || 0,
+        startAtFt:   row.startFt,
+        endAtFt:     row.endFt,
+        lengthUsed:  row.lengthFt,
+        joNumbers:   row.joNumbers,
+        isDamage:    row.type === PLOT_TYPE.DAMAGE,
+        isTestPrint: row.type === PLOT_TYPE.TEST_PRINT,
+        rows:        row.remarks.rows || [],
+        pngUrl:      row.pngUrl,
+        dateMs:      row.date ? new Date(row.date).getTime() : 0,
+        source:      'PLOT_LOG'
       });
-    }
-
-    const sh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const lr = sh.getLastRow();
-    if (lr >= 2 && wanted.length) {
-      const rows = sh.getRange(2, 1, lr - 1, 6).getValues();
-      rows.forEach(r => {
-        const remarks = String(r[PLOT_COL.REMARKS] || '').trim();
-        if (!remarks || remarks.charAt(0) !== '{') return;
-
-        let parsed = null;
-        try { parsed = JSON.parse(remarks); } catch (_) { parsed = null; }
-        if (!parsed || parsed.type !== 'ROLL_PLAN' || parsed.isVoid) return;
-
-        const rollId = String(parsed.rollId || '').trim();
-        if (!rollId || !wantedSet[rollId]) return;
-
-        out[rollId].push({
-          plotId: String(r[PLOT_COL.PLOT_ID] || '').trim(),
-          rollId: rollId,
-          rollWidth: parseFloat(parsed.rollWidth) || 0,
-          originalLength: parseFloat(parsed.originalLength) || 0,
-          startAtFt: parseFloat(parsed.startAtFt) || 0,
-          endAtFt: parseFloat(parsed.endAtFt) || 0,
-          lengthUsed: parseFloat(parsed.lengthUsed) || 0,
-          joNumbers: Array.isArray(parsed.joNumbers) ? parsed.joNumbers : [],
-          createdBy: String(parsed.createdBy || r[PLOT_COL.OPERATOR] || '').trim(),
-          datePlotted: prism_fmtShort_(r[PLOT_COL.DATE_PLOTTED]),
-          rows: Array.isArray(parsed.rows) ? parsed.rows : [],
-          isDamage: !!parsed.isDamage,
-          source: 'ROLL_PLAN'
-        });
-      });
-    }
-
-    // Remove the `firstStart > 0.05` constraint. Always parse USAGE_FALLBACK to fill gaps throughout the roll.
-    const fallbackNeeded = wanted;
-
-    if (fallbackNeeded.length) {
-      const fallbackSet = {};
-      fallbackNeeded.forEach(id => { fallbackSet[id] = true; });
-      const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-      const usageLr = usageSh.getLastRow();
-      if (usageLr >= 2) {
-        const grouped = {};
-        usageSh.getRange(2, 1, usageLr - 1, 8).getValues().forEach(r => {
-          const rollId = String(r[USAGE_COL.ROLL_ID] || '').trim();
-          if (!rollId || !fallbackSet[rollId]) return;
-          const joNumber = String(r[USAGE_COL.JO_NUMBER] || '').trim().toUpperCase();
-          const lengthUsed = parseFloat(r[USAGE_COL.LENGTH_USED]) || 0;
-          if (!joNumber || lengthUsed <= 0) return;
-          if (!grouped[rollId]) grouped[rollId] = [];
-          grouped[rollId].push({
-            usageId: String(r[USAGE_COL.USAGE_ID] || '').trim(),
-            joNumber: joNumber,
-            widthUsed: parseFloat(r[USAGE_COL.WIDTH_USED]) || 0,
-            lengthUsed: lengthUsed,
-            operator: String(r[USAGE_COL.OPERATOR] || '').trim(),
-            dateRaw: r[USAGE_COL.DATE_USED],
-            dateLabel: prism_fmtShort_(r[USAGE_COL.DATE_USED])
-          });
-        });
-
-        Object.keys(grouped).forEach(rollId => {
-          grouped[rollId].sort((a, b) => {
-            const ad = a.dateRaw ? new Date(a.dateRaw).getTime() : 0;
-            const bd = b.dateRaw ? new Date(b.dateRaw).getTime() : 0;
-            if (ad !== bd) return ad - bd;
-            return String(a.usageId).localeCompare(String(b.usageId));
-          });
-
-          // Sort out[rollId] so we can properly check for gaps between known plotted segments.
-          out[rollId].sort((a, b) => (a.startAtFt || 0) - (b.startAtFt || 0));
-
-          let cursorFt = 0;
-          grouped[rollId].forEach(item => {
-            const nextEnd = cursorFt + item.lengthUsed;
-
-            // Check if this usage overlaps with an already-known visual snapshot in out[rollId]
-            let isCovered = false;
-            for (let s = 0; s < out[rollId].length; s++) {
-              const seg = out[rollId][s];
-              // If this usage fits entirely inside or mostly overlaps with a Plotting_Log snapshot
-              if (Math.abs(cursorFt - seg.startAtFt) < 0.1 || (cursorFt >= seg.startAtFt && nextEnd <= seg.endAtFt + 0.1)) {
-                isCovered = true;
-                break;
-              }
-            }
-
-            if (!isCovered) {
-              out[rollId].push({
-                plotId: item.usageId,
-                rollId: rollId,
-                rollWidth: (rollMeta[rollId] && rollMeta[rollId].width) || 0,
-                originalLength: (rollMeta[rollId] && rollMeta[rollId].originalLength) || 0,
-                startAtFt: cursorFt,
-                endAtFt: nextEnd,
-                lengthUsed: item.lengthUsed,
-                joNumbers: [item.joNumber],
-                createdBy: item.operator,
-                datePlotted: item.dateLabel,
-                notes: item.notes || '',
-                isTestPrint: item.joNumber === TEST_PRINT_MARKER,
-                rows: [],
-                source: 'USAGE_FALLBACK'
-              });
-            }
-            cursorFt = nextEnd;
-          });
-        });
-      }
-    }
-
-    Object.keys(out).forEach(rollId => {
-      out[rollId].sort((a, b) => (a.startAtFt || 0) - (b.startAtFt || 0));
     });
-
+ 
+    // Sort each roll by startAtFt
+    Object.keys(out).forEach(id => {
+      out[id].sort((a,b) => a.startAtFt - b.startAtFt);
+    });
+ 
     return { success: true, data: out };
-  } catch (e) {
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
-
 // ============================================================
 //  USAGE LOG
 // ============================================================
@@ -1730,44 +1666,43 @@ function prism_confirmPlotLayout(payload) {
       });
     });
 
-    // Persist roll layout snapshots so future plotting on the same roll can show previous map.
+    // Persist roll layout snapshots
     const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
     rollPlans.forEach(plan => {
       const rollId = plan.rollId;
-      const snap = rollSnapshots[rollId] || {};
-      const joSet = {};
+      const snap   = rollSnapshots[rollId] || {};
+      const joSet  = {};
       (Array.isArray(plan.rows) ? plan.rows : []).forEach(r => {
         (Array.isArray(r.pieces) ? r.pieces : []).forEach(p => {
           const jo = String(p.joNumber || '').trim().toUpperCase();
           if (jo) joSet[jo] = true;
         });
       });
-
-      const remarksObj = {
-        type: 'ROLL_PLAN',
-        status: 'PLANNED',
-        rollId: rollId,
-        rollWidth: snap.width || 0,
-        originalLength: snap.originalLength || 0,
-        startAtFt: 0,
-        endAtFt: parseFloat(plan.lengthUsed) || 0,
-        lengthUsed: parseFloat(plan.lengthUsed) || 0,
-        joNumbers: Object.keys(joSet),
-        plottingLink: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '',
-        pngUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || '',
-        folderUrl: (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].folderUrl) || '',
-        createdBy: user.email,
-        rows: prism_compactRollRows_(plan.rows)
-      };
-
-      plotSh.getRange(plotSh.getLastRow() + 1, 1, 1, 6).setValues([[
-        'PLN-' + today.getTime() + '-' + rollId,
-        Object.keys(joSet).slice(0, 8).join(', '),
-        (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '',
-        user.email,
-        today,
-        JSON.stringify(remarksObj)
-      ]]);
+      const joList   = Object.keys(joSet);
+      const plotPngUrl = (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].pngUrl) || effectivePlottingLink || '';
+      const plotId   = 'PLN-' + today.getTime() + '-' + rollId;
+ 
+      prism_writePlotRow_(plotSh, {
+        plotId,
+        type:      PLOT_TYPE.PLOT,
+        rollId,
+        joNumbers: joList,
+        status:    PLOT_STATUS.PLANNED,
+        startFt:   0,
+        endFt:     parseFloat(plan.lengthUsed) || 0,
+        lengthFt:  parseFloat(plan.lengthUsed) || 0,
+        isVoid:    false,
+        isReprint: false,
+        pngUrl:    plotPngUrl,
+        operator:  user.email,
+        date:      today,
+        remarks: {
+          rollWidth:      snap.width || 0,
+          originalLength: snap.originalLength || 0,
+          folderUrl:      (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].folderUrl) || '',
+          rows:           prism_compactRollRows_(plan.rows)
+        }
+      });
     });
 
     prism_audit_('PRISM_CONFIRM_PLOT_LAYOUT', {
@@ -2019,64 +1954,52 @@ function prism_saveRollMapToDrive(payload) {
   }
 }
 
+
 function prism_startPrintingLayout(payload) {
   try {
     const user = prism_getUserInfo_();
     if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
       return { success: false, message: 'Access denied.' };
-
+ 
     const plotId = String(payload.plotId || '').trim();
     if (!plotId) return { success: false, message: 'No plot ID provided.' };
-
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    if (plotLr < 2) return { success: false, message: 'Plot log empty.' };
-    const plotData = plotSh.getRange(2, 1, plotLr - 1, 6).getValues();
-
-    let targetRowIdx = -1, targetJson = null, targetRollId = '', targetLength = 0;
-    for (let i = 0; i < plotData.length; i++) {
-      if (String(plotData[i][0]).trim() !== plotId) continue;
-      targetRowIdx = i + 2;
-      try { targetJson = JSON.parse(String(plotData[i][5] || '{}')); } catch (e) { }
-      if (!targetJson || targetJson.status !== 'PLANNED' || targetJson.isVoid)
-        return { success: false, message: 'Layout is not currently PLANNED or has been voided.' };
-      targetRollId = targetJson.rollId;
-      targetLength = parseFloat(targetJson.lengthUsed) || 0;
-      break;
-    }
-    if (targetRowIdx === -1) return { success: false, message: 'Plot layout not found.' };
-
-    // Guard: only one PRINTING item at a time
-    for (let i = 0; i < plotData.length; i++) {
-      try {
-        const j = JSON.parse(String(plotData[i][5] || '{}'));
-        if (j.rollId === targetRollId && !j.isVoid && j.status === 'PRINTING')
-          return { success: false, message: 'Another layout is already printing on roll ' + targetRollId + '. Mark it done or declare damage first.' };
-      } catch (e) { }
-    }
-
-    // Find the furthest non-voided PRINTED end on this roll
+ 
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+ 
+    // Find target row
+    const target = plotRows.find(r => r.plotId === plotId);
+    if (!target) return { success: false, message: 'Plot layout not found.' };
+    if (target.status !== PLOT_STATUS.PLANNED || target.isVoid)
+      return { success: false, message: 'Layout is not PLANNED or has been voided.' };
+ 
+    const targetRollId = target.rollId;
+    const targetLength = target.lengthFt;
+ 
+    // Guard: only one PRINTING at a time per roll
+    const alreadyPrinting = plotRows.find(r =>
+      r.rollId === targetRollId && !r.isVoid && r.status === PLOT_STATUS.PRINTING
+    );
+    if (alreadyPrinting)
+      return { success: false, message: 'Another layout is already printing on roll ' + targetRollId + '.' };
+ 
+    // Find furthest PRINTED end on this roll
     let maxEnd = 0;
-    plotData.forEach(r => {
-      try {
-        const j = JSON.parse(String(r[5] || '{}'));
-        if (j.rollId === targetRollId && !j.isVoid && j.status === 'PRINTED') {
-          const e = parseFloat(j.endAtFt) || 0;
-          if (e > maxEnd) maxEnd = e;
-        }
-      } catch (e) { }
+    plotRows.forEach(r => {
+      if (r.rollId === targetRollId && !r.isVoid && r.status === PLOT_STATUS.PRINTED) {
+        if (r.endFt > maxEnd) maxEnd = r.endFt;
+      }
     });
-
-    // Write status = PRINTING (not PRINTED yet — that happens on Mark Done)
-    targetJson.status = 'PRINTING';
-    targetJson.startAtFt = maxEnd;
-    targetJson.endAtFt = maxEnd + targetLength;
-    plotSh.getRange(targetRowIdx, 6).setValue(JSON.stringify(targetJson));
-
+ 
+    // Update status to PRINTING + set startFt/endFt
+    plotSh.getRange(target._rowIdx, PLOT_COL.STATUS   + 1).setValue(PLOT_STATUS.PRINTING);
+    plotSh.getRange(target._rowIdx, PLOT_COL.START_FT + 1).setValue(maxEnd);
+    plotSh.getRange(target._rowIdx, PLOT_COL.END_FT   + 1).setValue(maxEnd + targetLength);
+ 
     // Mark JOs as PRINTING
-    const joNumbers = Array.isArray(targetJson.joNumbers) ? targetJson.joNumbers : [];
+    const joNumbers = target.joNumbers;
     if (joNumbers.length) {
-      const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+      const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
       const joData = joSh.getRange(2, 1, joSh.getLastRow() - 1, 13).getValues();
       joData.forEach((r, i) => {
         const jo = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
@@ -2084,10 +2007,10 @@ function prism_startPrintingLayout(payload) {
           joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.PRINTING);
       });
     }
-
+ 
     prism_audit_('PRISM_START_PRINTING_LAYOUT', { plotId, rollId: targetRollId, by: user.email });
     return { success: true, message: 'Layout sent to printer!', startAtFt: maxEnd, endAtFt: maxEnd + targetLength };
-  } catch (e) {
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
@@ -2098,284 +2021,228 @@ function prism_markPrintingComplete(payload) {
     const user = prism_getUserInfo_();
     if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
       return { success: false, message: 'Access denied.' };
-
+ 
     const plotId = String(payload.plotId || '').trim();
     if (!plotId) return { success: false, message: 'No plot ID provided.' };
-
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    if (plotLr < 2) return { success: false, message: 'Plot log empty.' };
-    const plotData = plotSh.getRange(2, 1, plotLr - 1, 6).getValues();
-
-    let targetRowIdx = -1, targetJson = null;
-    for (let i = 0; i < plotData.length; i++) {
-      if (String(plotData[i][0]).trim() !== plotId) continue;
-      targetRowIdx = i + 2;
-      try { targetJson = JSON.parse(String(plotData[i][5] || '{}')); } catch (e) { }
-      break;
-    }
-    if (targetRowIdx === -1 || !targetJson)
-      return { success: false, message: 'Plot layout not found.' };
-    if (targetJson.status !== 'PRINTING')
-      return { success: false, message: 'Layout is not currently in PRINTING state.' };
-
+ 
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+    const target   = plotRows.find(r => r.plotId === plotId);
+ 
+    if (!target) return { success: false, message: 'Plot layout not found.' };
+    if (target.status !== PLOT_STATUS.PRINTING)
+      return { success: false, message: 'Layout is not currently PRINTING.' };
+ 
     // Flip to PRINTED
-    targetJson.status = 'PRINTED';
-    plotSh.getRange(targetRowIdx, 6).setValue(JSON.stringify(targetJson));
-
-    // Update roll remaining length
-    const targetLength = parseFloat(targetJson.lengthUsed) || 0;
-    const targetRollId = targetJson.rollId;
-    const rollSh = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
-    const rollLr = rollSh.getLastRow();
-    const rollData = rollLr >= 2 ? rollSh.getRange(2, 1, rollLr - 1, 9).getValues() : [];
+    plotSh.getRange(target._rowIdx, PLOT_COL.STATUS + 1).setValue(PLOT_STATUS.PRINTED);
+ 
+    const targetLength = target.lengthFt;
+    const targetRollId = target.rollId;
+ 
+    // Deduct from roll
+    const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
+    const rollData = rollSh.getRange(2, 1, rollSh.getLastRow() - 1, 9).getValues();
     rollData.forEach((r, i) => {
       if (String(r[ROLL_COL.ROLL_ID]).trim() !== targetRollId) return;
-      const cur = parseFloat(r[ROLL_COL.REMAINING_LENGTH]) || 0;
+      const cur  = parseFloat(r[ROLL_COL.REMAINING_LENGTH]) || 0;
       const next = Math.max(0, cur - targetLength);
-      const st = next <= 0 ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN;
       rollSh.getRange(i + 2, ROLL_COL.REMAINING_LENGTH + 1).setValue(next);
-      rollSh.getRange(i + 2, ROLL_COL.STATUS + 1).setValue(st);
+      rollSh.getRange(i + 2, ROLL_COL.STATUS + 1).setValue(next <= 0 ? ROLL_STATUS.CONSUMED : ROLL_STATUS.OPEN);
     });
-
+ 
     // Write usage log
-    const today = new Date();
-    const joNumbers = Array.isArray(targetJson.joNumbers) ? targetJson.joNumbers : [];
-    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const planRows = Array.isArray(targetJson.rows) ? targetJson.rows : [];
+    const today    = new Date();
+    const usageSh  = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const planRows = Array.isArray(target.remarks.rows) ? target.remarks.rows : [];
     const joLengths = {};
     planRows.forEach(row => {
       const rowJOs = {};
-      (row.pieces || []).forEach(p => {
-        rowJOs[String(p.joNumber || '').trim().toUpperCase()] = true;
-      });
+      (row.pieces || []).forEach(p => { rowJOs[String(p.jo || p.joNumber || '').trim().toUpperCase()] = true; });
       Object.keys(rowJOs).forEach(jo => {
         if (!jo) return;
         joLengths[jo] = (joLengths[jo] || 0) + (parseFloat(row.rowH) || 0);
       });
     });
-    if (!Object.keys(joLengths).length && joNumbers.length) {
-      const perJO = targetLength / joNumbers.length;
-      joNumbers.forEach(jo => { joLengths[jo] = perJO; });
+
+    if (!Object.keys(joLengths).length && target.joNumbers.length) {
+      const perJO = targetLength / target.joNumbers.length;
+      target.joNumbers.forEach(jo => { joLengths[jo] = perJO; });
     }
+    
     Object.keys(joLengths).forEach(jo => {
       const len = joLengths[jo];
       if (len <= 0) return;
       usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
         'USE-' + today.getTime() + '-' + jo + '-' + targetRollId,
         jo, targetRollId,
-        targetJson.rollWidth || 0,
+        target.remarks.rollWidth || 0,
         len, user.email,
-        targetJson.plottingLink || '',
+        target.pngUrl || '',
         today
       ]]);
     });
-
+ 
     // Mark JOs COMPLETED
-    if (joNumbers.length) {
-      const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    if (target.joNumbers.length) {
+      const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
       const joData = joSh.getRange(2, 1, joSh.getLastRow() - 1, 13).getValues();
       joData.forEach((r, i) => {
         const jo = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
-        if (joNumbers.includes(jo) && String(r[JO_COL.STATUS]).trim() === JO_STATUS.PRINTING)
+        if (target.joNumbers.includes(jo) && String(r[JO_COL.STATUS]).trim() === JO_STATUS.PRINTING)
           joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.COMPLETED);
       });
     }
-
+ 
     prism_audit_('PRISM_MARK_PRINTING_COMPLETE', { plotId, rollId: targetRollId, by: user.email });
     return { success: true, message: 'Job marked as COMPLETED. Roll updated.' };
-  } catch (e) {
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
 
 function prism_getPrintQueueData() {
   try {
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
-
-    // ── Build JO status + customer lookup ──
-    const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
-    const joLr = joSh.getLastRow();
-    const joStatusMap = {};
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+ 
+    // JO customer map
+    const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr   = joSh.getLastRow();
+    const joStatusMap   = {};
     const joCustomerMap = {};
     if (joLr >= 2) {
       joSh.getRange(2, 1, joLr - 1, 13).getValues().forEach(r => {
-        const jo = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
-        const st = String(r[JO_COL.STATUS] || '').trim();
-        const cust = String(r[JO_COL.CUSTOMER] || '').trim();
+        const jo   = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
+        const st   = String(r[JO_COL.STATUS]    || '').trim();
+        const cust = String(r[JO_COL.CUSTOMER]  || '').trim();
         if (jo) { joStatusMap[jo] = st; joCustomerMap[jo] = cust; }
       });
     }
-
-    const planned = [];
-    const reprints = [];
-    let printing = null;
+ 
+    const planned      = [];
+    const reprints     = [];
+    let   printing     = null;
     const rollsHistory = {};
-
-    const addHistory = (rollId, entry) => {
-      if (!rollsHistory[rollId]) rollsHistory[rollId] = [];
-      rollsHistory[rollId].push(entry);
-    };
-
-    plotData.forEach(r => {
-      const id = String(r[0]).trim();
-      let j = {};
-      try { j = JSON.parse(String(r[5] || '{}')); } catch (e) { }
-      if (!j.rollId) return;
-      if (j.isVoid || j.status === 'VOIDED') return;
-
-      const rollId = j.rollId;
-      const joNumbers = Array.isArray(j.joNumbers) ? j.joNumbers : [];
-
-      // ── Effective status: fix legacy PLANNED entries whose JOs are done ──
-      let effectiveStatus = j.status || 'PLANNED';
-      if (effectiveStatus === 'PLANNED' && !j.isReprint && joNumbers.length > 0) {
-        const allDone = joNumbers.every(jo => {
-          const st = joStatusMap[String(jo).trim().toUpperCase()] || '';
+ 
+    plotRows.forEach(row => {
+      if (row.isVoid) return;
+ 
+      // Legacy: PLANNED PLOT whose JOs are all done → treat as PRINTED
+      let effectiveStatus = row.status;
+      if (effectiveStatus === PLOT_STATUS.PLANNED && row.type === PLOT_TYPE.PLOT && row.joNumbers.length) {
+        const allDone = row.joNumbers.every(jo => {
+          const st = joStatusMap[jo.toUpperCase()] || '';
           return st === JO_STATUS.PRINTING || st === JO_STATUS.COMPLETED;
         });
-        if (allDone) effectiveStatus = 'PRINTED';
+        if (allDone) effectiveStatus = PLOT_STATUS.PRINTED;
       }
-
-      // ── Route ──
-      if (effectiveStatus === 'PRINTING') {
-        const item = {
-          plotId: id,
-          joNumbers,
-          rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
-          lengthUsed: parseFloat(j.lengthUsed) || 0,
-          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          rows: j.rows || [],
-          isReprint: !!j.isReprint,
-          startAtFt: parseFloat(j.startAtFt) || 0,
-          endAtFt: parseFloat(j.endAtFt) || 0,
-          customers: joNumbers.map(jo => joCustomerMap[String(jo).trim().toUpperCase()] || jo)
-        };
-        if (!printing || item.startAtFt > printing.startAtFt) printing = item;
-
-      } else if (effectiveStatus === 'PRINTED' || j.isDamage || j.isTestPrint) {
-        addHistory(rollId, {
-          plotId: id,
-          rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
-          startAtFt: parseFloat(j.startAtFt) || 0,
-          endAtFt: parseFloat(j.endAtFt) || 0,
-          lengthUsed: parseFloat(j.lengthUsed) || 0,
-          joNumbers,
-          isDamage: !!j.isDamage,
-          isVoid: false,
-          isTestPrint: !!j.isTestPrint,
-          rows: j.rows || [],
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          dateMs: r[4] ? new Date(r[4]).getTime() : 0
+ 
+      const base = {
+        plotId:     row.plotId,
+        joNumbers:  row.joNumbers,
+        rollId:     row.rollId,
+        rollWidth:  parseFloat(row.remarks.rollWidth) || 0,
+        lengthUsed: row.lengthFt,
+        date:       row.date ? prism_fmtShort_(new Date(row.date)) : '',
+        pngUrl:     row.pngUrl,
+        rows:       row.remarks.rows || [],
+        customers:  row.joNumbers.map(jo => joCustomerMap[jo.toUpperCase()] || jo)
+      };
+ 
+      if (effectiveStatus === PLOT_STATUS.PRINTING) {
+        const item = Object.assign({}, base, {
+          startAtFt: row.startFt,
+          endAtFt:   row.endFt,
+          isReprint: row.isReprint
         });
-
-      } else if (effectiveStatus === 'PLANNED') {
-        const item = {
-          plotId: id,
-          joNumbers,
-          rollId,
-          rollWidth: parseFloat(j.rollWidth) || 0,
-          lengthUsed: parseFloat(j.lengthUsed) || 0,
-          date: r[4] ? prism_fmtShort_(new Date(r[4])) : '',
-          pngUrl: r[2] || j.plottingLink || j.pngUrl || '',
-          rows: j.rows || [],
-          isReprint: !!j.isReprint,
-          reprintCount: parseInt(j.reprintCount) || 0,
-          reprintOf: j.reprintOf || null,
-          customers: joNumbers.map(jo => joCustomerMap[String(jo).trim().toUpperCase()] || jo)
-        };
-        if (j.isReprint) reprints.push(item);
-        else planned.push(item);
+        if (!printing || item.startAtFt > printing.startAtFt) printing = item;
+ 
+      } else if (effectiveStatus === PLOT_STATUS.PRINTED ||
+                 row.type === PLOT_TYPE.DAMAGE ||
+                 row.type === PLOT_TYPE.TEST_PRINT) {
+        if (!rollsHistory[row.rollId]) rollsHistory[row.rollId] = [];
+        rollsHistory[row.rollId].push({
+          plotId:      row.plotId,
+          rollId:      row.rollId,
+          rollWidth:   parseFloat(row.remarks.rollWidth) || 0,
+          startAtFt:   row.startFt,
+          endAtFt:     row.endFt,
+          lengthUsed:  row.lengthFt,
+          joNumbers:   row.joNumbers,
+          isDamage:    row.type === PLOT_TYPE.DAMAGE,
+          isTestPrint: row.type === PLOT_TYPE.TEST_PRINT,
+          isVoid:      false,
+          rows:        row.remarks.rows || [],
+          pngUrl:      row.pngUrl,
+          dateMs:      row.date ? new Date(row.date).getTime() : 0
+        });
+ 
+      } else if (effectiveStatus === PLOT_STATUS.PLANNED) {
+        const item = Object.assign({}, base, {
+          isReprint:    row.isReprint,
+          reprintCount: parseInt(row.remarks.reprintCount) || 0,
+          reprintOf:    row.remarks.reprintOf || null
+        });
+        if (row.isReprint) reprints.push(item);
+        else               planned.push(item);
       }
     });
-
-    // ── Sort each roll's history by startAtFt ──
-    Object.keys(rollsHistory).forEach(rollId => {
-      rollsHistory[rollId].sort((a, b) => a.startAtFt - b.startAtFt);
+ 
+    // Sort history by startAtFt
+    Object.keys(rollsHistory).forEach(id => {
+      rollsHistory[id].sort((a,b) => a.startAtFt - b.startAtFt);
     });
-
+ 
     return { success: true, planned, reprints, printing, rollsHistory, joCustomerMap };
-  } catch (e) {
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }
 
-
 function prism_getJobOrderReports() {
   try {
-    const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
-    const plotLr = plotSh.getLastRow();
-    const plotData = plotLr >= 2 ? plotSh.getRange(2, 1, plotLr - 1, 6).getValues() : [];
-
-    // Build customer lookup from JobOrders
-    const joSh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
-    const joLr = joSh.getLastRow();
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+ 
+    // Customer lookup
+    const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const joLr   = joSh.getLastRow();
     const custMap = {};
     if (joLr >= 2) {
       joSh.getRange(2, 1, joLr - 1, 13).getValues().forEach(r => {
-        const jo = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
-        const cust = String(r[JO_COL.CUSTOMER] || '').trim();
+        const jo   = String(r[JO_COL.JO_NUMBER] || '').trim().toUpperCase();
+        const cust = String(r[JO_COL.CUSTOMER]  || '').trim();
         if (jo) custMap[jo] = cust;
       });
     }
-
-    // Collect damage entries from Plotting_Log
-    const damages = [];
-    plotData.forEach(r => {
-      const id = String(r[0]).trim();
-      if (!id.startsWith('DMG-')) return;
-      let j = {};
-      try { j = JSON.parse(String(r[5] || '{}')); } catch (e) { }
-      if (!j.isDamage) return;
-
-      const joNumbers = Array.isArray(j.joNumbers) ? j.joNumbers : [];
-      const customers = [...new Set(
-        joNumbers.map(jo => custMap[String(jo).trim().toUpperCase()] || jo)
-      )].filter(Boolean);
-
-      damages.push({
-        plotId: id,
-        rollId: j.rollId || '',
-        joNumbers: joNumbers,
-        customer: customers.join(', '),
-        lengthUsed: parseFloat(j.lengthUsed) || 0,
-        operator: String(r[3] || '').trim(),
-        reason: j.damageReason || '',
-        date: r[4] ? prism_fmtShort_(new Date(r[4])) : ''
-      });
-    });
-
-    // Sort damages newest first
-    damages.reverse();
-
-    // Collect test prints from LFP_Usage
-    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
-    const usageLr = usageSh.getLastRow();
-    const testPrints = [];
-    if (usageLr >= 2) {
-      usageSh.getRange(2, 1, usageLr - 1, 8).getValues()
-        .filter(r => String(r[USAGE_COL.JO_NUMBER]).trim() === TEST_PRINT_MARKER)
-        .forEach(r => {
-          const d = r[USAGE_COL.DATE_USED];
-          testPrints.push({
-            rollId: String(r[USAGE_COL.ROLL_ID] || '').trim(),
-            lengthUsed: parseFloat(r[USAGE_COL.LENGTH_USED]) || 0,
-            operator: String(r[USAGE_COL.OPERATOR] || '').trim(),
-            plottingLink: String(r[USAGE_COL.PLOTTING_LINK] || '').trim(),
-            dateUsed: d ? prism_fmtShort_(new Date(d)) : '',
-            _dateRaw: d ? new Date(d).getTime() : 0
-          });
-        });
-    }
-    testPrints.sort((a, b) => b._dateRaw - a._dateRaw);
-
+ 
+    const damages = plotRows
+      .filter(r => r.type === PLOT_TYPE.DAMAGE && !r.isVoid)
+      .map(r => ({
+        plotId:     r.plotId,
+        rollId:     r.rollId,
+        joNumbers:  r.joNumbers,
+        customer:   [...new Set(r.joNumbers.map(jo => custMap[jo.toUpperCase()] || jo))].join(', '),
+        lengthUsed: r.lengthFt,
+        operator:   r.operator,
+        reason:     r.remarks.damageReason || '',
+        date:       r.date ? prism_fmtShort_(new Date(r.date)) : ''
+      }))
+      .reverse();
+ 
+    const testPrints = plotRows
+      .filter(r => r.type === PLOT_TYPE.TEST_PRINT && !r.isVoid)
+      .map(r => ({
+        rollId:      r.rollId,
+        lengthUsed:  r.lengthFt,
+        operator:    r.operator,
+        plottingLink: r.remarks.notes || '',
+        dateUsed:    r.date ? prism_fmtShort_(new Date(r.date)) : ''
+      }))
+      .reverse();
+ 
     return { success: true, damages, testPrints };
-  } catch (e) {
+  } catch(e) {
     return { success: false, message: e.message };
   }
 }

@@ -312,7 +312,7 @@ function pq_renderAll() {
     h += '</div>';
     h += '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:4px;">' + pq_esc(p.rollId) + '</span>';
     h += '<p style="font-size:11px;color:var(--p-muted);margin:0 0 8px;">Started: ' + pq_esc(p.date) + '</p>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-bottom:8px;">';
     if (p.pngUrl) {
       h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
         + ' style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--p-purple);'
@@ -563,6 +563,8 @@ function pq_renderAll() {
     // Background
     ctx.fillStyle = '#f8fafc';
     ctx.fillRect(axisW, 0, bodyW, canvasH);
+    ctx.fillStyle = 'rgba(148,163,184,0.08)';
+    ctx.fillRect(axisW, 0, bodyW, topPad);
 
     // Axis ticks + grid lines
     ctx.fillStyle = '#94a3b8';
