@@ -1985,10 +1985,11 @@ function prism_startPrintingLayout(payload) {
     if (alreadyPrinting)
       return { success: false, message: 'Another layout is already printing on roll ' + targetRollId + '.' };
  
-    // Find furthest PRINTED end on this roll
+    // Find furthest PRINTED or PRINTING end on this roll
     let maxEnd = 0;
     plotRows.forEach(r => {
-      if (r.rollId === targetRollId && !r.isVoid && r.status === PLOT_STATUS.PRINTED) {
+      if (r.rollId === targetRollId && !r.isVoid &&
+         (r.status === PLOT_STATUS.PRINTED || r.status === PLOT_STATUS.PRINTING)) {
         if (r.endFt > maxEnd) maxEnd = r.endFt;
       }
     });
