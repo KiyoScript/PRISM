@@ -221,7 +221,9 @@ function prism_readPlotRows_(plotSh) {
         rollId:     String(r[PLOT_COL.ROLL_ID]      || '').trim(),
         joNumbers:  String(r[PLOT_COL.JO_NUMBERS]   || '').split(',').map(x=>x.trim()).filter(Boolean),
         status:     String(r[PLOT_COL.STATUS]        || '').trim(),
-        startFt:    parseFloat(r[PLOT_COL.START_FT]) || 0,
+        startFt:    parseFloat(r[PLOT_COL.START_FT]) || 0,joNumbers:  String(r[PLOT_COL.JO_NUMBERS]   || '').split(',').map(x=>x.trim()).filter(function(x) {
+            return x.length > 0 && x.indexOf(' ') === -1 && x.indexOf(':') === -1;
+          }),
         endFt:      parseFloat(r[PLOT_COL.END_FT])   || 0,
         lengthFt:   parseFloat(r[PLOT_COL.LENGTH_FT])|| 0,
         isVoid:     r[PLOT_COL.IS_VOID] === true || String(r[PLOT_COL.IS_VOID]).toLowerCase() === 'true',

@@ -663,22 +663,59 @@
     ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 2;
     ctx.strokeRect(axisW, planY, bodyW, planH);
 
-    // Purple fill for JO area
-    var contW = Math.round(bodyW * 0.35);
-    var joW = bodyW - contW;
-    ctx.fillStyle = 'rgba(99,102,241,0.25)';
-    ctx.fillRect(axisW, planY, joW, planH);
+    // If the plan has detailed row layout, render it just like history segments
+    var planRows = Array.isArray(plan.rows) ? plan.rows : [];
+    if (planRows.length > 0) {
+      // Draw rows using the same helper, with teal/indigo colors for current plan pieces
+      var cy = planY;
+      planRows.forEach(function(r) {
+        var rh = Math.max(2, Math.round((parseFloat(r.rowH) || 0) * pxPerFt));
+        var cx2 = axisW;
+        (Array.isArray(r.pieces) ? r.pieces : []).forEach(function(p) {
+          var pw = Math.max(1, Math.round(((parseFloat(p.w) || 0) / rollWidth) * bodyW));
+          var p_rh = Math.max(2, Math.min(rh, Math.round((parseFloat(p.h) || parseFloat(r.rowH) || 0) * pxPerFt)));
+          var px2 = axisW + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx2 - axisW));
+          var py2 = cy + (p.dy !== undefined ? Math.round(p.dy * pxPerFt) : 0);
+          // Teal fill with indigo stroke for current plan pieces
+          ctx.fillStyle = 'rgba(99,102,241,0.35)';
+          ctx.fillRect(px2 + 1, py2 + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+          ctx.strokeStyle = '#4f46e5';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(px2 + 1, py2 + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+          // Label: customer name or JO number
+          var joNum = String(p.jo || p.joNumber || '').trim().toUpperCase();
+          var custLabel = (pq_joCustomerMap && pq_joCustomerMap[joNum]) ? pq_joCustomerMap[joNum] : joNum;
+          if (pw > 34 && p_rh > 13 && custLabel) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 9px JetBrains Mono, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(custLabel.slice(0, 14), px2 + pw / 2, py2 + p_rh / 2 + 3);
+          }
+          if (p.dx === undefined) cx2 += pw;
+        });
+        // Waste area
+        var wasteW = parseFloat(r.wasteW) || 0;
+        if (wasteW > 0.02) {
+          var ww = Math.max(1, Math.round((wasteW / rollWidth) * bodyW));
+          ctx.fillStyle = 'rgba(245,158,11,0.20)';
+          ctx.fillRect(cx2 + 1, cy + 1, Math.max(1, ww - 2), Math.max(1, rh - 2));
+        }
+        cy += rh;
+      });
+    } else {
+      // Fallback: no row data — show plain filled box with JO label
+      ctx.fillStyle = 'rgba(99,102,241,0.20)';
+      ctx.fillRect(axisW + 1, planY + 1, bodyW - 2, planH - 2);
+      if (planH > 26) {
+        ctx.fillStyle = '#3730a3'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText((plan.joNumbers || []).join(', '), axisW + bodyW / 2, planY + planH / 2 + 4);
+      }
+    }
 
-    // Continuation area
-    ctx.fillStyle = 'rgba(245,158,11,0.15)';
-    ctx.fillRect(axisW + joW, planY, contW, planH);
-
-    // Labels
+    // CURRENT PLAN header label
     if (planH > 14) {
-      ctx.fillStyle = '#3730a3'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#065f46'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
       ctx.fillText('CURRENT PLAN', axisW + 6, planY + 14);
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-      if (planH > 26) ctx.fillText((plan.joNumbers || []).join(', '), axisW + joW / 2, planY + planH / 2 + 4);
     }
     ctx.fillStyle = '#b45309'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
     ctx.fillText('Continuation @ ' + (totalPrinted + planLen).toFixed(1) + 'ft', axisW + bodyW - 6, planY + 14);
