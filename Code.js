@@ -1199,7 +1199,7 @@ function prism_getForPlottingJOs() {
     const all = prism_getAllJobOrders_();
     const usageMap = prism_getUsageSummaryByJO_();
     const data = all
-      .filter(j => j.status === JO_STATUS.FOR_PLOTTING || j.status === 'PRINTING')
+      .filter(j => j.status === JO_STATUS.FOR_PLOTTING)
       .map(j => {
         const u = usageMap[String(j.joNumber || '').trim().toUpperCase()];
         if (!u) return Object.assign({}, j, {
