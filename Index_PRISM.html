@@ -513,10 +513,7 @@ function switchTab(t) {
   var fn = 'prism_init_' + t.replace(/-/g, '_');
   if (typeof window[fn] === 'function') {
     if (!initializedTabs[t]) initializedTabs[t] = true;
-    if (t === 'print-queue' || !initializedTabs[t + '_ran']) {
-      initializedTabs[t + '_ran'] = true;
-      window[fn]();
-    }
+    window[fn]();
   }
 }
 document.querySelectorAll('.nav-link').forEach(function(l) {
