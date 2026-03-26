@@ -1196,32 +1196,77 @@ function prism_getUsageSummaryByJO_() {
 
 function prism_getForPlottingJOs() {
   try {
-    const all = prism_getAllJobOrders_();
-    const usageMap = prism_getUsageSummaryByJO_();
-    const data = all
-      .filter(j => j.status === JO_STATUS.FOR_PLOTTING)
-      .map(j => {
-        const u = usageMap[String(j.joNumber || '').trim().toUpperCase()];
-        if (!u) return Object.assign({}, j, {
-          plottedBefore: false,
-          usageCount: 0,
-          usageTotalLength: 0,
-          usageLastDate: '',
-          usageLastRollId: '',
-          usageRollIds: []
-        });
-        return Object.assign({}, j, {
-          plottedBefore: u.count > 0,
-          usageCount: u.count,
-          usageTotalLength: Number((u.totalLength || 0).toFixed(2)),
-          usageLastDate: u.lastDateLabel || '',
-          usageLastRollId: u.lastRollId || '',
-          usageRollIds: Object.keys(u.rollIds)
-        });
+    const sh = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+    const lr = sh.getLastRow();
+    if (lr < 2) return { success: true, data: [] };
+
+    const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    const usageLr = usageSh.getLastRow();
+    const usageMap = {};
+    if (usageLr >= 2) {
+      usageSh.getRange(2, 1, usageLr - 1, 8).getValues().forEach(u => {
+        const jo = String(u[USAGE_COL.JO_NUMBER] || '').trim().toUpperCase();
+        if (!jo) return;
+        if (!usageMap[jo]) usageMap[jo] = { count: 0, rollIds: [], lastRollId: '', lastDate: '' };
+        usageMap[jo].count++;
+        const rid = String(u[USAGE_COL.ROLL_ID] || '').trim();
+        if (rid && !usageMap[jo].rollIds.includes(rid)) usageMap[jo].rollIds.push(rid);
+        usageMap[jo].lastRollId = rid || usageMap[jo].lastRollId;
+        const d = u[USAGE_COL.DATE_USED];
+        if (d) usageMap[jo].lastDate = prism_fmtShort_(d);
       });
-    return { success: true, data: data };
-  } catch (e) { return { success: false, message: e.message }; }
+    }
+
+    const rows = sh.getRange(2, 1, lr - 1, 13).getValues();
+    const data = [];
+
+    rows.forEach((r, i) => {
+      const joNumber = String(r[JO_COL.JO_NUMBER] || '').trim();
+      if (!joNumber) return;
+      const status = String(r[JO_COL.STATUS] || JO_STATUS.FOR_PLOTTING).trim();
+      if (status !== JO_STATUS.FOR_PLOTTING) return;
+
+      const unit = String(r[JO_COL.UNIT] || 'ft').trim();
+      const usage = usageMap[joNumber.toUpperCase()] || {};
+      const widthRaw  = parseFloat(r[JO_COL.WIDTH])  || 0;
+      const heightRaw = parseFloat(r[JO_COL.HEIGHT]) || 0;
+
+      data.push({
+        rowIndex:       i + 2,
+        joNumber:       joNumber,
+        customer:       String(r[JO_COL.CUSTOMER]       || '').trim(),
+        jobDescription: String(r[JO_COL.JOB_DESCRIPTION]|| '').trim(),
+        category:       String(r[JO_COL.CATEGORY]       || '').trim(),
+        width:          widthRaw,
+        height:         heightRaw,
+        quantity:       parseInt(r[JO_COL.QUANTITY])    || 1,
+        unit:           unit,
+        widthFt:        prism_toFt_(widthRaw,  unit),
+        heightFt:       prism_toFt_(heightRaw, unit),
+        plottingLink:   String(r[JO_COL.PLOTTING_LINK]  || '').trim(),
+        status:         status,
+        rollId:         String(r[JO_COL.ROLL_ID]        || '').trim(),
+        dateCreated:    prism_fmtShort_(r[JO_COL.DATE_CREATED]),
+        plottedBefore:  (usage.count || 0) > 0,
+        usageCount:     usage.count     || 0,
+        usageRollIds:   usage.rollIds   || [],
+        usageLastRollId: usage.lastRollId || '',
+        usageLastDate:   usage.lastDate   || ''
+      });
+    });
+
+    data.sort((a, b) => {
+      const dd = new Date(b.dateCreated) - new Date(a.dateCreated);
+      return dd !== 0 ? dd : a.rowIndex - b.rowIndex;
+    });
+
+    return { success: true, data };
+  } catch (e) {
+    Logger.log('prism_getForPlottingJOs ERROR: ' + e.message);
+    return { success: false, message: e.message };
+  }
 }
+
 function prism_submitJobOrder(payload) {
   try {
     const user = prism_getUserInfo_();
@@ -1564,6 +1609,11 @@ function prism_confirmPlotLayout(payload) {
       rollJoNumbersById[plan.rollId] = Object.keys(joSet);
     });
 
+    // rowIndexes: new per-row targeting (sent by updated frontend)
+    const rowIndexes = Array.isArray(payload.rowIndexes)
+      ? payload.rowIndexes.map(Number).filter(Boolean)
+      : [];
+
     const plotImages = Array.isArray(payload.plotImages) ? payload.plotImages : [];
     const savedPlotsByRollId = {};
     let effectivePlottingLink = String(payload.plottingLink || '').trim();
@@ -1650,23 +1700,44 @@ function prism_confirmPlotLayout(payload) {
       });
     });
 
-    payload.joNumbers.forEach(joRaw => {
-      const joNumber = String(joRaw || '').trim().toUpperCase();
-      if (!joNumber) return;
+    if (rowIndexes.length > 0) {
+      // NEW PATH: only update the exact sheet rows that were confirmed
       joData.forEach((r, i) => {
-        if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() !== joNumber) return;
-        // Append roll IDs
+        const sheetRow  = i + 2;
+        const joNumber  = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
+        const rowStatus = String(r[JO_COL.STATUS]).trim();
+        if (rowStatus !== JO_STATUS.FOR_PLOTTING) return;
+        if (!rowIndexes.includes(sheetRow)) return;
+
         const existingRolls = String(r[JO_COL.ROLL_ID] || '')
           .split(',').map(x => x.trim()).filter(Boolean);
         Object.keys(joRollLengths[joNumber] || {}).forEach(rollId => {
           if (rollId && !existingRolls.includes(rollId)) existingRolls.push(rollId);
         });
-        joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
-        joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
+        joSh.getRange(sheetRow, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
+        joSh.getRange(sheetRow, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
         if (effectivePlottingLink)
-          joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
+          joSh.getRange(sheetRow, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
       });
-    });
+    } else {
+      // LEGACY PATH: update all rows matching joNumbers (old behavior)
+      payload.joNumbers.forEach(joRaw => {
+        const joNumber = String(joRaw || '').trim().toUpperCase();
+        if (!joNumber) return;
+        joData.forEach((r, i) => {
+          if (String(r[JO_COL.JO_NUMBER]).trim().toUpperCase() !== joNumber) return;
+          const existingRolls = String(r[JO_COL.ROLL_ID] || '')
+            .split(',').map(x => x.trim()).filter(Boolean);
+          Object.keys(joRollLengths[joNumber] || {}).forEach(rollId => {
+            if (rollId && !existingRolls.includes(rollId)) existingRolls.push(rollId);
+          });
+          joSh.getRange(i + 2, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
+          if (effectivePlottingLink)
+            joSh.getRange(i + 2, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
+        });
+      });
+    }
 
     // Persist roll layout snapshots
     const plotSh = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);

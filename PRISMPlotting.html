@@ -13,6 +13,20 @@
   }
   .pp-results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; align-items: start; }
   .pp-results-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+  .pp-jo-group { border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-surface); margin-bottom: 8px; overflow: hidden; }
+  .pp-jo-group.has-selected { border-color: var(--p-teal); background: var(--p-teal-lt); }
+  .pp-jo-group-header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; user-select: none; }
+  .pp-jo-group-header:hover { background: rgba(13,148,136,.06); }
+  .pp-jo-group-chevron { flex-shrink: 0; width: 16px; height: 16px; color: var(--p-muted); transition: transform .2s; }
+  .pp-jo-group.expanded .pp-jo-group-chevron { transform: rotate(90deg); }
+  .pp-jo-group-body { display: none; border-top: 1px solid var(--p-border); padding: 6px 8px 8px; }
+  .pp-jo-group.expanded .pp-jo-group-body { display: block; }
+  .pp-jo-subrow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; cursor: pointer; border: 1.5px solid transparent; margin-bottom: 5px; transition: all .15s; }
+  .pp-jo-subrow:last-child { margin-bottom: 0; }
+  .pp-jo-subrow:hover { background: var(--p-teal-lt); border-color: var(--p-teal-bd); }
+  .pp-jo-subrow.selected { background: var(--p-teal-lt); border-color: var(--p-teal); }
+  .pp-jo-badge-multi { display: inline-flex; align-items: center; gap: 3px; background: var(--p-indigo-lt); border: 1px solid #c7d2fe; border-radius: 6px; padding: 1px 7px; font-size: 10px; font-weight: 700; color: var(--p-indigo); flex-shrink: 0; }
   .pp-results-right { display: flex; flex-direction: column; min-width: 0; align-self: start; }
   #pp-historyWrap { overflow-y: auto; overflow-x: hidden; border: 1.5px solid var(--p-border); border-radius: 12px; background: #f8fafc; padding: 10px; height: 720px; max-height: 720px; }
   @media (max-width: 1100px) { .pp-results-grid { grid-template-columns: 1fr; } }
@@ -285,7 +299,8 @@ function pp_toFt(value, unit) {
 
 var pp_allJOs   = [];   // all FOR_PLOTTING and PRINTING JOs from backend
 var pp_filtJOs  = [];   // filtered for display
-var pp_selJOs   = {};   // { joNumber: true }
+var pp_selJOs        = {};   // { rowIndex: true }
+var pp_expandedGroups = {};  // { joNumber: true }
 var pp_mode     = 'NEW';
 var pp_rolls    = [];   // open rolls
 var pp_materials = [];  // all materials (for name lookup)
@@ -391,61 +406,143 @@ function pp_filterJOs() {
 }
 
 function pp_renderJOs() {
-  var el = document.getElementById('pp-joList');
+  var el    = document.getElementById('pp-joList');
   var count = document.getElementById('pp-joCount');
+
   if (!pp_filtJOs.length) {
-    var msg = 'No FOR_PLOTTING job orders found.';
+    var msg = pp_allJOs.some(function(j){ return j.status === 'FOR_PLOTTING'; })
+      ? 'No results match your search.'
+      : 'No FOR_PLOTTING job orders found.';
     el.innerHTML = '<div class="pp-empty"><svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>' + msg + '</div>';
     count.textContent = '';
     return;
   }
-  var selCount = Object.keys(pp_selJOs).filter(function(k){return pp_selJOs[k];}).length;
-  count.textContent = selCount + ' of ' + pp_filtJOs.length + ' selected';
-  var h = '';
+
+  var groups = {};
+  var order  = [];
   pp_filtJOs.forEach(function(j) {
-    var sel = pp_selJOs[j.joNumber] ? ' selected' : '';
-    var chk = pp_selJOs[j.joNumber] ? 'checked' : '';
-    var qty = j.quantity || 1;
-    var joUnit = (j.unit || 'ft').toUpperCase();
-    var size = (j.width && j.height)
-      ? j.width + ' × ' + j.height + ' ' + joUnit
-        + (j.unit && j.unit.toLowerCase() !== 'ft' && j.widthFt ? ' (' + j.widthFt + ' × ' + j.heightFt + ' ft)' : '')
-      : '?';
-    var total = (j.width && j.height) ? (j.width * j.height * qty).toFixed(1) + ' ft²' : '';
-    var hist = '';
-    if (j.plottedBefore) {
-      var rolls = (j.usageRollIds || []).join(', ');
-      hist = '<div style="font-size:10px;color:var(--p-teal);margin-top:3px;font-weight:700;">'
-        + 'Previously plotted: ' + (j.usageCount || 0) + 'x'
-        + (j.usageLastRollId ? ' · last ' + pp_esc(j.usageLastRollId) : '')
-        + (j.usageLastDate ? ' · ' + pp_esc(j.usageLastDate) : '')
-        + (rolls ? '<div style="font-weight:600;color:var(--p-muted);margin-top:1px;">Rolls: ' + pp_esc(rolls) + '</div>' : '')
-        + '</div>';
-    }
-    h += '<div class="pp-jo-item' + sel + '" onclick="pp_toggleJO(\'' + pp_esc(j.joNumber) + '\')">'
-      + '<input type="checkbox" ' + chk + ' onclick="event.stopPropagation();pp_toggleJO(\'' + pp_esc(j.joNumber) + '\')">'
-      + '<div style="flex:1;min-width:0;">'
-      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
-      + '<span class="pp-jo-num">' + pp_esc(j.joNumber) + '</span>'
-      + '<span class="pp-jo-size">' + size + ' ×' + qty + '</span>'
-      + '</div>'
-      + '<div class="pp-jo-cust">' + pp_esc(j.customer || '—') + '</div>'
-      + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
-      + hist
-      + '</div>'
-      + '</div>';
+    if (!groups[j.joNumber]) { groups[j.joNumber] = []; order.push(j.joNumber); }
+    groups[j.joNumber].push(j);
   });
+
+  var selCount = pp_allJOs.filter(function(j){ return pp_selJOs[j.rowIndex]; }).length;
+  count.textContent = selCount + ' of ' + pp_filtJOs.length + ' order' + (pp_filtJOs.length !== 1 ? 's' : '') + ' selected';
+
+  var h = '';
+  order.forEach(function(joNumber) {
+    var rows     = groups[joNumber];
+    var isMulti  = rows.length > 1;
+    var selRows  = rows.filter(function(r){ return pp_selJOs[r.rowIndex]; });
+    var hasSelected = selRows.length > 0;
+    var allSelected = selRows.length === rows.length;
+
+    if (!isMulti) {
+      var j    = rows[0];
+      var sel  = pp_selJOs[j.rowIndex] ? ' selected' : '';
+      var chk  = pp_selJOs[j.rowIndex] ? 'checked' : '';
+      var joUnit = (j.unit || 'ft').toUpperCase();
+      var size = (j.width && j.height)
+        ? j.width + ' × ' + j.height + ' ' + joUnit
+          + (j.unit && j.unit.toLowerCase() !== 'ft' && j.widthFt ? ' (' + j.widthFt + ' × ' + j.heightFt + ' ft)' : '')
+        : '?';
+      var hist = '';
+      if (j.plottedBefore) {
+        hist = '<div style="font-size:10px;color:var(--p-teal);margin-top:3px;font-weight:700;">'
+          + 'Previously plotted: ' + (j.usageCount||0) + 'x'
+          + (j.usageLastRollId ? ' · last ' + pp_esc(j.usageLastRollId) : '')
+          + (j.usageLastDate   ? ' · ' + pp_esc(j.usageLastDate)   : '')
+          + '</div>';
+      }
+      h += '<div class="pp-jo-item' + sel + '" onclick="pp_toggleRow(' + j.rowIndex + ')">'
+        + '<input type="checkbox" ' + chk + ' onclick="event.stopPropagation();pp_toggleRow(' + j.rowIndex + ')">'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+        + '<span class="pp-jo-num">' + pp_esc(j.joNumber) + '</span>'
+        + '<span class="pp-jo-size">' + size + ' ×' + (j.quantity||1) + '</span>'
+        + '</div>'
+        + '<div class="pp-jo-cust">' + pp_esc(j.customer || '—') + '</div>'
+        + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
+        + hist
+        + '</div></div>';
+    } else {
+      var expanded = pp_expandedGroups[joNumber] ? ' expanded' : '';
+      var selClass = hasSelected ? ' has-selected' : '';
+      var headerChk = allSelected ? 'checked' : '';
+      h += '<div class="pp-jo-group' + expanded + selClass + '">';
+      h += '<div class="pp-jo-group-header" onclick="pp_toggleJOGroup(\'' + pp_esc(joNumber) + '\')">'
+        + '<input type="checkbox" ' + headerChk + ' id="ppgrpchk-' + pp_esc(joNumber) + '"'
+        + ' onclick="event.stopPropagation();pp_toggleJOGroupAll(\'' + pp_esc(joNumber) + '\')"'
+        + ' style="flex-shrink:0;">'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+        + '<span class="pp-jo-num">' + pp_esc(joNumber) + '</span>'
+        + '<span class="pp-jo-badge-multi">' + rows.length + ' orders</span>'
+        + (hasSelected ? '<span style="font-size:10px;font-weight:700;color:var(--p-teal);">' + selRows.length + ' selected</span>' : '')
+        + '</div>'
+        + '<div class="pp-jo-cust">' + pp_esc(rows[0].customer || '—') + '</div>'
+        + '</div>'
+        + '<svg class="pp-jo-group-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>'
+        + '</svg></div>';
+      h += '<div class="pp-jo-group-body">';
+      rows.forEach(function(j) {
+        var selSub = pp_selJOs[j.rowIndex] ? ' selected' : '';
+        var chkSub = pp_selJOs[j.rowIndex] ? 'checked' : '';
+        var joUnit = (j.unit || 'ft').toUpperCase();
+        var size = (j.width && j.height)
+          ? j.width + ' × ' + j.height + ' ' + joUnit
+            + (j.unit && j.unit.toLowerCase() !== 'ft' && j.widthFt ? ' (' + j.widthFt + ' × ' + j.heightFt + ' ft)' : '')
+          : '?';
+        h += '<div class="pp-jo-subrow' + selSub + '" onclick="pp_toggleRow(' + j.rowIndex + ')">'
+          + '<input type="checkbox" ' + chkSub + ' onclick="event.stopPropagation();pp_toggleRow(' + j.rowIndex + ')">'
+          + '<div style="flex:1;min-width:0;">'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+          + '<span class="pp-jo-size" style="font-weight:700;color:var(--p-text);">' + size + '</span>'
+          + '<span style="font-size:11px;color:var(--p-muted);">×' + (j.quantity||1) + ' pcs</span>'
+          + '</div>'
+          + (j.jobDescription ? '<div class="pp-jo-meta" style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;margin-top:1px;">' + pp_esc(j.jobDescription) + '</div>' : '')
+          + '</div></div>';
+      });
+      h += '</div></div>';
+    }
+  });
+
   el.innerHTML = h;
+
+  order.forEach(function(joNumber) {
+    var rows = groups[joNumber];
+    if (rows.length <= 1) return;
+    var selRows = rows.filter(function(r){ return pp_selJOs[r.rowIndex]; });
+    var cb = document.getElementById('ppgrpchk-' + joNumber);
+    if (cb) cb.indeterminate = selRows.length > 0 && selRows.length < rows.length;
+  });
 }
 
-function pp_toggleJO(joNumber) {
-  pp_selJOs[joNumber] = !pp_selJOs[joNumber];
+function pp_toggleRow(rowIndex) {
+  pp_selJOs[rowIndex] = !pp_selJOs[rowIndex];
   pp_renderJOs();
   pp_updateRollSuggestions();
   pp_checkArrangeBtn();
-  pp_layout = null;
-  pp_rollPlans = [];
-  pp_activeRollViewId = '';
+  pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
+  document.getElementById('pp-results').style.display    = 'none';
+  document.getElementById('pp-rightEmpty').style.display = 'block';
+  document.getElementById('pp-confirmPanel').style.display = 'none';
+}
+
+function pp_toggleJOGroup(joNumber) {
+  pp_expandedGroups[joNumber] = !pp_expandedGroups[joNumber];
+  pp_renderJOs();
+}
+
+function pp_toggleJOGroupAll(joNumber) {
+  var rows = pp_filtJOs.filter(function(j){ return j.joNumber === joNumber; });
+  var selRows = rows.filter(function(r){ return pp_selJOs[r.rowIndex]; });
+  var shouldSelect = selRows.length < rows.length;
+  rows.forEach(function(r){ pp_selJOs[r.rowIndex] = shouldSelect; });
+  pp_renderJOs();
+  pp_updateRollSuggestions();
+  pp_checkArrangeBtn();
+  pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
   document.getElementById('pp-results').style.display    = 'none';
   document.getElementById('pp-rightEmpty').style.display = 'block';
   document.getElementById('pp-confirmPanel').style.display = 'none';
@@ -469,13 +566,7 @@ function pp_clearAll() {
 }
 
 function pp_selectAll() {
-  pp_filtJOs.forEach(function(j) { pp_selJOs[j.joNumber] = true; });
-  pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
-}
-function pp_clearAll() {
-  pp_selJOs = {}; pp_pendingDamages = [];
-  var dmgInput = document.getElementById('pp-damageInput');
-  if (dmgInput) dmgInput.value = '';
+  pp_filtJOs.forEach(function(j) { pp_selJOs[j.rowIndex] = true; });
   pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
 }
 
@@ -538,7 +629,7 @@ function pp_selRollFn(rollId) {
 }
 
 function pp_updateRollSuggestions() {
-  var selJOList = pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
+  var selJOList = pp_allJOs.filter(function(j) { return pp_selJOs[j.rowIndex]; });
   if (!selJOList.length) {
     pp_rolls.forEach(function(r){ r._suggested = false; r._sim = null; });
     document.getElementById('pp-rollHint').style.display = 'none';
@@ -571,10 +662,10 @@ function pp_updateRollSuggestions() {
 }
 
 function pp_checkArrangeBtn() {
-  var hasSel = Object.keys(pp_selJOs).some(function(k){ return pp_selJOs[k]; });
+  var hasSel = pp_allJOs.some(function(j){ return pp_selJOs[j.rowIndex]; });
   var btn = document.getElementById('pp-arrangeBtn');
   btn.disabled = !(hasSel && pp_selRoll);
-  
+
   if (pp_mode === 'REPRINT') {
     btn.innerHTML = '⚠ Declare Damage & Replot';
     btn.className = 'p-btn p-btn-amber';
@@ -589,7 +680,7 @@ function pp_checkArrangeBtn() {
 }
 
 function pp_getSelectedJOs() {
-  return pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
+  return pp_allJOs.filter(function(j) { return pp_selJOs[j.rowIndex]; });
 }
 
 var pp_pendingDamages = [];
@@ -1074,7 +1165,7 @@ function pp_planAcrossRolls(selJOList) {
 ══════════════════════════════════════════════ */
 function pp_autoArrange() {
   if (!pp_selRoll) { prism_toast('error', 'Please select a roll.'); return; }
-  var selJOList = pp_allJOs.filter(function(j) { return pp_selJOs[j.joNumber]; });
+  var selJOList = pp_allJOs.filter(function(j) { return pp_selJOs[j.rowIndex]; });
   if (!selJOList.length) { prism_toast('error', 'Please select at least one JO.'); return; }
 
   var plan = pp_planAcrossRolls(selJOList);
@@ -1752,7 +1843,8 @@ function pp_renderLegend() {
   var el = document.getElementById('pp-legend');
   var html = '';
   Object.keys(pp_colors).forEach(function(joNum) {
-    if (!pp_selJOs[joNum]) return;
+    var isSelected = pp_allJOs.some(function(j){ return j.joNumber === joNum && pp_selJOs[j.rowIndex]; });
+    if (!isSelected) return;
     var jo = null;
     for (var i = 0; i < pp_allJOs.length; i++) { if (pp_allJOs[i].joNumber === joNum) { jo = pp_allJOs[i]; break; } }
     html += '<div style="display:flex;align-items:center;gap:5px;">'
@@ -1837,6 +1929,11 @@ function pp_confirm() {
   var btn  = document.getElementById('pp-confirmBtn');
   var plotImages = pp_captureRollMapImages();
 
+  // Collect selected rowIndexes
+  var rowIndexList = pp_allJOs
+    .filter(function(j){ return pp_selJOs[j.rowIndex]; })
+    .map(function(j){ return j.rowIndex; });
+
   // Build list of unique JO numbers in layout
   var joNums = {};
   var plans = (pp_layout.rollPlans && pp_layout.rollPlans.length) ? pp_layout.rollPlans : [pp_layout];
@@ -1845,7 +1942,7 @@ function pp_confirm() {
   });
   var joList = Object.keys(joNums);
 
-  if (!joList.length) { prism_toast('error', 'No JOs in layout.'); return; }
+  if (!rowIndexList.length && !joList.length) { prism_toast('error', 'No JOs in layout.'); return; }
 
   btn.disabled = true; btn.textContent = 'Confirming…';
 
@@ -1859,11 +1956,14 @@ function pp_confirm() {
           successMsg += ' Saved IMG to Drive for ' + savedCount + ' roll(s).';
         }
         prism_toast('success', successMsg);
-        // Remove confirmed JOs from local list
+        // Remove confirmed rows from local list
+        rowIndexList.forEach(function(ri) {
+          delete pp_selJOs[ri];
+          pp_allJOs = pp_allJOs.filter(function(j){ return j.rowIndex !== ri; });
+        });
         joList.forEach(function(jo) {
-          pp_selJOs[jo] = false;
-          delete pp_colors[jo];
-          pp_allJOs = pp_allJOs.filter(function(j) { return j.joNumber !== jo; });
+          var stillExists = pp_allJOs.some(function(j){ return j.joNumber === jo; });
+          if (!stillExists) delete pp_colors[jo];
         });
         pp_filtJOs = pp_allJOs.slice();
         pp_layout  = null;
@@ -1886,8 +1986,9 @@ function pp_confirm() {
       prism_toast('error', e.message);
     })
     .prism_confirmPlotLayout({
-      joNumbers:    joList,
-      plotImages: plotImages,
+      rowIndexes:     rowIndexList,
+      joNumbers:      joList,
+      plotImages:     plotImages,
       pendingDamages: pp_pendingDamages,
       rollPlans:    plans.map(function(plan) {
         return {
