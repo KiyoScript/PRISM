@@ -311,6 +311,7 @@ var pp_activeRollViewId = '';
 var pp_rollHistory = {}; // { rollId: [historySegments...] }
 var pp_colors   = {};   // joNumber → color
 var pp_allowRotation = true;
+var pp_joRotation = {}; // { joNumber: true/false } — per-JO rotation override
 var pp_historyRenderMode = 'view'; // 'view' | 'export'
 var pp_resizeObserver = null;
 var pp_resizeTimer = null;
@@ -453,6 +454,25 @@ function pp_renderJOs() {
           + (j.usageLastDate   ? ' · ' + pp_esc(j.usageLastDate)   : '')
           + '</div>';
       }
+      var jw = j.widthFt || pp_toFt(parseFloat(j.width) || 0, j.unit);
+      var jh = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
+      var rollW = pp_selRoll ? parseFloat(pp_selRoll.width) || 10.5 : 10.5;
+      var canRotate = jw !== jh && jh <= rollW && jw <= rollW; // both orientations fit
+      var mustRotate = jw > rollW && jh <= rollW; // only rotated fits
+      var rotState = pp_joRotation.hasOwnProperty(j.joNumber)
+        ? pp_joRotation[j.joNumber]
+        : (mustRotate ? true : pp_allowRotation);
+      var rotBtnHtml = '';
+      if (canRotate && pp_selJOs[j.rowIndex]) {
+        var rotLabel = rotState ? '↺ Portrait' : '↔ Landscape';
+        var rotColor = rotState ? 'var(--p-teal)' : 'var(--p-indigo)';
+        rotBtnHtml = '<button onclick="event.stopPropagation();pp_toggleJoRotation(\'' + pp_esc(j.joNumber) + '\')"'
+          + ' style="padding:2px 8px;border-radius:6px;border:1.5px solid ' + rotColor + ';background:transparent;'
+          + 'font-size:10px;font-weight:700;color:' + rotColor + ';cursor:pointer;margin-top:4px;">'
+          + rotLabel + '</button>';
+      } else if (mustRotate && pp_selJOs[j.rowIndex]) {
+        rotBtnHtml = '<span style="font-size:10px;color:var(--p-faint);margin-top:4px;display:block;">↺ Auto-rotated (too wide)</span>';
+      }
       h += '<div class="pp-jo-item' + sel + '" onclick="pp_toggleRow(' + j.rowIndex + ')">'
         + '<input type="checkbox" ' + chk + ' onclick="event.stopPropagation();pp_toggleRow(' + j.rowIndex + ')">'
         + '<div style="flex:1;min-width:0;">'
@@ -463,6 +483,7 @@ function pp_renderJOs() {
         + '<div class="pp-jo-cust">' + pp_esc(j.customer || '—') + '</div>'
         + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
         + hist
+        + rotBtnHtml
         + '</div></div>';
     } else {
       var expanded = pp_expandedGroups[joNumber] ? ' expanded' : '';
@@ -520,6 +541,11 @@ function pp_renderJOs() {
 
 function pp_toggleRow(rowIndex) {
   pp_selJOs[rowIndex] = !pp_selJOs[rowIndex];
+  // Clear per-JO rotation when deselected so it resets cleanly
+  if (!pp_selJOs[rowIndex]) {
+    var deselJo = pp_allJOs.find(function(j){ return j.rowIndex === rowIndex; });
+    if (deselJo) delete pp_joRotation[deselJo.joNumber];
+  }
   pp_renderJOs();
   pp_updateRollSuggestions();
   pp_checkArrangeBtn();
@@ -551,6 +577,7 @@ function pp_toggleJOGroupAll(joNumber) {
 function pp_clearAll() {
   pp_selJOs = {};
   pp_colors = {};
+  pp_joRotation = {};
   pp_selRoll = null;
   pp_layout = null;
   pp_rollPlans = [];
@@ -563,6 +590,18 @@ function pp_clearAll() {
   pp_filterJOs();
   pp_renderRolls();
   pp_checkArrangeBtn();
+}
+
+function pp_toggleJoRotation(joNumber) {
+  // Determine current effective state
+  var current = pp_joRotation.hasOwnProperty(joNumber)
+    ? pp_joRotation[joNumber]
+    : pp_allowRotation;
+  // Flip it and store as explicit per-JO override
+  pp_joRotation[joNumber] = !current;
+  pp_renderJOs();
+  // Re-arrange immediately if layout exists
+  if (pp_layout) pp_autoArrange();
 }
 
 function pp_selectAll() {
@@ -831,14 +870,27 @@ function pp_orientationsForSpace(p, rollWidth, spaceLeft) {
   var normalFits = p.origW <= rollWidth + 0.0001;
   var rotatedFits = p.origH <= rollWidth + 0.0001 && Math.abs(p.origH - p.origW) > 0.0001;
 
-  if (normalFits) out.push({ w: p.origW, h: p.origH, rotated: false });
+  // Per-JO override takes priority over global toggle
+  var joNum = p.joNumber;
+  var hasPerJoOverride = pp_joRotation.hasOwnProperty(joNum);
+  var joRotateOn = hasPerJoOverride ? pp_joRotation[joNum] : pp_allowRotation;
 
-  // Always allow rotation if:
-  // 1. The piece physically cannot fit without rotation (forced rotation), OR
-  // 2. The global rotation toggle is ON
-  var mustRotate = !normalFits && rotatedFits;
-  if ((pp_allowRotation || mustRotate) && rotatedFits) {
-    out.push({ w: p.origH, h: p.origW, rotated: true });
+  var mustRotate = !normalFits && rotatedFits; // physically can't fit without rotating
+
+  if (mustRotate) {
+    // Force rotated only — no choice
+    if (rotatedFits) out.push({ w: p.origH, h: p.origW, rotated: true });
+  } else if (hasPerJoOverride) {
+    // Per-JO explicit setting: only one orientation
+    if (joRotateOn && rotatedFits) {
+      out.push({ w: p.origH, h: p.origW, rotated: true });
+    } else if (!joRotateOn && normalFits) {
+      out.push({ w: p.origW, h: p.origH, rotated: false });
+    }
+  } else {
+    // Global toggle: offer both if ON, normal only if OFF
+    if (normalFits) out.push({ w: p.origW, h: p.origH, rotated: false });
+    if (pp_allowRotation && rotatedFits) out.push({ w: p.origH, h: p.origW, rotated: true });
   }
 
   return out;
