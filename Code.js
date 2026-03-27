@@ -68,6 +68,7 @@ const PLOT_COL = {
 const PLOT_TYPE = {
   PLOT:       'PLOT',
   DAMAGE:     'DAMAGE',
+  ALLOWANCE: 'ALLOWANCE',
   TEST_PRINT: 'TEST_PRINT',
   REPRINT:    'REPRINT'
 };
@@ -708,8 +709,9 @@ function prism_recordTestPrint(payload) {
 
     // ── Write to LFP_Usage with TEST-PRINT marker ──
     const usageSh = prism_sh_(PRISM_SHEETS.LFP_USAGE);
+    var printType = (payload.type === 'ALLOWANCE') ? 'ALLOWANCE' : 'TEST_PRINT';
     usageSh.getRange(usageSh.getLastRow() + 1, 1, 1, 8).setValues([[
-      'TEST-' + today.getTime(),
+      (printType === 'ALLOWANCE' ? 'ALLOW-' : 'TEST-') + today.getTime(),
       TEST_PRINT_MARKER,
       payload.rollId,
       rollWidth,
@@ -728,7 +730,7 @@ function prism_recordTestPrint(payload) {
     });
     prism_writePlotRow_(plotSh2, {
       plotId:    'TEST-PLT-' + today.getTime(),
-      type:      PLOT_TYPE.TEST_PRINT,
+      type:      (payload.type === 'ALLOWANCE') ? PLOT_TYPE.ALLOWANCE : PLOT_TYPE.TEST_PRINT,
       rollId:    payload.rollId,
       joNumbers: [],
       status:    PLOT_STATUS.PRINTED,

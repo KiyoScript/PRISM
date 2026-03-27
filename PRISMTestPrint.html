@@ -62,8 +62,8 @@
   <!-- Top bar -->
   <div class="tp-topbar">
     <div>
-      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Test Print</h2>
-      <p style="font-size:13px;color:var(--p-muted);margin:0;">Log material consumed during test printing</p>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Test Print & Allowance</h2>
+      <p style="font-size:13px;color:var(--p-muted);margin:0;">Log material consumed during test printing or allowance cuts</p>
     </div>
     <div class="tp-topstats">
       <div class="tp-stat">
@@ -120,9 +120,16 @@
 
       <!-- Step 2: Length -->
       <div class="p-card" style="padding:16px;margin-bottom:12px;">
-        <p class="p-section-title">Step 2 — Test Length</p>
+        <p class="p-section-title">Step 2 — Print Details</p>
         <div style="margin-bottom:12px;">
-          <label class="p-label">Feet to test print <span style="color:var(--p-red);">*</span></label>
+          <label class="p-label">Print Type <span style="color:var(--p-red);">*</span></label>
+          <select id="tp-typeSelect" class="p-input" onchange="tp_onTypeChange()" style="font-size:13px;">
+            <option value="TEST_PRINT">🖨 Test Print — calibration / head alignment</option>
+            <option value="ALLOWANCE">✂ Allowance — material cut for job preparation</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="p-label" id="tp-lengthLabel">Feet to test print <span style="color:var(--p-red);">*</span></label>
           <input type="number" id="tp-lengthInput" class="p-input" placeholder="e.g. 0.5" min="0.01" step="0.01" oninput="tp_onLengthChange()">
           <p style="font-size:11px;color:var(--p-faint);margin:4px 0 0;">Full roll width will be used. Length deducted immediately on confirm.</p>
         </div>
@@ -133,7 +140,7 @@
       </div>
 
       <!-- Preview button -->
-      <button onclick="tp_preview()" class="p-btn" style="width:100%;padding:13px;font-size:13px;background:var(--p-amber-lt);color:var(--p-amber);border:1.5px solid var(--p-amber-bd);border-radius:11px;margin-bottom:12px;">
+      <button onclick="tp_preview()" id="tp-previewBtn" class="p-btn" style="width:100%;padding:13px;font-size:13px;background:var(--p-amber-lt);color:var(--p-amber);border:1.5px solid var(--p-amber-bd);border-radius:11px;margin-bottom:12px;">
         ✦ Preview Test Print
       </button>
     </div>
@@ -167,8 +174,8 @@
             </div>
 
             <div id="tp-confirmPanel" style="display:none;">
-              <p style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">Confirm Test Print</p>
-              <p style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll and record it on the roll map.</p>
+              <p id="tp-confirmTitle" style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-amber);margin:0 0 8px;">Confirm Test Print</p>
+              <p id="tp-confirmDesc" style="font-size:13px;color:var(--p-muted);margin:0 0 12px;">This will deduct the test length from the roll and record it on the roll map.</p>
               <button id="tp-confirmBtn" onclick="tp_confirm()" class="p-btn p-btn-green" style="width:100%;padding:13px;font-size:14px;">
                 ✓ Confirm & Deduct from Roll
               </button>
@@ -297,6 +304,24 @@ function tp_selectRoll(rollId) {
   tp_onLengthChange();
 }
 
+function tp_onTypeChange() {
+  var type = document.getElementById('tp-typeSelect').value;
+  var isAllowance = type === 'ALLOWANCE';
+  var lbl = document.getElementById('tp-lengthLabel');
+  var btn = document.getElementById('tp-previewBtn');
+  var previewTitle = document.getElementById('tp-confirmTitle');
+
+  if (lbl) lbl.innerHTML = (isAllowance ? 'Feet of allowance cut' : 'Feet to test print')
+    + ' <span style="color:var(--p-red);">*</span>';
+
+  if (btn) {
+    btn.textContent = isAllowance ? '✦ Preview Allowance' : '✦ Preview Test Print';
+    btn.style.background = isAllowance ? 'var(--p-indigo-lt)' : 'var(--p-amber-lt)';
+    btn.style.color = isAllowance ? 'var(--p-indigo)' : 'var(--p-amber)';
+    btn.style.borderColor = isAllowance ? '#c7d2fe' : 'var(--p-amber-bd)';
+  }
+}
+
 function tp_onLengthChange() {
   // Live-update stats if both roll and length are set
   if (!tp_selRoll) return;
@@ -327,7 +352,9 @@ function tp_resetStats() {
 function tp_preview() {
   if (!tp_selRoll) { prism_toast('error', 'Please select a roll.'); return; }
   var lu = parseFloat(document.getElementById('tp-lengthInput').value) || 0;
-  if (!lu || lu <= 0) { prism_toast('error', 'Please enter a test length greater than 0.'); return; }
+  var type = document.getElementById('tp-typeSelect').value;
+  var isAllowance = type === 'ALLOWANCE';
+  if (!lu || lu <= 0) { prism_toast('error', 'Please enter a ' + (isAllowance ? 'allowance' : 'test') + ' length greater than 0.'); return; }
   if (lu > tp_selRoll.remainingLength) {
     prism_toast('error', 'Test length (' + lu + ' ft) exceeds remaining (' + tp_selRoll.remainingLength + ' ft).');
     return;
@@ -357,7 +384,21 @@ function tp_preview() {
 
   document.getElementById('tp-emptyState').style.display = 'none';
   document.getElementById('tp-results').style.display    = 'block';
-  document.getElementById('tp-confirmPanel').style.display = 'block';
+  var isAllowance = (document.getElementById('tp-typeSelect').value === 'ALLOWANCE');
+        var confirmTitle = document.getElementById('tp-confirmTitle');
+        var confirmDesc  = document.getElementById('tp-confirmDesc');
+        var confirmBtn   = document.getElementById('tp-confirmBtn');
+        if (confirmTitle) {
+          confirmTitle.textContent = isAllowance ? 'Confirm Allowance Cut' : 'Confirm Test Print';
+          confirmTitle.style.color = isAllowance ? 'var(--p-indigo)' : 'var(--p-amber)';
+        }
+        if (confirmDesc) confirmDesc.textContent = isAllowance
+          ? 'This will deduct the allowance length from the roll and record it on the roll map.'
+          : 'This will deduct the test length from the roll and record it on the roll map.';
+        if (confirmBtn) confirmBtn.textContent = isAllowance
+          ? '✓ Confirm & Record Allowance'
+          : '✓ Confirm & Deduct from Roll';
+        document.getElementById('tp-confirmPanel').style.display = 'block';
   document.getElementById('tp-canvasLabel').textContent =
     tp_selRoll.rollId + ' · ' + tp_selRoll.width + 'ft × ' + tp_selRoll.remainingLength + 'ft';
 
@@ -597,7 +638,7 @@ function tp_confirm() {
       btn.disabled = false; btn.textContent = '✓ Confirm & Deduct from Roll';
       prism_toast('error', e.message);
     })
-    .prism_recordTestPrint({ rollId: rid, lengthUsed: lu, notes: notes });
+    .prism_recordTestPrint({ rollId: rid, lengthUsed: lu, notes: notes, type: document.getElementById('tp-typeSelect').value });
 }
 
 function tp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
