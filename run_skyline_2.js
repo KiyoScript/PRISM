@@ -1,3 +1,9 @@
+function pp_orientationsForSpace(p, rollWidth, spaceLeft) {
+  var out = [];
+  if (p.origW <= rollWidth && p.origW <= spaceLeft) out.push({ w: p.origW, h: p.origH, rotated: false });
+  if (true && p.origH <= rollWidth && p.origH <= spaceLeft && p.origH !== p.origW) out.push({ w: p.origH, h: p.origW, rotated: true });
+  return out;
+}
 function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
   var remaining = pieces.slice();
   var placed = [];
@@ -113,4 +119,13 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
     remainingPieces: remaining,
     placed: placed
   };
+}
+
+var pieces = [];
+for (var i=0; i<12; i++) pieces.push({ origW: 2.75, origH: 6.5, rotated: false });
+var res = pp_skylinePack(pieces, 10.5, 100, false);
+console.log('Total Len:', res.totalLen);
+for (var i=0; i<res.placed.length; i++) {
+  var p = res.placed[i];
+  console.log('Placed ' + p.w + 'x' + p.h + ' at X:' + p.dx + ' Y:' + p.dy);
 }
