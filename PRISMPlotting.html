@@ -904,7 +904,13 @@ function pp_expandPieces(selJOList, withColors) {
       });
     }
   });
-  pieces.sort(function(a, b) { return pp_maxFitWidth(b, 9999) - pp_maxFitWidth(a, 9999); });
+  // Sort by area DESC — large pieces anchor the layout, small ones fill gaps
+  pieces.sort(function(a, b) {
+    var aArea = Math.max(a.origW, a.origH) * Math.min(a.origW, a.origH);
+    var bArea = Math.max(b.origW, b.origH) * Math.min(b.origW, b.origH);
+    if (Math.abs(bArea - aArea) > 0.01) return bArea - aArea;
+    return pp_maxFitWidth(b, 9999) - pp_maxFitWidth(a, 9999);
+  });
   return pieces;
 }
 
@@ -990,6 +996,7 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
   var totalLen = 0;
   var totalPieceArea = 0;
   var unsupportedPieces = 0;
+  var skipped = [];
 
   while (remaining.length > 0) {
     var bestIdx = -1;
@@ -1018,9 +1025,16 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
           }
 
           var increaseInLen = Math.max(0, (maxY + o.h) - totalLen);
-          var score = increaseInLen * 1000 + maxY; 
-          var tieBreaker = startX * 0.0001 - (o.w * o.h) * 0.000001; 
-          var totalScore = score + tieBreaker;
+          var score = increaseInLen * 1000 + maxY;
+          // Cavity-fit bonus: strongly reward pieces that fill an existing gap
+          var cavityW = 0;
+          for (var cs = 0; cs < skyline.length; cs++) {
+            if (Math.abs(skyline[cs].y - maxY) < 0.001) cavityW += skyline[cs].w;
+          }
+          var fillRatio = cavityW > 0 ? o.w / cavityW : 0;
+          var cavityBonus = fillRatio > 0.85 ? -600 : (fillRatio > 0.6 ? -250 : 0);
+          var tieBreaker = startX * 0.0001 - (o.w * o.h) * 0.000001;
+          var totalScore = score + cavityBonus + tieBreaker;
 
           if (totalScore < bestScore) {
             bestScore = totalScore;
@@ -1057,14 +1071,14 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
 
     var picked = remaining[bestIdx];
     if (limitAvail && bestY + bestOr.h > rollAvail + 0.0001) {
-      // It exceeds the roll boundary, we can't fit it. Stop packing here.
-      // Wait, could another smaller piece fit? In standard strip packing, if best piece fails, 
-      // we might let others try, but here we strictly limit rollAvail per-roll. 
-      // Let's just break; we'll continue on next roll.
-      break; 
+      // This piece exceeds available length — skip it and try smaller pieces.
+      // Only truly stop when NO remaining piece can fit in the remaining space.
+      skipped.push(remaining.splice(bestIdx, 1)[0]);
+      continue;
     }
 
     picked = remaining.splice(bestIdx, 1)[0];
+    skipped = []; // reset — a piece was placed, so try skipped pieces again on next roll
     picked.w = bestOr.w;
     picked.h = bestOr.h;
     picked.rotated = bestOr.rotated;
@@ -1115,6 +1129,8 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
     skyline = merged;
   }
 
+  // Restore pieces that were skipped due to roll length limit — they go to next roll
+  remaining = remaining.concat(skipped);
   var totalAreaContext = rollWidth * totalLen;
   var wasteArea = Math.max(0, totalAreaContext - totalPieceArea);
   var wastePct = totalAreaContext > 0 ? Math.round(wasteArea / totalAreaContext * 100) : 0;
