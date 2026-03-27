@@ -912,6 +912,77 @@ function pp_canFitRollWidth(piece, rollWidth) {
   return piece.origW <= rollWidth || (pp_allowRotation && piece.origH <= rollWidth);
 }
 
+function pp_computeWasteRects(placed, rollWidth, totalLen) {
+    if (totalLen <= 0) return [];
+    var rects = [];
+    var yBreaks = [0, totalLen];
+    placed.forEach(function(p) {
+        yBreaks.push(p.dy);
+        yBreaks.push(p.dy + p.h);
+    });
+    // Remove duplicates and sort
+    var ys = [];
+    yBreaks.forEach(function(y) {
+        if (!ys.some(function(ey) { return Math.abs(ey - y) < 0.001; })) ys.push(y);
+    });
+    ys.sort(function(a, b) { return a - b; });
+
+    for (var i = 0; i < ys.length - 1; i++) {
+        var y1 = ys[i];
+        var y2 = ys[i+1];
+        if (y2 - y1 < 0.01) continue;
+
+        var xBreaks = [0, rollWidth];
+        placed.forEach(function(p) {
+            if (p.dy < y2 - 0.001 && p.dy + p.h > y1 + 0.001) {
+                xBreaks.push(p.dx);
+                xBreaks.push(p.dx + p.w);
+            }
+        });
+        var xs = [];
+        xBreaks.forEach(function(x) {
+            if (!xs.some(function(ex) { return Math.abs(ex - x) < 0.001; })) xs.push(x);
+        });
+        xs.sort(function(a, b) { return a - b; });
+
+        for (var j = 0; j < xs.length - 1; j++) {
+            var x1 = xs[j];
+            var x2 = xs[j+1];
+            if (x2 - x1 < 0.01) continue;
+
+            var cx = (x1 + x2) / 2;
+            var cy = (y1 + y2) / 2;
+            var occupied = false;
+            for (var pIdx = 0; pIdx < placed.length; pIdx++) {
+                var pc = placed[pIdx];
+                if (pc.dx < cx && pc.dx + pc.w > cx && pc.dy < cy && pc.dy + pc.h > cy) {
+                    occupied = true;
+                    break;
+                }
+            }
+            if (!occupied) {
+                rects.push({ dx: x1, dy: y1, w: x2 - x1, h: y2 - y1 });
+            }
+        }
+    }
+    
+    var merged = [];
+    rects.forEach(function(r) {
+        var merged_it = false;
+        for (var k = 0; k < merged.length; k++) {
+            var m = merged[k];
+            if (Math.abs(m.dx - r.dx) < 0.001 && Math.abs(m.w - r.w) < 0.001 && Math.abs(m.dy + m.h - r.dy) < 0.001) {
+                m.h += r.h;
+                merged_it = true;
+                break;
+            }
+        }
+        if (!merged_it) merged.push(r);
+    });
+
+    return merged;
+}
+
 function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
   var remaining = pieces.slice();
   var placed = [];
@@ -946,7 +1017,8 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
             }
           }
 
-          var score = maxY; 
+          var increaseInLen = Math.max(0, (maxY + o.h) - totalLen);
+          var score = increaseInLen * 1000 + maxY; 
           var tieBreaker = startX * 0.0001 - (o.w * o.h) * 0.000001; 
           var totalScore = score + tieBreaker;
 
@@ -1051,7 +1123,8 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
     pieces: placed,
     usedW: rollWidth,
     rowH: totalLen,
-    wasteW: 0
+    wasteW: 0,
+    wasteRects: pp_computeWasteRects(placed, rollWidth, totalLen)
   }];
 
   return {
@@ -1726,7 +1799,34 @@ function pp_drawCanvas(L, forcedWidth) {
     });
 
     // Waste hatching
-    if (row.wasteW > 0.05) {
+    if (row.wasteRects && row.wasteRects.length > 0) {
+      row.wasteRects.forEach(function(wr) {
+        if (wr.w < 0.05 || wr.h < 0.05) return;
+        var rX = LABEL_W + Math.round(wr.dx * scale);
+        var rY = y + Math.round(wr.dy * scale * heightScale);
+        var rW = Math.round(wr.w * scale);
+        var rH = Math.round(wr.h * scale * heightScale);
+        
+        ctx.fillStyle = 'rgba(251,191,36,0.15)';
+        ctx.fillRect(rX, rY + 1, rW, rH - 2);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(251,191,36,0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (var xi = rX; xi < rX + rW + rH; xi += 7) {
+          ctx.moveTo(xi, rY); ctx.lineTo(xi - rH, rY + rH);
+        }
+        ctx.stroke();
+        ctx.restore();
+        
+        if (rW > 20 && rH > 12) {
+          ctx.fillStyle = '#b45309';
+          ctx.font = '8px DM Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(wr.w.toFixed(2) + '×' + wr.h.toFixed(1) + 'ft', rX + rW/2, rY + rH/2 + 3);
+        }
+      });
+    } else if (row.wasteW > 0.05) {
       var wasteX = LABEL_W + Math.round((L.rollWidth - row.wasteW) * scale);
       var wasteW2 = LABEL_W + dispW - wasteX;
       ctx.fillStyle = 'rgba(251,191,36,0.15)';
