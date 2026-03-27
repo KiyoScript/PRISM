@@ -2113,7 +2113,6 @@ function prism_markPrintingComplete(payload) {
     const targetLength = target.lengthFt;
     const targetRollId = target.rollId;
  
-    // Deduct from roll
     const rollSh   = prism_sh_(PRISM_SHEETS.LFP_ROLLS);
     const rollData = rollSh.getRange(2, 1, rollSh.getLastRow() - 1, 9).getValues();
     rollData.forEach((r, i) => {
