@@ -904,12 +904,22 @@ function pp_expandPieces(selJOList, withColors) {
       });
     }
   });
-  // Sort by area DESC — large pieces anchor the layout, small ones fill gaps
+  // Sort: dominant JO first (most total area = highest-qty repeating JO),
+  // then by piece area DESC within each JO.
+  // This ensures the big repeating JO fills the strip cleanly first,
+  // and small one-off pieces come last to fill leftover gaps naturally.
+  var joArea = {};
+  pieces.forEach(function(p) {
+    var a = Math.max(p.origW, p.origH) * Math.min(p.origW, p.origH);
+    joArea[p.joNumber] = (joArea[p.joNumber] || 0) + a;
+  });
   pieces.sort(function(a, b) {
-    var aArea = Math.max(a.origW, a.origH) * Math.min(a.origW, a.origH);
-    var bArea = Math.max(b.origW, b.origH) * Math.min(b.origW, b.origH);
-    if (Math.abs(bArea - aArea) > 0.01) return bArea - aArea;
-    return pp_maxFitWidth(b, 9999) - pp_maxFitWidth(a, 9999);
+    var aJoA = joArea[a.joNumber] || 0;
+    var bJoA = joArea[b.joNumber] || 0;
+    if (Math.abs(bJoA - aJoA) > 0.01) return bJoA - aJoA;
+    var aPieceA = Math.max(a.origW, a.origH) * Math.min(a.origW, a.origH);
+    var bPieceA = Math.max(b.origW, b.origH) * Math.min(b.origW, b.origH);
+    return bPieceA - aPieceA;
   });
   return pieces;
 }
@@ -1024,6 +1034,9 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
             }
           }
 
+          // Skip positions that would exceed rollAvail — never score them
+          if (limitAvail && maxY + o.h > rollAvail + 0.0001) continue;
+
           var increaseInLen = Math.max(0, (maxY + o.h) - totalLen);
           var score = increaseInLen * 1000 + maxY;
           // Cavity-fit bonus: strongly reward pieces that fill an existing gap
@@ -1070,12 +1083,6 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
     }
 
     var picked = remaining[bestIdx];
-    if (limitAvail && bestY + bestOr.h > rollAvail + 0.0001) {
-      // This piece exceeds available length — skip it and try smaller pieces.
-      // Only truly stop when NO remaining piece can fit in the remaining space.
-      skipped.push(remaining.splice(bestIdx, 1)[0]);
-      continue;
-    }
 
     picked = remaining.splice(bestIdx, 1)[0];
     skipped = []; // reset — a piece was placed, so try skipped pieces again on next roll
