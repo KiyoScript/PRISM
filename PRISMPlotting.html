@@ -772,16 +772,19 @@ function pp_isRotationApplicable() {
   }
   if (!candidateRolls.length) return false;
 
+  // Only applicable if at least one piece has an OPTIONAL rotation
+  // (i.e. both orientations fit the roll width — user can choose)
   for (var i = 0; i < selJOList.length; i++) {
     var w = parseFloat(selJOList[i].width) || 0;
     var h = parseFloat(selJOList[i].height) || 0;
     if (!w || !h) continue;
-    if (Math.abs(w - h) < 0.0001) continue;
+    if (Math.abs(w - h) < 0.0001) continue; // square — rotation irrelevant
 
     for (var r = 0; r < candidateRolls.length; r++) {
       var rw = parseFloat(candidateRolls[r].width) || 0;
       if (!rw) continue;
-      if (h <= rw) return true;
+      // Both orientations fit = rotation is optional = toggle is meaningful
+      if (w <= rw && h <= rw) return true;
     }
   }
   return false;
@@ -825,8 +828,19 @@ function pp_toggleRotation() {
 
 function pp_orientationsForSpace(p, rollWidth, spaceLeft) {
   var out = [];
-  if (p.origW <= rollWidth && p.origW <= spaceLeft) out.push({ w: p.origW, h: p.origH, rotated: false });
-  if (pp_allowRotation && p.origH <= rollWidth && p.origH <= spaceLeft && p.origH !== p.origW) out.push({ w: p.origH, h: p.origW, rotated: true });
+  var normalFits = p.origW <= rollWidth + 0.0001;
+  var rotatedFits = p.origH <= rollWidth + 0.0001 && Math.abs(p.origH - p.origW) > 0.0001;
+
+  if (normalFits) out.push({ w: p.origW, h: p.origH, rotated: false });
+
+  // Always allow rotation if:
+  // 1. The piece physically cannot fit without rotation (forced rotation), OR
+  // 2. The global rotation toggle is ON
+  var mustRotate = !normalFits && rotatedFits;
+  if ((pp_allowRotation || mustRotate) && rotatedFits) {
+    out.push({ w: p.origH, h: p.origW, rotated: true });
+  }
+
   return out;
 }
 
