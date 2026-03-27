@@ -864,6 +864,17 @@ function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
     }
   });
 
+  // Apply same JO ranking used in real packing so simulation scores are accurate
+  var simJoArea = {};
+  pieces.forEach(function(p) {
+    var a = Math.max(p.origW, p.origH) * Math.min(p.origW, p.origH);
+    simJoArea[p.joNumber] = (simJoArea[p.joNumber] || 0) + a;
+  });
+  var simSortedJOs = Object.keys(simJoArea).sort(function(a, b) { return simJoArea[b] - simJoArea[a]; });
+  var simJoRanks = {};
+  simSortedJOs.forEach(function(jo, idx) { simJoRanks[jo] = idx; });
+  pieces.forEach(function(p) { p.joRank = simJoRanks[p.joNumber] || 0; });
+
   var pack = pp_skylinePack(pieces, rollWidth, rollAvail, false);
   var overflowFt = Math.max(0, pack.totalLen - rollAvail);
 
@@ -913,14 +924,23 @@ function pp_expandPieces(selJOList, withColors) {
     var a = Math.max(p.origW, p.origH) * Math.min(p.origW, p.origH);
     joArea[p.joNumber] = (joArea[p.joNumber] || 0) + a;
   });
+  // Rank each JO — rank 0 = dominant (most total area)
+  var joRanks = {};
+  var sortedJOs = Object.keys(joArea).sort(function(a, b) {
+    return joArea[b] - joArea[a];
+  });
+  sortedJOs.forEach(function(jo, idx) { joRanks[jo] = idx; });
+
   pieces.sort(function(a, b) {
-    var aJoA = joArea[a.joNumber] || 0;
-    var bJoA = joArea[b.joNumber] || 0;
-    if (Math.abs(bJoA - aJoA) > 0.01) return bJoA - aJoA;
+    var aRank = joRanks[a.joNumber] || 0;
+    var bRank = joRanks[b.joNumber] || 0;
+    if (aRank !== bRank) return aRank - bRank; // dominant JO first
     var aPieceA = Math.max(a.origW, a.origH) * Math.min(a.origW, a.origH);
     var bPieceA = Math.max(b.origW, b.origH) * Math.min(b.origW, b.origH);
     return bPieceA - aPieceA;
   });
+  // Tag each piece with its JO rank for use in scoring
+  pieces.forEach(function(p) { p.joRank = joRanks[p.joNumber] || 0; });
   return pieces;
 }
 
@@ -1034,20 +1054,27 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
             }
           }
 
-          // Skip positions that would exceed rollAvail — never score them
+          // Skip positions that exceed rollAvail — never score them
           if (limitAvail && maxY + o.h > rollAvail + 0.0001) continue;
 
           var increaseInLen = Math.max(0, (maxY + o.h) - totalLen);
           var score = increaseInLen * 1000 + maxY;
-          // Cavity-fit bonus: strongly reward pieces that fill an existing gap
+
+          // Cavity-fit bonus: reward pieces that fill an existing gap
           var cavityW = 0;
           for (var cs = 0; cs < skyline.length; cs++) {
             if (Math.abs(skyline[cs].y - maxY) < 0.001) cavityW += skyline[cs].w;
           }
           var fillRatio = cavityW > 0 ? o.w / cavityW : 0;
           var cavityBonus = fillRatio > 0.85 ? -600 : (fillRatio > 0.6 ? -250 : 0);
+
+          // JO rank penalty: minority JOs (rank > 0) are strongly discouraged
+          // from taking prime real estate (low Y, open skyline).
+          // They should only win when they genuinely fill a gap better.
+          var joRankPenalty = (p.joRank || 0) * 800;
+
           var tieBreaker = startX * 0.0001 - (o.w * o.h) * 0.000001;
-          var totalScore = score + cavityBonus + tieBreaker;
+          var totalScore = score + cavityBonus + joRankPenalty + tieBreaker;
 
           if (totalScore < bestScore) {
             bestScore = totalScore;
@@ -1082,9 +1109,7 @@ function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
       continue;
     }
 
-    var picked = remaining[bestIdx];
-
-    picked = remaining.splice(bestIdx, 1)[0];
+    var picked = remaining.splice(bestIdx, 1)[0];
     skipped = []; // reset — a piece was placed, so try skipped pieces again on next roll
     picked.w = bestOr.w;
     picked.h = bestOr.h;
