@@ -1022,151 +1022,175 @@ function pp_computeWasteRects(placed, rollWidth, totalLen) {
 function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
   var remaining = pieces.slice();
   var placed = [];
-  var skyline = [{ x: 0, w: rollWidth, y: 0 }];
-  var totalLen = 0;
   var totalPieceArea = 0;
   var unsupportedPieces = 0;
   var skipped = [];
 
-  while (remaining.length > 0) {
-    var bestIdx = -1;
-    var bestOr = null;
-    var bestX = 0;
-    var bestY = 9999999;
+  // Free-rectangle list (guillotine split)
+  // Start with one big free rect covering the full roll
+  var freeRects = [{ x: 0, y: 0, w: rollWidth, h: limitAvail ? rollAvail : 999999 }];
+
+  function rectScore(rect, o) {
+    // Score: prefer rects where the piece fits tightly (less leftover)
+    var leftoverW = rect.w - o.w;
+    var leftoverH = rect.h - o.h;
+    return leftoverW + leftoverH; // shorter side fit heuristic
+  }
+
+  function splitRect(rect, o, px, py) {
+    // Guillotine split: place piece at (px,py), split remainder into 2 rects
+    var newRects = [];
+    // Right of piece
+    if (rect.w - o.w > 0.01) {
+      newRects.push({ x: px + o.w, y: rect.y, w: rect.w - o.w, h: rect.h });
+    }
+    // Below piece (full width of original rect)
+    if (rect.h - o.h > 0.01) {
+      newRects.push({ x: rect.x, y: py + o.h, w: o.w, h: rect.h - o.h });
+    }
+    return newRects;
+  }
+
+  function mergeRects(rects) {
+    // Simple merge: combine vertically adjacent rects with same x and w
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var a = 0; a < rects.length; a++) {
+        for (var b = a + 1; b < rects.length; b++) {
+          var ra = rects[a], rb = rects[b];
+          if (Math.abs(ra.x - rb.x) < 0.001 && Math.abs(ra.w - rb.w) < 0.001) {
+            if (Math.abs(ra.y + ra.h - rb.y) < 0.001) {
+              rects[a] = { x: ra.x, y: ra.y, w: ra.w, h: ra.h + rb.h };
+              rects.splice(b, 1); changed = true; break;
+            }
+            if (Math.abs(rb.y + rb.h - ra.y) < 0.001) {
+              rects[a] = { x: ra.x, y: rb.y, w: ra.w, h: ra.h + rb.h };
+              rects.splice(b, 1); changed = true; break;
+            }
+          }
+          // Horizontal merge: same y and h
+          if (Math.abs(ra.y - rb.y) < 0.001 && Math.abs(ra.h - rb.h) < 0.001) {
+            if (Math.abs(ra.x + ra.w - rb.x) < 0.001) {
+              rects[a] = { x: ra.x, y: ra.y, w: ra.w + rb.w, h: ra.h };
+              rects.splice(b, 1); changed = true; break;
+            }
+            if (Math.abs(rb.x + rb.w - ra.x) < 0.001) {
+              rects[a] = { x: rb.x, y: ra.y, w: ra.w + rb.w, h: ra.h };
+              rects.splice(b, 1); changed = true; break;
+            }
+          }
+        }
+        if (changed) break;
+      }
+    }
+    return rects;
+  }
+
+  var maxIter = remaining.length * remaining.length + 100;
+  var iter = 0;
+
+  while (remaining.length > 0 && iter++ < maxIter) {
+    var bestPieceIdx = -1;
+    var bestRectIdx = -1;
+    var bestOrient = null;
     var bestScore = 9999999;
+    var bestPx = 0, bestPy = 0;
 
     for (var i = 0; i < remaining.length; i++) {
       var p = remaining[i];
       var ors = pp_orientationsForSpace(p, rollWidth, rollWidth);
-      
+
       for (var oi = 0; oi < ors.length; oi++) {
         var o = ors[oi];
-        
-        for (var s = 0; s < skyline.length; s++) {
-          var startX = skyline[s].x;
-          if (startX + o.w > rollWidth + 0.0001) continue;
 
-          var maxY = 0;
-          for (var js = 0; js < skyline.length; js++) {
-            var sl = skyline[js];
-            if (sl.x < startX + o.w - 0.001 && sl.x + sl.w > startX + 0.001) {
-              if (sl.y > maxY) maxY = sl.y;
-            }
-          }
+        for (var ri = 0; ri < freeRects.length; ri++) {
+          var rect = freeRects[ri];
+          if (o.w > rect.w + 0.0001 || o.h > rect.h + 0.0001) continue;
 
-          // Skip positions that exceed rollAvail — never score them
-          if (limitAvail && maxY + o.h > rollAvail + 0.0001) continue;
+          var px = rect.x, py = rect.y;
 
-          var increaseInLen = Math.max(0, (maxY + o.h) - totalLen);
-          var score = increaseInLen * 1000 + maxY;
+          // Check rollAvail constraint
+          if (limitAvail && py + o.h > rollAvail + 0.0001) continue;
 
-          // Cavity-fit bonus: reward pieces that fill an existing gap
-          var cavityW = 0;
-          for (var cs = 0; cs < skyline.length; cs++) {
-            if (Math.abs(skyline[cs].y - maxY) < 0.001) cavityW += skyline[cs].w;
-          }
-          var fillRatio = cavityW > 0 ? o.w / cavityW : 0;
-          var cavityBonus = fillRatio > 0.85 ? -600 : (fillRatio > 0.6 ? -250 : 0);
+          var leftoverW = rect.w - o.w;
+          var leftoverH = rect.h - o.h;
+          var shortLeftover = Math.min(leftoverW, leftoverH);
+          var longLeftover = Math.max(leftoverW, leftoverH);
 
-          // JO rank penalty: minority JOs (rank > 0) are strongly discouraged
-          // from taking prime real estate (low Y, open skyline).
-          // They should only win when they genuinely fill a gap better.
-          var joRankPenalty = (p.joRank || 0) * 800;
-
-          var tieBreaker = startX * 0.0001 - (o.w * o.h) * 0.000001;
-          var totalScore = score + cavityBonus + joRankPenalty + tieBreaker;
+          // Score: JO rank is PRIMARY (dominant JO always placed first),
+          // then lowest Y to minimize length, then tightest fit.
+          // Using large multipliers to ensure rank never loses to position.
+          var joRankScore = (p.joRank || 0) * 100000;
+          var yScore = py * 100;
+          var fitScore = shortLeftover + longLeftover * 0.1;
+          var totalScore = joRankScore + yScore + fitScore;
 
           if (totalScore < bestScore) {
             bestScore = totalScore;
-            bestIdx = i;
-            bestOr = o;
-            bestX = startX;
-            bestY = maxY;
+            bestPieceIdx = i;
+            bestRectIdx = ri;
+            bestOrient = o;
+            bestPx = px;
+            bestPy = py;
           }
         }
       }
     }
 
-    if (bestIdx === -1) {
-      var forced = remaining.shift();
-      forced.w = Math.min(forced.origW, forced.origH);
-      forced.h = Math.max(forced.origW, forced.origH);
-      forced.rotated = false;
-      forced.oversized = true;
-      forced.dx = 0;
-      forced.dy = totalLen;
-      
-      if (limitAvail && totalLen > rollAvail + 0.0001) {
-          remaining.unshift(forced);
-          break;
-      }
-
-      placed.push(forced);
-      totalLen += forced.h;
-      totalPieceArea += forced.w * forced.h;
-      unsupportedPieces++;
-      skyline = [{ x: 0, w: rollWidth, y: totalLen }];
-      continue;
+    if (bestPieceIdx === -1) {
+      // Nothing fits in any free rect — move all remaining to skipped
+      skipped = skipped.concat(remaining);
+      remaining = [];
+      break;
     }
 
-    var picked = remaining.splice(bestIdx, 1)[0];
-    skipped = []; // reset — a piece was placed, so try skipped pieces again on next roll
-    picked.w = bestOr.w;
-    picked.h = bestOr.h;
-    picked.rotated = bestOr.rotated;
+    var picked = remaining.splice(bestPieceIdx, 1)[0];
+    skipped = [];
+    picked.w = bestOrient.w;
+    picked.h = bestOrient.h;
+    picked.rotated = bestOrient.rotated;
     picked.oversized = false;
-    picked.dx = bestX;
-    picked.dy = bestY;
+    picked.dx = bestPx;
+    picked.dy = bestPy;
 
     placed.push(picked);
     totalPieceArea += picked.w * picked.h;
 
-    var newY = bestY + picked.h;
-    if (newY > totalLen) totalLen = newY;
+    // Split the used rect and remove it from freeRects
+    var usedRect = freeRects.splice(bestRectIdx, 1)[0];
+    var splits = splitRect(usedRect, bestOrient, bestPx, bestPy);
+    freeRects = freeRects.concat(splits);
 
-    var startX = bestX;
-    var endX = startX + picked.w;
-    var newSkyline = [];
-
-    for (var s = 0; s < skyline.length; s++) {
-      var sl = skyline[s];
-      var slEnd = sl.x + sl.w;
-      
-      if (slEnd <= startX + 0.001 || sl.x >= endX - 0.001) {
-        newSkyline.push(sl);
-      } else {
-        if (sl.x < startX) {
-          newSkyline.push({ x: sl.x, y: sl.y, w: startX - sl.x });
-        }
-        if (slEnd > endX) {
-          newSkyline.push({ x: endX, y: sl.y, w: slEnd - endX });
+    // Remove free rects that are fully covered by placed pieces
+    freeRects = freeRects.filter(function(r) {
+      if (r.w < 0.05 || r.h < 0.05) return false;
+      // Check if this rect is fully covered by any placed piece
+      for (var pi = 0; pi < placed.length; pi++) {
+        var pc = placed[pi];
+        if (pc.dx <= r.x + 0.001 && pc.dx + pc.w >= r.x + r.w - 0.001 &&
+            pc.dy <= r.y + 0.001 && pc.dy + pc.h >= r.y + r.h - 0.001) {
+          return false;
         }
       }
-    }
-    newSkyline.push({ x: startX, y: newY, w: picked.w });
+      return true;
+    });
 
-    newSkyline.sort(function(a, b) { return a.x - b.x; });
-    var merged = [];
-    for (var m = 0; m < newSkyline.length; m++) {
-      var nsl = newSkyline[m];
-      if (merged.length > 0) {
-        var last = merged[merged.length - 1];
-        if (Math.abs(last.y - nsl.y) < 0.001 && Math.abs(last.x + last.w - nsl.x) < 0.001) {
-          last.w += nsl.w;
-          continue;
-        }
-      }
-      merged.push(nsl);
-    }
-    skyline = merged;
+    freeRects = mergeRects(freeRects);
   }
 
-  // Restore pieces that were skipped due to roll length limit — they go to next roll
   remaining = remaining.concat(skipped);
+
+  var totalLen = 0;
+  placed.forEach(function(p) {
+    var bottom = p.dy + p.h;
+    if (bottom > totalLen) totalLen = bottom;
+  });
+
   var totalAreaContext = rollWidth * totalLen;
   var wasteArea = Math.max(0, totalAreaContext - totalPieceArea);
   var wastePct = totalAreaContext > 0 ? Math.round(wasteArea / totalAreaContext * 100) : 0;
-  
+
   var rows = [{
     pieces: placed,
     usedW: rollWidth,
