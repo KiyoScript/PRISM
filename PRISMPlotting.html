@@ -1236,15 +1236,22 @@ function pp_autoArrange() {
   var totalLen = 0;
   var totalRemain = 0;
   var totalArea = 0;
-  var totalWasteArea = 0;
+  var totalPieceArea = 0;
   pp_rollPlans.forEach(function(p) {
     totalLen += p.totalLen;
     totalRemain += p.remaining;
     p.rows.forEach(function(r) {
       totalArea += p.rollWidth * r.rowH;
-      totalWasteArea += r.wasteW * r.rowH;
+      if (r.pieces) {
+        r.pieces.forEach(function(piece) {
+          totalPieceArea += piece.w * piece.h;
+        });
+      }
     });
   });
+
+  var totalWasteArea = Math.max(0, totalArea - totalPieceArea);
+  var overallWastePct = totalArea > 0 ? Math.round(totalWasteArea / totalArea * 100) : 0;
 
   pp_layout = {
     rows: primary.rows,
@@ -1253,7 +1260,7 @@ function pp_autoArrange() {
     totalLen: totalLen,
     remaining: totalRemain,
     overflow: plan.unplannedPieces > 0,
-    wastePct: totalArea > 0 ? Math.round(totalWasteArea / totalArea * 100) : 0,
+    wastePct: overallWastePct,
     totalPieces: plan.totalPieces,
     unplannedPieces: plan.unplannedPieces,
     unsupportedPieces: plan.unsupportedPieces,
@@ -1963,7 +1970,13 @@ function pp_renderRowList(L) {
         var lbl = p.joNumber + (p.qty > 1 ? ' #' + p.idx : '') + ' (' + p.w + '×' + p.h + 'ft' + (p.rotated ? ' ↺' : '') + ')';
         html += '<span class="pp-piece" style="background:' + p.color + '22;color:' + p.color + ';border:1px solid ' + p.color + '44;">' + pp_esc(lbl) + '</span>';
       });
-      if (row.wasteW > 0.05) {
+      var wa = 0;
+      if (row.wasteRects) {
+          row.wasteRects.forEach(function(wr) { wa += wr.w * wr.h; });
+      }
+      if (wa > 0.05) {
+        html += '<span class="pp-waste">waste ' + wa.toFixed(1) + ' sq.ft</span>';
+      } else if (row.wasteW > 0.05) {
         html += '<span class="pp-waste">waste ' + row.wasteW.toFixed(2) + 'ft</span>';
       }
       html += '</div><span class="pp-row-len">' + row.rowH.toFixed(1) + 'ft</span></div>';
