@@ -246,7 +246,7 @@
 
             <!-- Row-by-row table -->
             <div class="p-card" style="padding:14px;display:flex;flex-direction:column;max-height:380px;">
-              <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Row Details</p>
+              <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--p-muted);margin:0 0 10px;">Packing Details</p>
               <div id="pp-rowList" style="flex:1;overflow-y:auto;padding-right:6px;"></div>
             </div>
 
@@ -864,92 +864,20 @@ function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
     }
   });
 
-  // Start with widest-fit pieces first to reduce hard-to-place leftovers.
-  pieces.sort(function(a, b) { return pp_maxFitWidth(b, rollWidth) - pp_maxFitWidth(a, rollWidth); });
-
-  var rows = [];
-  var remaining = pieces.slice();
-  var unsupportedPieces = 0;
-
-  while (remaining.length > 0) {
-    var row = [];
-    var usedW = 0;
-    var rowH = 0;
-
-    while (true) {
-      var spaceLeft = rollWidth - usedW;
-      var bestIdx = -1;
-      var bestOr = null;
-      var bestScore = -999999;
-
-      for (var i = 0; i < remaining.length; i++) {
-        var p = remaining[i];
-        var ors = pp_orientationsForSpace(p, rollWidth, spaceLeft);
-        for (var oi = 0; oi < ors.length; oi++) {
-          var o = ors[oi];
-          var nextH = row.length ? Math.max(rowH, o.h) : o.h;
-          var heightPenalty = row.length ? (nextH - rowH) * 0.25 : 0;
-          var score = o.w - heightPenalty;
-          if (score > bestScore || (score === bestScore && (!bestOr || o.w > bestOr.w))) {
-            bestScore = score;
-            bestIdx = i;
-            bestOr = o;
-          }
-        }
-      }
-
-      if (bestIdx === -1) break;
-
-      var picked = remaining.splice(bestIdx, 1)[0];
-      picked.w = bestOr.w;
-      picked.h = bestOr.h;
-      picked.rotated = bestOr.rotated;
-      picked.oversized = false;
-      row.push(picked);
-      usedW += picked.w;
-      if (picked.h > rowH) rowH = picked.h;
-
-      if (rollWidth - usedW < 0.01) break;
-    }
-
-    if (!row.length) {
-      var forced = remaining.shift();
-      forced.w = Math.min(forced.origW, forced.origH);
-      forced.h = Math.max(forced.origW, forced.origH);
-      forced.rotated = false;
-      forced.oversized = true;
-      unsupportedPieces++;
-      row.push(forced);
-      usedW = forced.w;
-      rowH = forced.h;
-    }
-
-    rows.push({ pieces: row, usedW: usedW, rowH: rowH, wasteW: Math.max(0, rollWidth - usedW) });
-  }
-
-  var totalLen = 0;
-  var totalArea = 0;
-  var wasteArea = 0;
-  rows.forEach(function(r) {
-    totalLen += r.rowH;
-    totalArea += rollWidth * r.rowH;
-    wasteArea += r.wasteW * r.rowH;
-  });
-
-  var overflowFt = Math.max(0, totalLen - rollAvail);
-  var wastePct = totalArea > 0 ? Math.round(wasteArea / totalArea * 100) : 0;
+  var pack = pp_skylinePack(pieces, rollWidth, rollAvail, false);
+  var overflowFt = Math.max(0, pack.totalLen - rollAvail);
 
   return {
-    rows: rows,
+    rows: pack.rows,
     rollWidth: rollWidth,
     rollAvail: rollAvail,
-    totalLen: totalLen,
-    remaining: Math.max(0, rollAvail - totalLen),
+    totalLen: pack.totalLen,
+    remaining: Math.max(0, rollAvail - pack.totalLen),
     overflow: overflowFt > 0,
     overflowFt: overflowFt,
-    wastePct: wastePct,
+    wastePct: pack.wastePct,
     totalPieces: pieces.length,
-    unsupportedPieces: unsupportedPieces
+    unsupportedPieces: pack.unsupportedPieces
   };
 }
 
@@ -984,114 +912,169 @@ function pp_canFitRollWidth(piece, rollWidth) {
   return piece.origW <= rollWidth || (pp_allowRotation && piece.origH <= rollWidth);
 }
 
-function pp_packPiecesForRoll(pieces, rollWidth, rollAvail) {
+function pp_skylinePack(pieces, rollWidth, rollAvail, limitAvail) {
   var remaining = pieces.slice();
-  var rows = [];
+  var placed = [];
+  var skyline = [{ x: 0, w: rollWidth, y: 0 }];
   var totalLen = 0;
+  var totalPieceArea = 0;
+  var unsupportedPieces = 0;
 
   while (remaining.length > 0) {
-    var canFitAny = remaining.some(function(p) { return pp_canFitRollWidth(p, rollWidth); });
-    if (!canFitAny) break;
+    var bestIdx = -1;
+    var bestOr = null;
+    var bestX = 0;
+    var bestY = 9999999;
+    var bestScore = 9999999;
 
-    var row = [];
-    var usedW = 0;
-    var rowH = 0;
-    var columns = []; // { x, w, y }
+    for (var i = 0; i < remaining.length; i++) {
+      var p = remaining[i];
+      var ors = pp_orientationsForSpace(p, rollWidth, rollWidth);
+      
+      for (var oi = 0; oi < ors.length; oi++) {
+        var o = ors[oi];
+        
+        for (var s = 0; s < skyline.length; s++) {
+          var startX = skyline[s].x;
+          if (startX + o.w > rollWidth + 0.0001) continue;
 
-    while (true) {
-      var bestIdx = -1;
-      var bestOr = null;
-      var bestScore = -999999;
-      var bestColIdx = -1;
-
-      for (var i = 0; i < remaining.length; i++) {
-        var p = remaining[i];
-        var ors = pp_orientationsForSpace(p, rollWidth, rollWidth);
-        for (var oi = 0; oi < ors.length; oi++) {
-          var o = ors[oi];
-
-          // 1. Can it fit in an existing column vertically?
-          var fitColFound = false;
-          for (var c = 0; c < columns.length; c++) {
-            var col = columns[c];
-            if (o.w <= col.w && col.y + o.h <= rowH) {
-              var score = 10000 + o.w * o.h; // Prioritize filling vertical gaps!
-              if (o.w === col.w) score += 5000;
-              if (score > bestScore) {
-                bestScore = score;
-                bestIdx = i;
-                bestOr = o;
-                bestColIdx = c;
-              }
-              fitColFound = true;
+          var maxY = 0;
+          for (var js = 0; js < skyline.length; js++) {
+            var sl = skyline[js];
+            if (sl.x < startX + o.w - 0.001 && sl.x + sl.w > startX + 0.001) {
+              if (sl.y > maxY) maxY = sl.y;
             }
           }
 
-          // 2. Can it start a new column horizontally?
-          var spaceLeft = rollWidth - usedW;
-          if (o.w <= spaceLeft) {
-            var nextH = row.length ? Math.max(rowH, o.h) : o.h;
-            var score = o.w - (row.length ? (nextH - rowH) * 0.25 : 0);
-            if (score > bestScore || (score === bestScore && (!bestOr || o.w > bestOr.w))) {
-              bestScore = score;
-              bestIdx = i;
-              bestOr = o;
-              bestColIdx = -1;
-            }
+          var score = maxY; 
+          var tieBreaker = startX * 0.0001 - (o.w * o.h) * 0.000001; 
+          var totalScore = score + tieBreaker;
+
+          if (totalScore < bestScore) {
+            bestScore = totalScore;
+            bestIdx = i;
+            bestOr = o;
+            bestX = startX;
+            bestY = maxY;
           }
         }
       }
+    }
 
-      if (bestIdx === -1) break;
-
-      var picked = remaining.splice(bestIdx, 1)[0];
-      picked.w = bestOr.w;
-      picked.h = bestOr.h;
-      picked.rotated = bestOr.rotated;
-
-      if (bestColIdx === -1) { // New column
-        picked.dx = usedW;
-        picked.dy = 0;
-        columns.push({ x: usedW, w: picked.w, y: picked.h });
-        usedW += picked.w;
-        if (picked.h > rowH) rowH = picked.h;
-      } else { // Existing column
-        var col = columns[bestColIdx];
-        picked.dx = col.x;
-        picked.dy = col.y;
-        col.y += picked.h;
-      }
+    if (bestIdx === -1) {
+      var forced = remaining.shift();
+      forced.w = Math.min(forced.origW, forced.origH);
+      forced.h = Math.max(forced.origW, forced.origH);
+      forced.rotated = false;
+      forced.oversized = true;
+      forced.dx = 0;
+      forced.dy = totalLen;
       
-      row.push(picked);
+      if (limitAvail && totalLen > rollAvail + 0.0001) {
+          remaining.unshift(forced);
+          break;
+      }
+
+      placed.push(forced);
+      totalLen += forced.h;
+      totalPieceArea += forced.w * forced.h;
+      unsupportedPieces++;
+      skyline = [{ x: 0, w: rollWidth, y: totalLen }];
+      continue;
     }
 
-    if (!row.length) break;
-
-    if (totalLen + rowH > rollAvail + 0.0001) {
-      Array.prototype.push.apply(remaining, row);
-      break;
+    var picked = remaining[bestIdx];
+    if (limitAvail && bestY + bestOr.h > rollAvail + 0.0001) {
+      // It exceeds the roll boundary, we can't fit it. Stop packing here.
+      // Wait, could another smaller piece fit? In standard strip packing, if best piece fails, 
+      // we might let others try, but here we strictly limit rollAvail per-roll. 
+      // Let's just break; we'll continue on next roll.
+      break; 
     }
 
-    rows.push({ pieces: row, usedW: usedW, rowH: rowH, wasteW: Math.max(0, rollWidth - usedW) });
-    totalLen += rowH;
+    picked = remaining.splice(bestIdx, 1)[0];
+    picked.w = bestOr.w;
+    picked.h = bestOr.h;
+    picked.rotated = bestOr.rotated;
+    picked.oversized = false;
+    picked.dx = bestX;
+    picked.dy = bestY;
+
+    placed.push(picked);
+    totalPieceArea += picked.w * picked.h;
+
+    var newY = bestY + picked.h;
+    if (newY > totalLen) totalLen = newY;
+
+    var startX = bestX;
+    var endX = startX + picked.w;
+    var newSkyline = [];
+
+    for (var s = 0; s < skyline.length; s++) {
+      var sl = skyline[s];
+      var slEnd = sl.x + sl.w;
+      
+      if (slEnd <= startX + 0.001 || sl.x >= endX - 0.001) {
+        newSkyline.push(sl);
+      } else {
+        if (sl.x < startX) {
+          newSkyline.push({ x: sl.x, y: sl.y, w: startX - sl.x });
+        }
+        if (slEnd > endX) {
+          newSkyline.push({ x: endX, y: sl.y, w: slEnd - endX });
+        }
+      }
+    }
+    newSkyline.push({ x: startX, y: newY, w: picked.w });
+
+    newSkyline.sort(function(a, b) { return a.x - b.x; });
+    var merged = [];
+    for (var m = 0; m < newSkyline.length; m++) {
+      var nsl = newSkyline[m];
+      if (merged.length > 0) {
+        var last = merged[merged.length - 1];
+        if (Math.abs(last.y - nsl.y) < 0.001 && Math.abs(last.x + last.w - nsl.x) < 0.001) {
+          last.w += nsl.w;
+          continue;
+        }
+      }
+      merged.push(nsl);
+    }
+    skyline = merged;
   }
 
-  var totalArea = 0;
-  var wasteArea = 0;
-  var pieceCount = 0;
-  rows.forEach(function(r) {
-    totalArea += rollWidth * r.rowH;
-    wasteArea += r.wasteW * r.rowH;
-    pieceCount += (r.pieces || []).length;
-  });
+  var totalAreaContext = rollWidth * totalLen;
+  var wasteArea = Math.max(0, totalAreaContext - totalPieceArea);
+  var wastePct = totalAreaContext > 0 ? Math.round(wasteArea / totalAreaContext * 100) : 0;
+  
+  var rows = [{
+    pieces: placed,
+    usedW: rollWidth,
+    rowH: totalLen,
+    wasteW: 0
+  }];
 
   return {
     rows: rows,
     totalLen: totalLen,
     remainingPieces: remaining,
-    totalPieces: pieceCount,
-    wastePct: totalArea > 0 ? Math.round(wasteArea / totalArea * 100) : 0,
-    remainingLength: Math.max(0, rollAvail - totalLen)
+    totalPieces: placed.length,
+    wastePct: wastePct,
+    unsupportedPieces: unsupportedPieces,
+    placed: placed
+  };
+}
+
+function pp_packPiecesForRoll(pieces, rollWidth, rollAvail) {
+  var pack = pp_skylinePack(pieces, rollWidth, rollAvail, true);
+
+  return {
+    rows: pack.rows,
+    totalLen: pack.totalLen,
+    remainingPieces: pack.remainingPieces,
+    totalPieces: pack.totalPieces,
+    wastePct: pack.wastePct,
+    remainingLength: Math.max(0, rollAvail - pack.totalLen)
   };
 }
 
