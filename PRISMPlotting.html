@@ -2184,10 +2184,20 @@ function pp_confirm() {
   var btn  = document.getElementById('pp-confirmBtn');
   var plotImages = pp_captureRollMapImages();
 
-  // Collect selected rowIndexes
+  // Collect selected rowIndexes + custom qty per rowIndex
   var rowIndexList = pp_allJOs
     .filter(function(j){ return pp_selJOs[j.rowIndex]; })
     .map(function(j){ return j.rowIndex; });
+
+  // Build partialQtyMap + rowIndexToJO for partial quantity support
+  var partialQtyMap = {};
+  var rowIndexToJO = {};
+  pp_allJOs.filter(function(j){ return pp_selJOs[j.rowIndex]; }).forEach(function(j) {
+    var fullQty = parseInt(j.quantity, 10) || 1;
+    var printedQty = pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : fullQty;
+    partialQtyMap[j.rowIndex] = { printedQty: printedQty, fullQty: fullQty };
+    rowIndexToJO[j.rowIndex] = j.joNumber;
+  });
 
   // Build list of unique JO numbers in layout
   var joNums = {};
@@ -2245,6 +2255,8 @@ function pp_confirm() {
       joNumbers:      joList,
       plotImages:     plotImages,
       pendingDamages: pp_pendingDamages,
+      partialQtyMap:  partialQtyMap,
+      rowIndexToJO:   rowIndexToJO,
       rollPlans:    plans.map(function(plan) {
         return {
           rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,

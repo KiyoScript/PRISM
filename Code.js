@@ -1664,6 +1664,20 @@ function prism_confirmPlotLayout(payload) {
       ? payload.rowIndexes.map(Number).filter(Boolean)
       : [];
 
+    // partialQtyMap + rowIndexToJO: handle partial quantity printing
+    const partialQtyMap = (payload.partialQtyMap && typeof payload.partialQtyMap === 'object')
+      ? payload.partialQtyMap : {};
+    const rowIndexToJO = (payload.rowIndexToJO && typeof payload.rowIndexToJO === 'object')
+      ? payload.rowIndexToJO : {};
+
+    // Build joNumber → { printedQty, fullQty }
+    const joPartialMap = {};
+    Object.keys(rowIndexToJO).forEach(ri => {
+      const joNum = String(rowIndexToJO[ri] || '').trim().toUpperCase();
+      const pq = partialQtyMap[ri];
+      if (joNum && pq) joPartialMap[joNum] = pq;
+    });
+
     const plotImages = Array.isArray(payload.plotImages) ? payload.plotImages : [];
     const savedPlotsByRollId = {};
     let effectivePlottingLink = String(payload.plottingLink || '').trim();
@@ -1765,7 +1779,17 @@ function prism_confirmPlotLayout(payload) {
           if (rollId && !existingRolls.includes(rollId)) existingRolls.push(rollId);
         });
         joSh.getRange(sheetRow, JO_COL.ROLL_ID + 1).setValue(existingRolls.join(', '));
-        joSh.getRange(sheetRow, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
+
+        const pq = joPartialMap[joNumber];
+        const isPartial = pq && pq.printedQty < pq.fullQty;
+        if (isPartial) {
+          const remaining = pq.fullQty - pq.printedQty;
+          joSh.getRange(sheetRow, JO_COL.QUANTITY + 1).setValue(remaining);
+          joSh.getRange(sheetRow, JO_COL.STATUS + 1).setValue(JO_STATUS.FOR_PLOTTING);
+          prism_audit_('PRISM_PARTIAL_PRINT', { joNumber, printedQty: pq.printedQty, remaining, by: user.email });
+        } else {
+          joSh.getRange(sheetRow, JO_COL.STATUS + 1).setValue(JO_STATUS.READY_TO_PRINT);
+        }
         if (effectivePlottingLink)
           joSh.getRange(sheetRow, JO_COL.PLOTTING_LINK + 1).setValue(effectivePlottingLink);
       });
