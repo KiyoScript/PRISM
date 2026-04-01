@@ -2251,6 +2251,14 @@ function prism_getPrintQueueData() {
   try {
     const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
     const plotRows = prism_readPlotRows_(plotSh);
+
+    // Roll → material name map
+    const rollMatMap = {};
+    try {
+      const matMap = {};
+      prism_getAllMaterials_().forEach(m => { matMap[m.materialCode] = m.materialName || ''; });
+      prism_getAllRolls_().forEach(r => { rollMatMap[r.rollId] = matMap[r.materialCode] || r.materialCode || ''; });
+    } catch(_) {}
  
     // JO customer map
     const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
