@@ -312,6 +312,7 @@ var pp_rollHistory = {}; // { rollId: [historySegments...] }
 var pp_colors   = {};   // joNumber → color
 var pp_allowRotation = true;
 var pp_joRotation = {}; // { joNumber: true/false } — per-JO rotation override
+var pp_selQty = {}; // { rowIndex: N } — custom print quantity per selected JO
 var pp_historyRenderMode = 'view'; // 'view' | 'export'
 var pp_resizeObserver = null;
 var pp_resizeTimer = null;
@@ -485,6 +486,7 @@ function pp_renderJOs() {
         + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
         + hist
         + rotBtnHtml
+        + (pp_selJOs[j.rowIndex] ? '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--p-muted);">Print qty:</span><input type="number" min="1" max="' + (j.quantity||1) + '" value="' + (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : (j.quantity||1)) + '" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();" oninput="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value)" style="width:60px;padding:3px 7px;border:1.5px solid var(--p-teal-bd);border-radius:6px;font-size:12px;font-weight:700;background:var(--p-bg);color:var(--p-text);text-align:center;"><span style="font-size:11px;color:var(--p-faint);">of ' + (j.quantity||1) + '</span></div>' : '')
         + '</div></div>';
     } else {
       var expanded = pp_expandedGroups[joNumber] ? ' expanded' : '';
@@ -523,7 +525,8 @@ function pp_renderJOs() {
           + '<span style="font-size:11px;color:var(--p-muted);">×' + (j.quantity||1) + ' pcs</span>'
           + '</div>'
           + (j.jobDescription ? '<div class="pp-jo-meta" style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;margin-top:1px;">' + pp_esc(j.jobDescription) + '</div>' : '')
-          + '</div></div>';
+          + (pp_selJOs[j.rowIndex] ? '<div style="margin-top:5px;display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--p-muted);">Print qty:</span><input type="number" min="1" max="' + (j.quantity||1) + '" value="' + (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : (j.quantity||1)) + '" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();" oninput="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value)" style="width:60px;padding:3px 7px;border:1.5px solid var(--p-teal-bd);border-radius:6px;font-size:12px;font-weight:700;background:var(--p-bg);color:var(--p-text);text-align:center;"><span style="font-size:11px;color:var(--p-faint);">of ' + (j.quantity||1) + '</span></div>' : '')
++ '</div></div>';
       });
       h += '</div></div>';
     }
@@ -546,6 +549,7 @@ function pp_toggleRow(rowIndex) {
   if (!pp_selJOs[rowIndex]) {
     var deselJo = pp_allJOs.find(function(j){ return j.rowIndex === rowIndex; });
     if (deselJo) delete pp_joRotation[deselJo.joNumber];
+    delete pp_selQty[rowIndex];
   }
   pp_renderJOs();
   pp_updateRollSuggestions();
@@ -579,6 +583,7 @@ function pp_clearAll() {
   pp_selJOs = {};
   pp_colors = {};
   pp_joRotation = {};
+pp_selQty = {};
   pp_selRoll = null;
   pp_layout = null;
   pp_rollPlans = [];
@@ -590,6 +595,21 @@ function pp_clearAll() {
   if (document.getElementById('pp-damageInput')) document.getElementById('pp-damageInput').value = '';
   pp_filterJOs();
   pp_renderRolls();
+  pp_checkArrangeBtn();
+}
+
+function pp_setSelQty(rowIndex, maxQty, val) {
+  var n = parseInt(val, 10);
+  if (isNaN(n) || n < 1) n = 1;
+  if (n > maxQty) n = maxQty;
+  pp_selQty[rowIndex] = n;
+  if (pp_layout) {
+    pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
+    document.getElementById('pp-results').style.display = 'none';
+    document.getElementById('pp-rightEmpty').style.display = 'block';
+    document.getElementById('pp-confirmPanel').style.display = 'none';
+  }
+  pp_updateRollSuggestions();
   pp_checkArrangeBtn();
 }
 
@@ -963,7 +983,7 @@ function pp_expandPieces(selJOList, withColors) {
   var pieces = [];
   var colorSeed = Object.keys(pp_colors).length;
   selJOList.forEach(function(j) {
-    var qty = parseInt(j.quantity, 10) || 1;
+    var qty = (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : parseInt(j.quantity, 10)) || 1;
     var jw  = j.widthFt  || pp_toFt(parseFloat(j.width)  || 0, j.unit);
     var jh  = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
     if (withColors && !pp_colors[j.joNumber]) {
