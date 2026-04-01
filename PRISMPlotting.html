@@ -929,7 +929,7 @@ function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
   var colorSeed = Object.keys(pp_colors).length;
 
   selJOList.forEach(function(j) {
-    var qty = parseInt(j.quantity, 10) || 1;
+    var qty = (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : parseInt(j.quantity, 10)) || 1;
     var jw  = j.widthFt  || pp_toFt(parseFloat(j.width)  || 0, j.unit);
     var jh  = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
 
