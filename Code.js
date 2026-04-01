@@ -1519,8 +1519,9 @@ function prism_removeFromQueue(payload) {
     plotSh.getRange(target._rowIdx, PLOT_COL.STATUS  + 1).setValue(PLOT_STATUS.VOIDED);
     plotSh.getRange(target._rowIdx, PLOT_COL.IS_VOID + 1).setValue(true);
 
-    // Revert JOs back to FOR_PLOTTING
+    // Revert JOs back to FOR_PLOTTING + restore original quantity if partial
     const joNumbers = target.joNumbers;
+    const originalQtys = (target.remarks && target.remarks.originalQtys) || {};
     let reverted = 0;
     if (joNumbers.length) {
       const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
@@ -1529,6 +1530,10 @@ function prism_removeFromQueue(payload) {
         const jo = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
         if (joNumbers.includes(jo) && String(r[JO_COL.STATUS]).trim() === JO_STATUS.READY_TO_PRINT) {
           joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.FOR_PLOTTING);
+          const origQty = originalQtys[jo];
+          if (origQty && origQty > 0) {
+            joSh.getRange(i + 2, JO_COL.QUANTITY + 1).setValue(origQty);
+          }
           reverted++;
         }
       });
@@ -1847,7 +1852,11 @@ function prism_confirmPlotLayout(payload) {
           rollWidth:      snap.width || 0,
           originalLength: snap.originalLength || 0,
           folderUrl:      (savedPlotsByRollId[rollId] && savedPlotsByRollId[rollId].folderUrl) || '',
-          rows:           prism_compactRollRows_(plan.rows)
+          rows:           prism_compactRollRows_(plan.rows),
+          originalQtys:   Object.keys(joPartialMap).reduce((acc, jo) => {
+            acc[jo] = joPartialMap[jo].fullQty;
+            return acc;
+          }, {})
         }
       });
     });

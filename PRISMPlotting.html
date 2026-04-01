@@ -2257,6 +2257,13 @@ function pp_confirm() {
       pendingDamages: pp_pendingDamages,
       partialQtyMap:  partialQtyMap,
       rowIndexToJO:   rowIndexToJO,
+      originalQtyMap: (function() {
+        var m = {};
+        pp_allJOs.filter(function(j){ return pp_selJOs[j.rowIndex]; }).forEach(function(j) {
+          m[j.joNumber] = parseInt(j.quantity, 10) || 1;
+        });
+        return m;
+      })(),
       rollPlans:    plans.map(function(plan) {
         return {
           rollId: plan.rollId || (plan.roll && plan.roll.rollId) || pp_layout.roll.rollId,
