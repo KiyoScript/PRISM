@@ -2267,7 +2267,7 @@ function pp_confirm() {
               usedW: r.usedW,
               wasteW: r.wasteW,
               pieces: (r.pieces || []).map(function(p) {
-                return { joNumber: p.joNumber, w: p.w, h: p.h, rotated: !!p.rotated };
+                return { joNumber: p.joNumber, w: p.w, h: p.h, rotated: !!p.rotated, dx: p.dx, dy: p.dy };
               })
             };
           })
