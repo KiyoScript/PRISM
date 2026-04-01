@@ -2285,15 +2285,16 @@ function prism_getPrintQueueData() {
       }
  
       const base = {
-        plotId:     row.plotId,
-        joNumbers:  row.joNumbers,
-        rollId:     row.rollId,
-        rollWidth:  parseFloat(row.remarks.rollWidth) || 0,
-        lengthUsed: row.lengthFt,
-        date:       row.date ? prism_fmtShort_(new Date(row.date)) : '',
-        pngUrl:     row.pngUrl,
-        rows:       row.remarks.rows || [],
-        customers:  row.joNumbers.map(jo => joCustomerMap[jo.toUpperCase()] || jo)
+        plotId:       row.plotId,
+        joNumbers:    row.joNumbers,
+        rollId:       row.rollId,
+        materialName: rollMatMap[row.rollId] || '',
+        rollWidth:    parseFloat(row.remarks.rollWidth) || 0,
+        lengthUsed:   row.lengthFt,
+        date:         row.date ? prism_fmtShort_(new Date(row.date)) : '',
+        pngUrl:       row.pngUrl,
+        rows:         row.remarks.rows || [],
+        customers:    row.joNumbers.map(jo => joCustomerMap[jo.toUpperCase()] || jo)
       };
  
       if (effectiveStatus === PLOT_STATUS.PRINTING) {
@@ -2350,6 +2351,14 @@ function prism_getJobOrderReports() {
   try {
     const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
     const plotRows = prism_readPlotRows_(plotSh);
+
+    // Roll → material name map
+    const rollMatMap = {};
+    try {
+      const matMap = {};
+      prism_getAllMaterials_().forEach(m => { matMap[m.materialCode] = m.materialName || ''; });
+      prism_getAllRolls_().forEach(r => { rollMatMap[r.rollId] = matMap[r.materialCode] || r.materialCode || ''; });
+    } catch(_) {}
  
     // Customer lookup
     const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);

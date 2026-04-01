@@ -319,7 +319,8 @@
     h += '<span style="font-weight:800;font-size:15px;color:var(--p-text);">' + pq_esc(customerLabel) + '</span>';
     h += '<span class="p-badge" style="background:var(--p-green-lt);color:var(--p-green);border:1px solid var(--p-green-bd);">&#9654; Printing</span>';
     h += '</div>';
-    h += '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:4px;">' + pq_esc(p.rollId) + '</span>';
+    h += (p.materialName ? '<div style="font-size:13px;font-weight:700;color:var(--p-text);margin-bottom:2px;">' + pq_esc(p.materialName) + '</div>' : '')
+      + '<span class="mono" style="font-size:11px;font-weight:700;color:var(--p-green);display:block;margin-bottom:4px;">' + pq_esc(p.rollId) + '</span>';
     h += '<p style="font-size:11px;color:var(--p-muted);margin:0 0 6px;">Started: ' + pq_esc(p.date) + '</p>';
     if (p.pngUrl) {
       h += '<a href="' + pq_esc(p.pngUrl) + '" target="_blank" onclick="event.stopPropagation();"'
@@ -383,8 +384,10 @@
 
     var h = '<div class="pq-queue-card' + repClass + lockClass + act + '"' + onclick + '>';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">';
-    h += '<span class="mono" style="font-weight:800;font-size:13px;color:' + (isReprint ? '#dc2626' : 'var(--p-purple)') + ';">'
-      + pq_esc(p.rollId) + '</span>';
+    h += '<div>'
+      + (p.materialName ? '<div style="font-size:12px;font-weight:700;color:var(--p-text);margin-bottom:1px;">' + pq_esc(p.materialName) + '</div>' : '')
+      + '<span class="mono" style="font-weight:700;font-size:11px;color:' + (isReprint ? '#dc2626' : 'var(--p-purple)') + ';">' + pq_esc(p.rollId) + '</span>'
+      + '</div>';
 
     var badge = isReprint
       ? '<span class="p-badge" style="background:rgba(239,68,68,0.15);color:#dc2626;border:1px solid rgba(239,68,68,0.3);">&#8634; Reprint #' + (p.reprintCount || 1) + '</span>'
