@@ -189,6 +189,25 @@
   </div>
 </div>
 
+<!-- Remove from Queue Confirm Modal -->
+<div id="pq-removeModal" onclick="pq_closeRemoveModal()" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.65);
+         backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div onclick="event.stopPropagation()"
+    style="background:var(--p-surface);border-radius:16px;padding:28px 32px;max-width:420px;width:100%;">
+    <p style="font-weight:800;font-size:16px;margin:0 0 8px;">Remove from Queue?</p>
+    <p style="font-size:13px;color:var(--p-muted);margin:0 0 16px;">
+      Plot <strong id="pq-removePlotId"></strong> will be voided and its JOs will be returned to
+      <strong>FOR_PLOTTING</strong> so they can be re-plotted.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="pq_closeRemoveModal()" style="border:1px solid var(--p-border);background:var(--p-bg);color:var(--p-text);
+               border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="pq_doRemoveFromQueue()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;
+               padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">✕ Confirm Remove</button>
+    </div>
+  </div>
+</div>
+
 <!-- Declare Damage Modal -->
 <div id="pq-damageModal" onclick="pq_closeDamageModal()" style="display:none;position:fixed;inset:0;z-index:9997;background:rgba(0,0,0,0.65);
          backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
@@ -382,6 +401,14 @@
     }
     h += '<div style="font-size:11px;color:var(--p-faint);">JOs: <span style="color:var(--p-text);font-weight:500;">'
       + pq_esc((p.joNumbers || []).join(', ')) + '</span></div>';
+    if (!isLocked) {
+      h += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--p-border);">';
+      h += '<button onclick="event.stopPropagation();pq_openRemoveModal(\'' + pq_esc(p.plotId) + '\')" '
+        + 'style="font-size:11px;font-weight:700;color:#dc2626;background:rgba(239,68,68,0.08);'
+        + 'border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:4px 10px;cursor:pointer;">'
+        + '✕ Remove from Queue</button>';
+      h += '</div>';
+    }
     h += '</div>';
     return h;
   }
@@ -459,6 +486,30 @@
       })
       .withFailureHandler(function (e) { prism_toast('error', e.message); })
       .prism_markPrintingComplete({ plotId: pq_printing.plotId });
+  }
+
+  // ── Remove from Queue flow ───────────────────────────────────────────────────
+  var pq_removeTarget = null;
+  function pq_openRemoveModal(plotId) {
+    pq_removeTarget = plotId;
+    document.getElementById('pq-removePlotId').textContent = plotId;
+    document.getElementById('pq-removeModal').style.display = 'flex';
+  }
+  function pq_closeRemoveModal() {
+    document.getElementById('pq-removeModal').style.display = 'none';
+    pq_removeTarget = null;
+  }
+  function pq_doRemoveFromQueue() {
+    if (!pq_removeTarget) return;
+    var plotId = pq_removeTarget;
+    pq_closeRemoveModal();
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (r.success) { prism_toast('success', r.message); pq_load(); }
+        else prism_toast('error', r.message);
+      })
+      .withFailureHandler(function (e) { prism_toast('error', e.message); })
+      .prism_removeFromQueue({ plotId: plotId });
   }
 
   // ── Declare Damage flow ──────────────────────────────────────────────────────

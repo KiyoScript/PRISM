@@ -1495,6 +1495,54 @@ function prism_getUsageLog() {
 }
 
 // ============================================================
+//  REMOVE FROM QUEUE (void a PLANNED layout, revert JOs)
+// ============================================================
+function prism_removeFromQueue(payload) {
+  try {
+    const user = prism_getUserInfo_();
+    if (!prism_isAdmin_(user.role) && !prism_isOperator_(user.role))
+      return { success: false, message: 'Access denied.' };
+
+    const plotId = String(payload.plotId || '').trim();
+    if (!plotId) return { success: false, message: 'No plot ID provided.' };
+
+    const plotSh   = prism_sh_(PRISM_SHEETS.PLOTTING_LOG);
+    const plotRows = prism_readPlotRows_(plotSh);
+    const target   = plotRows.find(r => r.plotId === plotId);
+
+    if (!target)
+      return { success: false, message: 'Plot layout not found.' };
+    if (target.status !== PLOT_STATUS.PLANNED || target.isVoid)
+      return { success: false, message: 'Only PLANNED (waiting) layouts can be removed.' };
+
+    // Void the plot entry
+    plotSh.getRange(target._rowIdx, PLOT_COL.STATUS  + 1).setValue(PLOT_STATUS.VOIDED);
+    plotSh.getRange(target._rowIdx, PLOT_COL.IS_VOID + 1).setValue(true);
+
+    // Revert JOs back to FOR_PLOTTING
+    const joNumbers = target.joNumbers;
+    let reverted = 0;
+    if (joNumbers.length) {
+      const joSh   = prism_sh_(PRISM_SHEETS.JOB_ORDERS);
+      const joData = joSh.getRange(2, 1, joSh.getLastRow() - 1, 13).getValues();
+      joData.forEach((r, i) => {
+        const jo = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
+        if (joNumbers.includes(jo) && String(r[JO_COL.STATUS]).trim() === JO_STATUS.READY_TO_PRINT) {
+          joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.FOR_PLOTTING);
+          reverted++;
+        }
+      });
+    }
+
+    prism_audit_('PRISM_REMOVE_FROM_QUEUE', { plotId, joNumbers, reverted, by: user.email });
+    return {
+      success: true,
+      message: `Layout removed. ${reverted} JO(s) returned to FOR_PLOTTING.`
+    };
+  } catch (e) { return { success: false, message: e.message }; }
+}
+
+// ============================================================
 //  ADMIN: Manual roll status override
 // ============================================================
 function prism_setRollStatus(rollId, newStatus) {
