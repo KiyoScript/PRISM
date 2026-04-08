@@ -222,9 +222,7 @@ function prism_readPlotRows_(plotSh) {
         rollId:     String(r[PLOT_COL.ROLL_ID]      || '').trim(),
         joNumbers:  String(r[PLOT_COL.JO_NUMBERS]   || '').split(',').map(x=>x.trim()).filter(Boolean),
         status:     String(r[PLOT_COL.STATUS]        || '').trim(),
-        startFt:    parseFloat(r[PLOT_COL.START_FT]) || 0,joNumbers:  String(r[PLOT_COL.JO_NUMBERS]   || '').split(',').map(x=>x.trim()).filter(function(x) {
-            return x.length > 0 && x.indexOf(' ') === -1 && x.indexOf(':') === -1;
-          }),
+        startFt:    parseFloat(r[PLOT_COL.START_FT]) || 0,
         endFt:      parseFloat(r[PLOT_COL.END_FT])   || 0,
         lengthFt:   parseFloat(r[PLOT_COL.LENGTH_FT])|| 0,
         isVoid:     r[PLOT_COL.IS_VOID] === true || String(r[PLOT_COL.IS_VOID]).toLowerCase() === 'true',
@@ -1519,6 +1517,16 @@ function prism_removeFromQueue(payload) {
     plotSh.getRange(target._rowIdx, PLOT_COL.STATUS  + 1).setValue(PLOT_STATUS.VOIDED);
     plotSh.getRange(target._rowIdx, PLOT_COL.IS_VOID + 1).setValue(true);
 
+    // Calculate how many pieces of each JO are in this layout
+    const layoutJoCounts = {};
+    const rows = (target.remarks && target.remarks.rows) || [];
+    rows.forEach(r => {
+      (r.pieces || []).forEach(p => {
+        const jo = String(p.jo || p.joNumber || '').trim().toUpperCase();
+        if (jo) layoutJoCounts[jo] = (layoutJoCounts[jo] || 0) + 1;
+      });
+    });
+
     // Revert JOs back to FOR_PLOTTING + restore original quantity if partial
     const joNumbers = target.joNumbers;
     const originalQtys = (target.remarks && target.remarks.originalQtys) || {};
@@ -1528,11 +1536,30 @@ function prism_removeFromQueue(payload) {
       const joData = joSh.getRange(2, 1, joSh.getLastRow() - 1, 13).getValues();
       joData.forEach((r, i) => {
         const jo = String(r[JO_COL.JO_NUMBER]).trim().toUpperCase();
-        if (joNumbers.includes(jo) && String(r[JO_COL.STATUS]).trim() === JO_STATUS.READY_TO_PRINT) {
+        if (!joNumbers.includes(jo)) return;
+
+        const currentStatus = String(r[JO_COL.STATUS]).trim();
+        const currentQty = parseInt(r[JO_COL.QUANTITY], 10) || 0;
+        
+        if (currentStatus === JO_STATUS.READY_TO_PRINT || currentStatus === JO_STATUS.FOR_PLOTTING) {
           joSh.getRange(i + 2, JO_COL.STATUS + 1).setValue(JO_STATUS.FOR_PLOTTING);
-          const origQty = originalQtys[jo];
-          if (origQty && origQty > 0) {
-            joSh.getRange(i + 2, JO_COL.QUANTITY + 1).setValue(origQty);
+          
+          let piecesToRestore = layoutJoCounts[jo] || 0;
+          
+          // Fallback if pieces array wasn't saved (older layouts)
+          if (piecesToRestore === 0 && originalQtys[jo]) piecesToRestore = originalQtys[jo];
+
+          if (piecesToRestore > 0) {
+            let maxQty = parseInt(originalQtys[jo], 10);
+            if (maxQty > 0) {
+              let newQty = currentQty + piecesToRestore;
+              if (newQty > maxQty) newQty = maxQty; // Cap to avoid doubling for non-partial plots!
+              if (newQty !== currentQty) {
+                joSh.getRange(i + 2, JO_COL.QUANTITY + 1).setValue(newQty);
+              }
+            } else {
+              joSh.getRange(i + 2, JO_COL.QUANTITY + 1).setValue(currentQty + piecesToRestore);
+            }
           }
           reverted++;
         }
