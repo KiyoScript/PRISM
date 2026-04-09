@@ -123,35 +123,34 @@
     </div>
   </div>
   
-  <!-- RIGHT: Map Preview -->
-  <div class="rm-right">
-    
-    <div id="rm-rightEmpty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--p-faint);">
-      <svg width="60" height="60" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-bottom:16px;">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L16 4m0 13V4m0 0L9 7"/>
-      </svg>
-      <div style="font-size:18px;font-weight:800;color:var(--p-text);margin-bottom:8px;">No roll selected</div>
-      <div style="font-size:14px;max-width:320px;text-align:center;color:var(--p-muted);">Select any roll from the list to view its exact 1:1 physical layout history.</div>
-    </div>
-    
-    <div id="rm-results" style="display:none;height:100%;flex-direction:column;">
-      <div class="rm-map-header">
-        <div>
-          <div id="rm-mapTitle" style="font-size:16px;font-weight:800;color:var(--p-text);margin-bottom:2px;">PMT-000-R00</div>
-          <div id="rm-mapSub" style="font-size:12px;font-weight:600;color:var(--p-muted);">10.5ft &times; 164ft</div>
-        </div>
-        <div>
+          <!-- RIGHT: Map Preview -->
+    <div class="rm-right p-card" style="flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 12px; padding: 20px; overflow: hidden;">
+      
+      <div id="rm-rightEmpty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--p-faint);">
+        <svg width="60" height="60" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-bottom:16px;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L16 4m0 13V4m0 0L9 7"/>
+        </svg>
+        <div style="font-size:18px;font-weight:800;color:var(--p-text);margin-bottom:8px;">No roll selected</div>
+        <div style="font-size:14px;max-width:320px;text-align:center;color:var(--p-muted);">Select any roll from the list to view its precise layout history.</div>
+      </div>
+      
+      <div id="rm-results" style="display:none;height:100%;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div>
+            <div id="rm-mapTitle" class="p-section-title" style="margin:0 0 4px;font-size:16px;">PMT-000-R00</div>
+            <div id="rm-mapSub" style="font-size:12px;color:var(--p-muted);margin:0;">10.5ft &times; 164ft</div>
+          </div>
           <button id="rm-refreshBtn" onclick="rm_fetchMap()" class="p-btn p-btn-ghost" style="padding:6px 12px;font-size:12px;">&#8635; Refresh Map</button>
+        </div>
+        
+        <div id="rm-mapWrap" style="flex:1;background:var(--p-bg);border:1px solid var(--p-border);border-radius:10px; overflow-y:auto; overflow-x:hidden; position:relative; padding:16px; text-align:center; min-height:0;">
+          <canvas id="rm-mapCanvas" style="max-width:100%;display:block;margin:0 auto;box-shadow:0 1px 3px rgba(0,0,0,.1);border-radius:4px;"></canvas>
         </div>
       </div>
       
-      <div class="rm-map-body">
-        <div class="rm-timeline-wrap" id="rm-mapWrap">
-          <canvas id="rm-mapCanvas"></canvas>
-          <!-- Ruler overlay -->
-        </div>
-      </div>
     </div>
+  </div>
+  </div>
     
   </div>
 </div>
@@ -315,7 +314,8 @@ function rm_colorForHistoryJO(jo) {
 
 function rm_drawCanvas() {
   var canvas = document.getElementById('rm-mapCanvas');
-  if (!canvas) return;
+  var wrap = document.getElementById('rm-mapWrap');
+  if (!canvas || !wrap) return;
   var ctx = canvas.getContext('2d');
   
   if (!rm_layoutData || !rm_layoutData.length) {
@@ -331,132 +331,120 @@ function rm_drawCanvas() {
   var rollLen = rObj ? parseFloat(rObj.originalLength) : 0;
   
   var maxFt = 0;
-  rm_layoutData.forEach(function(seg) {
+  var history = rm_layoutData.slice().sort(function(a,b) { return (parseFloat(a.startAtFt)||0) - (parseFloat(b.startAtFt)||0); });
+  
+  history.forEach(function(seg) {
     if (seg.endAtFt > maxFt) maxFt = seg.endAtFt;
   });
-  if (maxFt <= 0) maxFt = 10;
+  
   if (!rollLen || rollLen <= 0) rollLen = Math.max(164, maxFt + 10);
+  var totalLen = Math.max(rollLen, maxFt + 2);
   
-  var pxPerFt = 50; 
-  var rulerW = 50;
-  var mapW = rollWidth * pxPerFt;
-  var bodyW = rulerW + mapW;
-  var totalH = rollLen * pxPerFt;
+  var wrapW = Math.max((wrap.offsetWidth || wrap.clientWidth) - 32, 500);
+  var pxPerFt = 15;
+  var axisW = 36;
+  var bodyW = wrapW - axisW;
+  var topPad = 20;
+  var canvasH = Math.max(120, Math.round(totalLen * pxPerFt) + 60 + topPad);
   
-  canvas.width = bodyW;
-  canvas.height = totalH;
-  document.getElementById('rm-mapWrap').style.width = bodyW + 'px';
-  document.getElementById('rm-mapWrap').style.margin = '0 auto';
+  canvas.style.width = wrapW + 'px';
+  canvas.style.height = canvasH + 'px';
+  canvas.width = wrapW;
+  canvas.height = canvasH;
   
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Ruler background
+  // Background
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, rulerW, canvas.height);
-  ctx.beginPath();
-  ctx.moveTo(rulerW - 0.5, 0); ctx.lineTo(rulerW - 0.5, canvas.height);
-  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.fillRect(axisW, 0, bodyW, canvasH);
+  ctx.fillStyle = 'rgba(148,163,184,0.08)';
+  ctx.fillRect(axisW, 0, bodyW, topPad);
   
-  // Map background
-  ctx.fillStyle = '#f1f5f9';
-  ctx.fillRect(rulerW, 0, mapW, canvas.height);
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.strokeRect(rulerW, 0, mapW, canvas.height);
-  
-  // Ruler ticks
-  ctx.fillStyle = '#64748b';
-  ctx.font = '11px "DM Sans", sans-serif';
+  // Axis ticks + grid lines
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px JetBrains Mono, monospace';
   ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  for (var f = 0; f <= rollLen; f++) {
-    var y = f * pxPerFt;
-    if (f % 5 === 0) {
-      ctx.beginPath(); ctx.moveTo(rulerW - 20, y); ctx.lineTo(rulerW, y);
-      ctx.strokeStyle = '#94a3b8'; ctx.stroke();
-      if (y > 10) ctx.fillText(f + 'ft', rulerW - 25, y);
-    } else {
-      ctx.beginPath(); ctx.moveTo(rulerW - 10, y); ctx.lineTo(rulerW, y);
-      ctx.strokeStyle = '#cbd5e1'; ctx.stroke();
-    }
+  for (var ft = 0; ft <= Math.ceil(totalLen); ft += 5) {
+    var ty = Math.round(ft * pxPerFt) + topPad;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(ft, axisW - 4, ty + 4);
+    ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(axisW, ty); ctx.lineTo(axisW + bodyW, ty); ctx.stroke();
   }
   
-  rm_layoutData.forEach(function(seg) {
-    if (seg.isDamage) {
-      var y0 = seg.startAtFt * pxPerFt;
-      var y1 = seg.endAtFt * pxPerFt;
-      ctx.fillStyle = 'rgba(239,68,68,0.15)'; 
-      ctx.fillRect(rulerW, y0, mapW, y1 - y0);
-      
-      ctx.save();
-      ctx.beginPath(); ctx.rect(rulerW, y0, mapW, y1 - y0); ctx.clip();
-      ctx.strokeStyle = 'rgba(239,68,68,0.3)'; ctx.lineWidth = 3;
-      for (var p = -mapW; p < (y1 - y0) + mapW; p += 20) {
-        ctx.beginPath(); ctx.moveTo(rulerW, y0 + p); ctx.lineTo(rulerW + mapW, y0 + p + mapW); ctx.stroke();
-      }
-      ctx.restore();
-      
-      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.strokeRect(rulerW, y0, mapW, y1 - y0);
-      ctx.fillStyle = '#b91c1c'; ctx.font = 'bold 14px "DM Sans"'; ctx.textAlign = 'center';
-      ctx.fillText('DAMAGE DECLARATION / SPLICE (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', rulerW + mapW/2, y0 + (y1-y0)/2);
-      return;
-    }
+  history.forEach(function(seg) {
+    var sy = Math.round((parseFloat(seg.startAtFt) || 0) * pxPerFt) + topPad;
+    var ey = Math.round((parseFloat(seg.endAtFt) || 0) * pxPerFt) + topPad;
+    var sh = Math.max(2, ey - sy);
     
     if (seg.isTestPrint) {
-      var y0 = seg.startAtFt * pxPerFt;
-      var y1 = seg.endAtFt * pxPerFt;
-      ctx.fillStyle = 'rgba(100,116,139,0.2)';
-      ctx.fillRect(rulerW, y0, mapW, y1 - y0);
-      ctx.strokeStyle = '#475569'; ctx.lineWidth = 1; ctx.strokeRect(rulerW, y0, mapW, y1 - y0);
-      ctx.fillStyle = '#334155'; ctx.font = 'bold 13px "DM Sans"'; ctx.textAlign = 'center';
-      ctx.fillText('TEST PRINT (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', rulerW + mapW/2, y0 + 15);
-      return;
-    }
-    
-    var y0 = seg.startAtFt * pxPerFt;
-    var rows = Array.isArray(seg.rows) ? seg.rows : [];
-    var rowY = y0;
-    
-    rows.forEach(function(r) {
-      var rowH_px = (parseFloat(r.rowH) || 0) * pxPerFt;
-      if (rowH_px <= 0) return;
-      var pieces = Array.isArray(r.pieces) ? r.pieces : [];
-      pieces.forEach(function(p) {
-        var dx = parseFloat(p.dx) || 0;
-        var wPx = (parseFloat(p.w) || 0) * pxPerFt;
-        var hPx = (parseFloat(p.h) || 0) * pxPerFt;
-        var xPx = rulerW + (dx * pxPerFt);
-        
-        ctx.fillStyle = rm_colorForHistoryJO(p.jo);
-        ctx.globalAlpha = 0.5; ctx.fillRect(xPx, rowY, wPx, hPx);
-        ctx.globalAlpha = 1.0; ctx.strokeStyle = 'rgba(15,23,42,0.4)'; ctx.lineWidth = 1.5; ctx.strokeRect(xPx, rowY, wPx, hPx);
-        
-        ctx.fillStyle = '#0f172a';
-        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-        
-        var fontSize = Math.min(14, Math.max(8, hPx * 0.4));
-        if (hPx > 15 && wPx > 30) {
-            ctx.font = 'bold ' + fontSize + 'px "DM Sans", sans-serif';
-            ctx.fillText(p.jo || '', xPx + 5, rowY + 5);
-        }
-        if (hPx > 30 && wPx > 40) {
-          ctx.font = '600 ' + (fontSize * 0.75) + 'px "DM Sans", sans-serif';
-          ctx.fillStyle = '#334155';
-          var dimStr = (parseFloat(p.w)||0).toFixed(1) + ' &times; ' + (parseFloat(p.h)||0).toFixed(1) + 'ft';
-          ctx.fillText(dimStr, xPx + 5, rowY + 5 + fontSize + 4);
-        }
-      });
-      
-      var ux = rulerW + ((parseFloat(r.usedW) || 0) * pxPerFt);
-      if (ux > rulerW && ux < rulerW+mapW) {
-        ctx.beginPath(); ctx.moveTo(ux, rowY); ctx.lineTo(ux, rowY + rowH_px);
-        ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(245,158,11,0.30)';
+      ctx.fillRect(axisW, sy, bodyW, sh);
+      ctx.strokeStyle = 'rgba(245,158,11,0.7)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(axisW, sy, bodyW, sh);
+      if (sh > 12) {
+        ctx.fillStyle = '#92400e';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('TEST PRINT (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', axisW + 6, sy + 14);
       }
-      ctx.beginPath(); ctx.moveTo(rulerW, rowY + rowH_px); ctx.lineTo(rulerW + mapW, rowY + rowH_px);
-      ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
+    } else if (seg.isDamage || seg.isVoid || seg.type === 'DAMAGE') {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(axisW, sy, bodyW, sh); ctx.clip();
+      ctx.fillStyle = 'rgba(239,68,68,0.15)';
+      ctx.fillRect(axisW, sy, bodyW, sh);
+      ctx.strokeStyle = 'rgba(239,68,68,0.45)'; ctx.lineWidth = 0.5;
+      for (var xi = -sh; xi < bodyW + sh; xi += 10) {
+        ctx.beginPath(); ctx.moveTo(axisW + xi, sy); ctx.lineTo(axisW + xi + sh, sy + sh); ctx.stroke();
+      }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(239,68,68,0.6)'; ctx.lineWidth = 1;
+      ctx.strokeRect(axisW, sy, bodyW, sh);
+      if (sh > 12) {
+        ctx.fillStyle = '#dc2626'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('DAMAGE (' + ((parseFloat(seg.endAtFt)||0)-(parseFloat(seg.startAtFt)||0)).toFixed(1) + 'ft)', axisW + 6, sy + 14);
+      }
+    } else {
+      ctx.fillStyle = 'rgba(148,163,184,0.35)';
+      ctx.fillRect(axisW, sy, bodyW, sh);
+      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.5;
+      ctx.strokeRect(axisW, sy, bodyW, sh);
       
-      rowY += rowH_px;
-    });
+      var rows = Array.isArray(seg.rows) ? seg.rows : [];
+      var y = sy;
+      rows.forEach(function (r) {
+        var rh = Math.max(2, Math.round((parseFloat(r.rowH) || 0) * pxPerFt));
+        var cx = axisW;
+        (Array.isArray(r.pieces) ? r.pieces : []).forEach(function (p) {
+          var pw = Math.max(1, Math.round(((parseFloat(p.w) || 0) / rollWidth) * bodyW));
+          var p_rh = Math.max(2, Math.min(rh, Math.round((parseFloat(p.h) || parseFloat(r.rowH) || 0) * pxPerFt)));
+          var pxc = axisW + (p.dx !== undefined ? Math.round((p.dx / rollWidth) * bodyW) : (cx - axisW));
+          var pyc = y + (p.dy !== undefined ? Math.round(p.dy * pxPerFt) : 0);
+          
+          ctx.fillStyle = 'rgba(148,163,184,0.33)';
+          ctx.fillRect(pxc + 1, pyc + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+          ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1;
+          ctx.strokeRect(pxc + 1, pyc + 1, Math.max(1, pw - 2), Math.max(1, p_rh - 2));
+          
+          if (pw > 34 && p_rh > 14) {
+            ctx.fillStyle = '#334155'; ctx.font = 'bold 9px JetBrains Mono,monospace'; ctx.textAlign = 'center';
+            var joLabel = String(p.jo || p.joNumber || '').slice(0, 14);
+            var dimLabel = (p.w || 0) + '×' + (p.h || 0) + 'ft';
+            if (p_rh > 28) {
+              ctx.fillText(joLabel, pxc + pw/2, pyc + p_rh/2 - 2);
+              ctx.font = '8px DM Sans,sans-serif'; ctx.fillStyle = '#64748b';
+              ctx.fillText(dimLabel, pxc + pw/2, pyc + p_rh/2 + 10);
+            } else {
+              ctx.fillText(joLabel + ' ' + dimLabel, pxc + pw/2, pyc + p_rh/2 + 3);
+            }
+          }
+          if (p.dx === undefined) cx += pw;
+        });
+        y += rh;
+      });
+    }
   });
 }
 
