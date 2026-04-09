@@ -1042,6 +1042,7 @@ function pp_expandPieces(selJOList, withColors) {
     }
     for (var q = 0; q < qty; q++) {
       pieces.push({
+        rowIndex: j.rowIndex,
         joNumber: j.joNumber,
         customer: j.customer,
         idx: q + 1,
