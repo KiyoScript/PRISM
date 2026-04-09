@@ -254,7 +254,7 @@ function rm_applyFilter() {
     var statClr = r.status === 'OPEN' ? 'var(--p-green)' : 'var(--p-red)';
     var statDot = '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+statClr+';margin-right:5px;"></span>';
     
-        h += '<div class="rm-roll-card' + sel + '" onclick="rm_selectRoll('\'' + pp_esc(r.rollId) + '\'')">'
+    h += '<div class="rm-roll-card' + sel + '" onclick="rm_selectRoll(\'' + pp_esc(r.rollId) + '\')">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
       + '<div style="font-size:15px;font-weight:900;color:var(--p-text);letter-spacing:-0.03em;">' + pp_esc(r.rollId) + '</div>'
       + (r.status === 'OPEN' 
@@ -471,108 +471,6 @@ function rm_drawCanvas() {
         ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
       }
       ctx.beginPath(); ctx.moveTo(rulerW, rowY + rowH_px); ctx.lineTo(rulerW + mapW, rowY + rowH_px);
-      ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
-      
-      rowY += rowH_px;
-    });
-  });
-}
-  
-  // Draw each segment
-  rm_layoutData.forEach(function(seg) {
-    if (seg.isDamage) {
-      var y0 = seg.startAtFt * pxPerFtY;
-      var y1 = seg.endAtFt * pxPerFtY;
-      ctx.fillStyle = 'rgba(239,68,68,0.2)'; // faint red
-      ctx.fillRect(40, y0, mapW, y1 - y0);
-      
-      // red diagonal hatching
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(40, y0, mapW, y1 - y0);
-      ctx.clip();
-      ctx.strokeStyle = 'rgba(239,68,68,0.4)';
-      ctx.lineWidth = 2;
-      for (var p = -mapW; p < (y1 - y0) + mapW; p += 15) {
-        ctx.beginPath();
-        ctx.moveTo(40, y0 + p);
-        ctx.lineTo(40 + mapW, y0 + p + mapW);
-        ctx.stroke();
-      }
-      ctx.restore();
-      
-      // border
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(40, y0, mapW, y1 - y0);
-      
-      ctx.fillStyle = '#b91c1c';
-      ctx.font = 'bold 12px "DM Sans"';
-      ctx.textAlign = 'center';
-      ctx.fillText('DAMAGE DECLARATION / SPLICE (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', 40 + mapW/2, y0 + (y1-y0)/2);
-      return;
-    }
-    
-    if (seg.isTestPrint) {
-      var y0 = seg.startAtFt * pxPerFtY;
-      var y1 = seg.endAtFt * pxPerFtY;
-      ctx.fillStyle = 'rgba(100,116,139,0.3)';
-      ctx.fillRect(40, y0, mapW, y1 - y0);
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(40, y0, mapW, y1 - y0);
-      
-      ctx.fillStyle = '#334155';
-      ctx.font = 'bold 11px "DM Sans"';
-      ctx.textAlign = 'center';
-      ctx.fillText('TEST PRINT (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', 40 + mapW/2, y0 + 12);
-      return;
-    }
-    
-    // Normal layout
-    var y0 = seg.startAtFt * pxPerFtY;
-    var rows = Array.isArray(seg.rows) ? seg.rows : [];
-    var rowY = y0;
-    
-    rows.forEach(function(r) {
-      var rowH_px = (parseFloat(r.rowH) || 0) * pxPerFtY;
-      if (rowH_px <= 0) return;
-      var pieces = Array.isArray(r.pieces) ? r.pieces : [];
-      pieces.forEach(function(p) {
-        var dx = parseFloat(p.dx) || 0;
-        var wPx = (parseFloat(p.w) || 0) / rollWidth * mapW;
-        var hPx = (parseFloat(p.h) || 0) * pxPerFtY;
-        var xPx = 40 + (dx / rollWidth * mapW);
-        
-        ctx.fillStyle = rm_colorForHistoryJO(p.jo);
-        ctx.globalAlpha = 0.5;
-        ctx.fillRect(xPx, rowY, wPx, hPx);
-        ctx.globalAlpha = 1.0;
-        ctx.strokeStyle = 'rgba(15,23,42,0.3)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(xPx, rowY, wPx, hPx);
-        
-        // Text
-        ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 10px "DM Sans", sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(p.jo || '', xPx + 3, rowY + 3);
-        if (hPx > 20) {
-          ctx.font = '9px "DM Sans", sans-serif';
-          ctx.fillStyle = '#334155';
-          var dimStr = (parseFloat(p.w)||0).toFixed(1) + 'x' + (parseFloat(p.h)||0).toFixed(1) + 'ft';
-          ctx.fillText(dimStr, xPx + 3, rowY + 14);
-        }
-      });
-      // right bound line representing used width
-      var ux = 40 + ((parseFloat(r.usedW) || 0) / rollWidth * mapW);
-      if (ux > 40 && ux < 40+mapW) {
-        ctx.beginPath(); ctx.moveTo(ux, rowY); ctx.lineTo(ux, rowY + rowH_px);
-        ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([2,3]); ctx.stroke(); ctx.setLineDash([]);
-      }
-      // row separator
-      ctx.beginPath(); ctx.moveTo(40, rowY + rowH_px); ctx.lineTo(40 + mapW, rowY + rowH_px);
       ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
       
       rowY += rowH_px;
