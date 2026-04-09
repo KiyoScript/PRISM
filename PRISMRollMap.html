@@ -27,32 +27,15 @@
   }
   
   .rm-roll-card {
-    background: var(--p-surface);
-    border: 1.5px solid var(--p-border);
-    border-radius: 12px;
-    padding: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    position: relative;
-    overflow: hidden;
-  }
-  .rm-roll-card:hover {
-    border-color: var(--p-teal-lt);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  }
-  .rm-roll-card.active {
-    border-color: var(--p-teal);
-    background: var(--p-teal-lt);
-    box-shadow: 0 0 0 2px var(--p-teal-lt);
-  }
-  .rm-roll-meta {
-    font-size: 11px;
-    color: var(--p-muted);
-    margin-top: 4px;
-    display: flex;
-    gap: 8px;
-  }
-  
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 13px; border-radius: 10px; cursor: pointer;
+      border: 1.5px solid var(--p-border); background: var(--p-surface);
+      margin-bottom: 7px; transition: all .15s;
+    }
+    .rm-roll-card:hover { border-color: var(--p-green-bd); background: var(--p-green-lt); }
+    .rm-roll-card.active { border-color: var(--p-green); background: var(--p-green-lt); }
+    .rm-roll-id { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: var(--p-text); margin-bottom: 2px; }
+    .rm-roll-meta { font-size: 11px; color: var(--p-muted); margin-top: 2px; }
   .rm-filter-btn {
     padding: 6px 12px;
     border: 1px solid var(--p-border);
@@ -250,24 +233,23 @@ function rm_applyFilter() {
       if(rm_materials[i].materialCode === r.materialCode) { matName = rm_materials[i].materialName; break; }
     }
     var matClean = matName.replace(/\s+\d[\d.]*\s*(?:ft|FT|Ft).*$/i, '').trim();
-    
-    var statClr = r.status === 'OPEN' ? 'var(--p-green)' : 'var(--p-red)';
-    var statDot = '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+statClr+';margin-right:5px;"></span>';
-    
-    h += '<div class="rm-roll-card' + sel + '" onclick="rm_selectRoll(\'' + pp_esc(r.rollId) + '\')">'
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
-      + '<div style="font-size:15px;font-weight:900;color:var(--p-text);letter-spacing:-0.03em;">' + pp_esc(r.rollId) + '</div>'
-      + (r.status === 'OPEN' 
-          ? '<div style="font-size:10px;font-weight:800;background:var(--p-green);color:#fff;padding:3px 8px;border-radius:12px;letter-spacing:0.05em;">OPEN</div>' 
-          : '<div style="font-size:10px;font-weight:800;background:var(--p-red);color:#fff;padding:3px 8px;border-radius:12px;letter-spacing:0.05em;">CONSUMED</div>')
-      + '</div>'
-      + '<div style="font-size:12px;font-weight:600;color:var(--p-muted);margin-bottom:8px;line-height:1.4;">' + pp_esc(matClean || r.materialCode) + '</div>'
-      + '<div class="rm-roll-meta" style="align-items:center;border-top:1px solid var(--p-border);padding-top:8px;margin-top:0;">'
-      + '<span><strong style="color:var(--p-text);">' + r.width + 'ft</strong> width</span><span>&nbsp;&middot;&nbsp;</span>'
-      + '<span><strong style="color:var(--p-text);">' + (r.originalLength > 0 ? (r.originalLength - r.remainingLength).toFixed(1)+'/'+r.originalLength : '?') + 'ft</strong> used</span>'
-      + '</div>'
-      + '</div>';
-  });
+      var orig = r.originalLength || 1;
+      var rem = r.remainingLength || 0;
+      var pct = Math.max(0, Math.round((rem/orig)*100));
+      var bc = pct > 20 ? 'var(--p-green)' : (pct > 5 ? 'var(--p-orange)' : 'var(--p-red)');
+      
+      h += '<div class="rm-roll-card' + sel + '" onclick="rm_selectRoll(\'' + pp_esc(r.rollId) + '\')">'
+        + '<div>'
+        + (matClean ? '<div style="font-size:12px;font-weight:700;color:var(--p-text);margin-bottom:2px;">' + pp_esc(matClean) + '</div>' : '')
+        + '<div class="rm-roll-id">' + pp_esc(r.rollId) + '</div>'
+        + '<div class="rm-roll-meta">' + pp_esc(r.materialCode) + ' &middot; ' + r.width + 'ft wide</div>'
+        + '</div>'
+        + '<div style="text-align:right;">'
+        + '<div style="font-size:13px;font-weight:800;color:' + bc + ';">' + pct + '%</div>'
+        + '<div style="font-size:10px;color:var(--p-faint);">remaining</div>'
+        + '</div>'
+        + '</div>';
+    });
   el.innerHTML = h;
 }
 
