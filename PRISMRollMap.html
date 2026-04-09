@@ -1,4 +1,4 @@
-<!-- PRISMRollMap.html -->
+﻿<!-- PRISMRollMap.html -->
 
 <style>
   #tab-roll-map,
@@ -17,8 +17,7 @@
   }
   
   /* LEFT PANEL */
-  .rm-left {
-    width: 380px;
+  .rm-left { width: 420px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -145,21 +144,21 @@
   <div class="rm-right">
     
     <div id="rm-rightEmpty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--p-faint);">
-      <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-bottom:16px;">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L16 4m0 13V4m0 0L9 7"/>
+      <svg width="60" height="60" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-bottom:16px;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L16 4m0 13V4m0 0L9 7"/>
       </svg>
-      <div style="font-size:16px;font-weight:700;color:var(--p-muted);margin-bottom:8px;">No roll selected</div>
-      <div style="font-size:13px;max-width:300px;text-align:center;">Select a roll from the list to view its exact plotting layout map.</div>
+      <div style="font-size:18px;font-weight:800;color:var(--p-text);margin-bottom:8px;">No roll selected</div>
+      <div style="font-size:14px;max-width:320px;text-align:center;color:var(--p-muted);">Select any roll from the list to view its exact 1:1 physical layout history.</div>
     </div>
     
     <div id="rm-results" style="display:none;height:100%;flex-direction:column;">
       <div class="rm-map-header">
         <div>
           <div id="rm-mapTitle" style="font-size:16px;font-weight:800;color:var(--p-text);margin-bottom:2px;">PMT-000-R00</div>
-          <div id="rm-mapSub" style="font-size:12px;font-weight:600;color:var(--p-muted);">10.5ft Ã— 164ft</div>
+          <div id="rm-mapSub" style="font-size:12px;font-weight:600;color:var(--p-muted);">10.5ft &times; 164ft</div>
         </div>
         <div>
-          <button id="rm-refreshBtn" onclick="rm_fetchMap()" class="p-btn p-btn-ghost" style="padding:6px 12px;font-size:12px;">â†º Refresh Map</button>
+          <button id="rm-refreshBtn" onclick="rm_fetchMap()" class="p-btn p-btn-ghost" style="padding:6px 12px;font-size:12px;">&#8635; Refresh Map</button>
         </div>
       </div>
       
@@ -255,13 +254,17 @@ function rm_applyFilter() {
     var statClr = r.status === 'OPEN' ? 'var(--p-green)' : 'var(--p-red)';
     var statDot = '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+statClr+';margin-right:5px;"></span>';
     
-    h += '<div class="rm-roll-card' + sel + '" onclick="rm_selectRoll(\'' + pp_esc(r.rollId) + '\')">'
-      + '<div style="font-size:13px;font-weight:800;color:var(--p-text);margin-bottom:2px;">' + pp_esc(r.rollId) + '</div>'
-      + '<div style="font-size:11px;font-weight:600;color:var(--p-muted);margin-bottom:6px;">' + pp_esc(matClean || r.materialCode) + '</div>'
-      + '<div class="rm-roll-meta">'
-      + statDot + '<span style="font-weight:700;">' + r.status + '</span>'
-      + '<span>Â·</span>'
-      + '<span>' + r.width + 'ft Â· ' + (r.originalLength > 0 ? (r.originalLength - r.remainingLength).toFixed(1)+'/'+r.originalLength : '?') + 'ft used</span>'
+        h += '<div class="rm-roll-card' + sel + '" onclick="rm_selectRoll('\'' + pp_esc(r.rollId) + '\'')">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
+      + '<div style="font-size:15px;font-weight:900;color:var(--p-text);letter-spacing:-0.03em;">' + pp_esc(r.rollId) + '</div>'
+      + (r.status === 'OPEN' 
+          ? '<div style="font-size:10px;font-weight:800;background:var(--p-green);color:#fff;padding:3px 8px;border-radius:12px;letter-spacing:0.05em;">OPEN</div>' 
+          : '<div style="font-size:10px;font-weight:800;background:var(--p-red);color:#fff;padding:3px 8px;border-radius:12px;letter-spacing:0.05em;">CONSUMED</div>')
+      + '</div>'
+      + '<div style="font-size:12px;font-weight:600;color:var(--p-muted);margin-bottom:8px;line-height:1.4;">' + pp_esc(matClean || r.materialCode) + '</div>'
+      + '<div class="rm-roll-meta" style="align-items:center;border-top:1px solid var(--p-border);padding-top:8px;margin-top:0;">'
+      + '<span><strong style="color:var(--p-text);">' + r.width + 'ft</strong> width</span><span>&nbsp;&middot;&nbsp;</span>'
+      + '<span><strong style="color:var(--p-text);">' + (r.originalLength > 0 ? (r.originalLength - r.remainingLength).toFixed(1)+'/'+r.originalLength : '?') + 'ft</strong> used</span>'
       + '</div>'
       + '</div>';
   });
@@ -287,7 +290,7 @@ function rm_fetchMap() {
       if(rm_materials[i].materialCode === rObj.materialCode) { matName = rm_materials[i].materialName; break; }
     }
     document.getElementById('rm-mapTitle').textContent = rObj.rollId;
-    document.getElementById('rm-mapSub').textContent = (matName || rObj.materialCode) + ' Â· ' + rObj.width + 'ft';
+    document.getElementById('rm-mapSub').innerHTML = (matName || rObj.materialCode) + ' &middot; ' + rObj.width + 'ft';
   }
   
   var canvas = document.getElementById('rm-mapCanvas');
@@ -334,7 +337,7 @@ function rm_drawCanvas() {
   var ctx = canvas.getContext('2d');
   
   if (!rm_layoutData || !rm_layoutData.length) {
-    canvas.width = 400; canvas.height = 100;
+    canvas.width = 600; canvas.height = 100;
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = '#6b7280'; ctx.font = '14px DM Sans, sans-serif';
     ctx.fillText('No history found for this roll.', 10, 40);
@@ -345,57 +348,135 @@ function rm_drawCanvas() {
   var rollWidth = rObj ? (parseFloat(rObj.width) || 10.5) : 10.5;
   var rollLen = rObj ? parseFloat(rObj.originalLength) : 0;
   
-  // Compute total used
   var maxFt = 0;
   rm_layoutData.forEach(function(seg) {
     if (seg.endAtFt > maxFt) maxFt = seg.endAtFt;
   });
-  if (maxFt <= 0) maxFt = 10; // minimum display
+  if (maxFt <= 0) maxFt = 10;
   if (!rollLen || rollLen <= 0) rollLen = Math.max(164, maxFt + 10);
   
-  var bodyW = parseInt(document.getElementById('rm-mapWrap').clientWidth, 10) || 600;
-  if (bodyW > 800) bodyW = 800; // max width
-  
-  // Ruler space = 40px left
-  var pxPerFtY = 24; // scale
-  var mapW = bodyW - 40; 
-  var totalH = rollLen * pxPerFtY;
+  var pxPerFt = 50; 
+  var rulerW = 50;
+  var mapW = rollWidth * pxPerFt;
+  var bodyW = rulerW + mapW;
+  var totalH = rollLen * pxPerFt;
   
   canvas.width = bodyW;
   canvas.height = totalH;
+  document.getElementById('rm-mapWrap').style.width = bodyW + 'px';
+  document.getElementById('rm-mapWrap').style.margin = '0 auto';
   
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
-  // Draw ruler background
+  // Ruler background
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, 40, canvas.height);
+  ctx.fillRect(0, 0, rulerW, canvas.height);
   ctx.beginPath();
-  ctx.moveTo(39.5, 0); ctx.lineTo(39.5, canvas.height);
+  ctx.moveTo(rulerW - 0.5, 0); ctx.lineTo(rulerW - 0.5, canvas.height);
   ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
   ctx.stroke();
   
-  // Draw map background
+  // Map background
   ctx.fillStyle = '#f1f5f9';
-  ctx.fillRect(40, 0, mapW, canvas.height);
+  ctx.fillRect(rulerW, 0, mapW, canvas.height);
   ctx.strokeStyle = '#cbd5e1';
-  ctx.strokeRect(40, 0, mapW, canvas.height);
+  ctx.strokeRect(rulerW, 0, mapW, canvas.height);
   
   // Ruler ticks
   ctx.fillStyle = '#64748b';
-  ctx.font = '10px "DM Sans", sans-serif';
+  ctx.font = '11px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (var f = 0; f <= rollLen; f++) {
-    var y = f * pxPerFtY;
+    var y = f * pxPerFt;
     if (f % 5 === 0) {
-      ctx.beginPath(); ctx.moveTo(25, y); ctx.lineTo(40, y);
+      ctx.beginPath(); ctx.moveTo(rulerW - 20, y); ctx.lineTo(rulerW, y);
       ctx.strokeStyle = '#94a3b8'; ctx.stroke();
-      if (y > 10) ctx.fillText(f, 22, y);
+      if (y > 10) ctx.fillText(f + 'ft', rulerW - 25, y);
     } else {
-      ctx.beginPath(); ctx.moveTo(32, y); ctx.lineTo(40, y);
+      ctx.beginPath(); ctx.moveTo(rulerW - 10, y); ctx.lineTo(rulerW, y);
       ctx.strokeStyle = '#cbd5e1'; ctx.stroke();
     }
   }
+  
+  rm_layoutData.forEach(function(seg) {
+    if (seg.isDamage) {
+      var y0 = seg.startAtFt * pxPerFt;
+      var y1 = seg.endAtFt * pxPerFt;
+      ctx.fillStyle = 'rgba(239,68,68,0.15)'; 
+      ctx.fillRect(rulerW, y0, mapW, y1 - y0);
+      
+      ctx.save();
+      ctx.beginPath(); ctx.rect(rulerW, y0, mapW, y1 - y0); ctx.clip();
+      ctx.strokeStyle = 'rgba(239,68,68,0.3)'; ctx.lineWidth = 3;
+      for (var p = -mapW; p < (y1 - y0) + mapW; p += 20) {
+        ctx.beginPath(); ctx.moveTo(rulerW, y0 + p); ctx.lineTo(rulerW + mapW, y0 + p + mapW); ctx.stroke();
+      }
+      ctx.restore();
+      
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.strokeRect(rulerW, y0, mapW, y1 - y0);
+      ctx.fillStyle = '#b91c1c'; ctx.font = 'bold 14px "DM Sans"'; ctx.textAlign = 'center';
+      ctx.fillText('DAMAGE DECLARATION / SPLICE (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', rulerW + mapW/2, y0 + (y1-y0)/2);
+      return;
+    }
+    
+    if (seg.isTestPrint) {
+      var y0 = seg.startAtFt * pxPerFt;
+      var y1 = seg.endAtFt * pxPerFt;
+      ctx.fillStyle = 'rgba(100,116,139,0.2)';
+      ctx.fillRect(rulerW, y0, mapW, y1 - y0);
+      ctx.strokeStyle = '#475569'; ctx.lineWidth = 1; ctx.strokeRect(rulerW, y0, mapW, y1 - y0);
+      ctx.fillStyle = '#334155'; ctx.font = 'bold 13px "DM Sans"'; ctx.textAlign = 'center';
+      ctx.fillText('TEST PRINT (' + (seg.lengthUsed||0).toFixed(1) + 'ft)', rulerW + mapW/2, y0 + 15);
+      return;
+    }
+    
+    var y0 = seg.startAtFt * pxPerFt;
+    var rows = Array.isArray(seg.rows) ? seg.rows : [];
+    var rowY = y0;
+    
+    rows.forEach(function(r) {
+      var rowH_px = (parseFloat(r.rowH) || 0) * pxPerFt;
+      if (rowH_px <= 0) return;
+      var pieces = Array.isArray(r.pieces) ? r.pieces : [];
+      pieces.forEach(function(p) {
+        var dx = parseFloat(p.dx) || 0;
+        var wPx = (parseFloat(p.w) || 0) * pxPerFt;
+        var hPx = (parseFloat(p.h) || 0) * pxPerFt;
+        var xPx = rulerW + (dx * pxPerFt);
+        
+        ctx.fillStyle = rm_colorForHistoryJO(p.jo);
+        ctx.globalAlpha = 0.5; ctx.fillRect(xPx, rowY, wPx, hPx);
+        ctx.globalAlpha = 1.0; ctx.strokeStyle = 'rgba(15,23,42,0.4)'; ctx.lineWidth = 1.5; ctx.strokeRect(xPx, rowY, wPx, hPx);
+        
+        ctx.fillStyle = '#0f172a';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+        
+        var fontSize = Math.min(14, Math.max(8, hPx * 0.4));
+        if (hPx > 15 && wPx > 30) {
+            ctx.font = 'bold ' + fontSize + 'px "DM Sans", sans-serif';
+            ctx.fillText(p.jo || '', xPx + 5, rowY + 5);
+        }
+        if (hPx > 30 && wPx > 40) {
+          ctx.font = '600 ' + (fontSize * 0.75) + 'px "DM Sans", sans-serif';
+          ctx.fillStyle = '#334155';
+          var dimStr = (parseFloat(p.w)||0).toFixed(1) + ' &times; ' + (parseFloat(p.h)||0).toFixed(1) + 'ft';
+          ctx.fillText(dimStr, xPx + 5, rowY + 5 + fontSize + 4);
+        }
+      });
+      
+      var ux = rulerW + ((parseFloat(r.usedW) || 0) * pxPerFt);
+      if (ux > rulerW && ux < rulerW+mapW) {
+        ctx.beginPath(); ctx.moveTo(ux, rowY); ctx.lineTo(ux, rowY + rowH_px);
+        ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+      }
+      ctx.beginPath(); ctx.moveTo(rulerW, rowY + rowH_px); ctx.lineTo(rulerW + mapW, rowY + rowH_px);
+      ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.stroke();
+      
+      rowY += rowH_px;
+    });
+  });
+}
   
   // Draw each segment
   rm_layoutData.forEach(function(seg) {
@@ -502,3 +583,6 @@ function rm_drawCanvas() {
 function pp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 </script>
+
+
+
