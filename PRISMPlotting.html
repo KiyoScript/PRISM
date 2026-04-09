@@ -591,6 +591,24 @@ function pp_getRotBtnHtml(j, sel) {
 }
 
 function pp_toggleRow(rowIndex) {
+  var isSelecting = !pp_selJOs[rowIndex];
+  if (isSelecting) {
+    var jo = pp_allJOs.find(function(j) { return j.rowIndex === rowIndex; });
+    if (jo) {
+      var maxQty = parseInt(jo.quantity, 10) || 1;
+      if (maxQty > 1) {
+        var ans = window.prompt('Enter quantity to print for ' + (jo.joNumber || 'this JO') + ' (max ' + maxQty + '):', '1');
+        if (ans === null) return; // user cancelled selection
+        var qty = parseInt(ans, 10);
+        if (isNaN(qty) || qty < 1) qty = 1;
+        if (qty > maxQty) qty = maxQty;
+        pp_selQty[rowIndex] = qty;
+      } else {
+        pp_selQty[rowIndex] = 1;
+      }
+    }
+  }
+
   pp_selJOs[rowIndex] = !pp_selJOs[rowIndex];
   // Clear per-JO rotation when deselected so it resets cleanly
   if (!pp_selJOs[rowIndex]) {
@@ -621,6 +639,26 @@ function pp_toggleJOGroupAll(joNumber) {
   var rows = pp_filtJOs.filter(function(j){ return j.joNumber === joNumber; });
   var selRows = rows.filter(function(r){ return pp_selJOs[r.rowIndex]; });
   var shouldSelect = selRows.length < rows.length;
+  
+  if (shouldSelect) {
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!pp_selJOs[r.rowIndex]) {
+        var maxQty = parseInt(r.quantity, 10) || 1;
+        if (maxQty > 1) {
+          var ans = window.prompt('Enter quantity to print for ' + (r.joNumber || 'this JO') + ' (max ' + maxQty + '):', '1');
+          if (ans === null) return; // user cancelled selection
+          var qty = parseInt(ans, 10);
+          if (isNaN(qty) || qty < 1) qty = 1;
+          if (qty > maxQty) qty = maxQty;
+          pp_selQty[r.rowIndex] = qty;
+        } else {
+          pp_selQty[r.rowIndex] = 1;
+        }
+      }
+    }
+  }
+
   rows.forEach(function(r){ pp_selJOs[r.rowIndex] = shouldSelect; });
   pp_renderJOs();
   pp_updateRollSuggestions();
@@ -668,7 +706,26 @@ function pp_setSelQty(rowIndex, maxQty, val) {
 
 
 function pp_selectAll() {
-  pp_filtJOs.forEach(function(j) { pp_selJOs[j.rowIndex] = true; });
+  var userCancelled = false;
+  for (var i = 0; i < pp_filtJOs.length; i++) {
+    var j = pp_filtJOs[i];
+    if (!pp_selJOs[j.rowIndex]) {
+      var maxQty = parseInt(j.quantity, 10) || 1;
+      if (maxQty > 1) {
+        var ans = window.prompt('Select All: Enter quantity to print for ' + (j.joNumber || 'this JO') + ' (max ' + maxQty + '):', '1');
+        if (ans === null) { userCancelled = true; break; }
+        var qty = parseInt(ans, 10);
+        if (isNaN(qty) || qty < 1) qty = 1;
+        if (qty > maxQty) qty = maxQty;
+        pp_selQty[j.rowIndex] = qty;
+      } else {
+        pp_selQty[j.rowIndex] = 1;
+      }
+      pp_selJOs[j.rowIndex] = true;
+    }
+  }
+  if (userCancelled) return;
+  
   pp_renderJOs(); pp_updateRollSuggestions(); pp_checkArrangeBtn(); pp_layout = null; pp_rollPlans = []; pp_activeRollViewId = '';
 }
 
