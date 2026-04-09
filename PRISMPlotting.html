@@ -178,7 +178,7 @@
       <!-- Step 2: Select Roll -->
       <div class="p-card" style="padding:16px;margin-bottom:14px;">
         <p class="p-section-title" style="margin-bottom:6px;">Step 2 — Select Roll</p>
-        <p id="pp-rollHint" style="font-size:11px;color:var(--p-teal);font-weight:600;margin:0 0 10px;display:none;">
+        <div style="position:relative;margin-bottom:10px;"><span style="position:absolute;left:8px;top:7px;color:var(--p-faint);"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg></span><input type="text" id="pp-roll-search" placeholder="Search Material..." class="p-input" style="padding-left:28px;font-size:12px;width:100%;" oninput="pp_renderRolls()"></div>        <p id="pp-rollHint" style="font-size:11px;color:var(--p-teal);font-weight:600;margin:0 0 10px;display:none;">
           ✦ Suggested rolls highlighted based on selected JOs
         </p>
         <div id="pp-rollList" style="max-height:300px;overflow-y:auto;">
@@ -678,8 +678,40 @@ function pp_renderRolls() {
   if (!pp_rolls.length) {
     el.innerHTML = '<div class="pp-empty">No open rolls. Ask STL to open a roll.</div>'; return;
   }
+  
+  var qObj = document.getElementById('pp-roll-search');
+  var q = qObj ? qObj.value.toLowerCase().trim() : '';
+  
+  var filtered = pp_rolls.filter(function(r) {
+    if (r.remainingLength <= 0) return false;
+    
+    var matName = '';
+    for (var mi = 0; mi < pp_materials.length; mi++) {
+      if (pp_materials[mi].materialCode === r.materialCode) {
+        matName = pp_materials[mi].materialName;
+        break;
+      }
+    }
+    r._matName = matName;
+    
+    if (q) {
+      if (r.rollId.toLowerCase().indexOf(q) === -1 && 
+          r.materialCode.toLowerCase().indexOf(q) === -1 &&
+          matName.toLowerCase().indexOf(q) === -1) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    if (q) el.innerHTML = '<div class="pp-empty">No matching rolls found.</div>';
+    else el.innerHTML = '<div class="pp-empty">All open rolls are consumed. Please open a new roll.</div>';
+    return;
+  }
+
   var h = '';
-  pp_rolls.forEach(function(r) {
+  filtered.forEach(function(r) {
     var sel = (pp_selRoll && pp_selRoll.rollId === r.rollId) ? ' selected' : '';
     var sug = r._suggested ? ' suggested' : '';
     var pct = r.originalLength > 0 ? Math.round(r.remainingLength / r.originalLength * 100) : 0;
@@ -689,23 +721,17 @@ function pp_renderRolls() {
       if (r._sim.unsupportedPieces > 0) {
         simMeta = '<div class="pp-roll-meta" style="color:var(--p-red);font-weight:700;">Cannot fit ' + r._sim.unsupportedPieces + ' piece(s) in width</div>';
       } else if (r._sim.overflowFt > 0) {
-        simMeta = '<div class="pp-roll-meta" style="color:var(--p-amber);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft · overflow +' + r._sim.overflowFt.toFixed(1) + 'ft</div>';
+        simMeta = '<div class="pp-roll-meta" style="color:var(--p-amber);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft &middot; overflow +' + r._sim.overflowFt.toFixed(1) + 'ft</div>';
       } else {
-        simMeta = '<div class="pp-roll-meta" style="color:var(--p-teal);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft · waste ' + r._sim.wastePct + '%</div>';
+        simMeta = '<div class="pp-roll-meta" style="color:var(--p-teal);font-weight:700;">Est. use ' + r._sim.totalLen.toFixed(1) + 'ft &middot; waste ' + r._sim.wastePct + '%</div>';
       }
     }
-    var matName = '';
-    for (var mi = 0; mi < pp_materials.length; mi++) {
-      if (pp_materials[mi].materialCode === r.materialCode) {
-        matName = pp_materials[mi].materialName;
-        break;
-      }
-    }    var matNameClean = matName.replace(/\s+\d[\d.]*\s*(?:ft|FT|Ft).*$/i, '').trim();
+    var matNameClean = (r._matName || '').replace(/\s+\d[\d.]*\s*(?:ft|FT|Ft).*$/i, '').trim();
     h += '<div class="pp-roll-opt' + sel + sug + '" onclick="pp_selRollFn(\'' + pp_esc(r.rollId) + '\')">'
       + '<div>'
       + (matNameClean ? '<div style="font-size:12px;font-weight:700;color:var(--p-text);margin-bottom:2px;">' + pp_esc(matNameClean) + '</div>' : '')
-      + '<div class="pp-roll-id" style="margin-bottom:2px;">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">✦ Best Fit</span>' : '') + '</div>'
-      + '<div class="pp-roll-meta">' + pp_esc(r.materialCode) + ' · ' + r.width + 'ft wide</div>'
+      + '<div class="pp-roll-id" style="margin-bottom:2px;">' + pp_esc(r.rollId) + (r._suggested ? ' <span style="font-size:9px;background:var(--p-teal);color:#fff;border-radius:4px;padding:1px 5px;">&starf; Best Fit</span>' : '') + '</div>'
+      + '<div class="pp-roll-meta">' + pp_esc(r.materialCode) + ' &middot; ' + r.width + 'ft wide</div>'
       + simMeta
       + '</div>'
       + '<div style="text-align:right;">'
@@ -2366,3 +2392,4 @@ function pp_saveMapToDrive() {
 
 function pp_esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
+

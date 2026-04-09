@@ -388,6 +388,13 @@
       </svg>
       <span class="sb-label">Print Queue</span>
     </a>
+    <a href="#" class="nav-link" data-tab="roll-map" id="nav-roll-map" onclick="rm_init()">
+      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L16 4m0 13V4m0 0L9 7"/>
+      </svg>
+      <span class="sb-label">Physical Roll Map</span>
+    </a>
     <a href="#" class="nav-link" data-tab="test-print" id="nav-test-print">
       <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -448,8 +455,7 @@
 <main id="mainContent">
   <div id="tab-job-orders" class="tab-pane active"><?!= include('PRISMJobOrders') ?></div>
   <div id="tab-plotting"   class="tab-pane"><?!= include('PRISMPlotting') ?></div>
-  <div id="tab-print-queue" class="tab-pane"><?!= include('PRISMPrintQueue') ?></div>
-  <div id="tab-test-print" class="tab-pane"><?!= include('PRISMTestPrint') ?></div>
+  <div id="tab-print-queue" class="tab-pane"><?!= include('PRISMPrintQueue') ?></div>    <div id="tab-roll-map"   class="tab-pane"><?!= include('PRISMRollMap') ?></div>  <div id="tab-test-print" class="tab-pane"><?!= include('PRISMTestPrint') ?></div>
   <div id="tab-dashboard"  class="tab-pane"><?!= include('RollDashboard') ?></div>
   <div id="tab-stock-in"   class="tab-pane"><?!= include('RollStockIn') ?></div>
   <div id="tab-materials"  class="tab-pane"><?!= include('PRISMMaterials') ?></div>
@@ -540,6 +546,7 @@ google.script.run
       document.getElementById('nav-settings').style.display  = 'none';
       document.getElementById('nav-plotting').style.display  = 'none';
       var pq = document.getElementById('nav-print-queue'); if (pq) pq.style.display = 'none';
+      var rm = document.getElementById('nav-roll-map'); if (rm) rm.style.display = 'none';
     }
     // Test Print: visible to Digital Operators and Admins only
     var isOperator = role.includes('digital operator') || role.includes('operator');

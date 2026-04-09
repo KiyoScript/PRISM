@@ -161,6 +161,7 @@ function prism_init_dashboard() {
     .withSuccessHandler(function(r) {
       if (!r.success) { d4_error(r.message); return; }
       d4_rolls    = r.rolls    || [];
+d4_materials = r.materials || [];
       d4_settings = r.settings || {};
       d4_userRole = ((r.user && r.user.role) || '').toLowerCase();
       d4_render();
@@ -176,6 +177,7 @@ function prism_reloadDashboard() {
       prism_setReloading('d4-reloadBtn', false);
       if (!r.success) { d4_error(r.message); return; }
       d4_rolls    = r.rolls    || [];
+d4_materials = r.materials || [];
       d4_settings = r.settings || {};
       d4_render();
     })
@@ -199,7 +201,15 @@ function d4_apply() {
   var filtered = d4_rolls.filter(function(r) {
     if (d4_filter === 'AVAILABLE') { if (r.status !== 'OPEN' && r.status !== 'UNOPENED') return false; }
     else if (d4_filter !== 'ALL' && d4_filter !== 'WARN') { if (r.status !== d4_filter) return false; }
-    if (q) { var h = (r.rollId + ' ' + r.materialCode).toLowerCase(); if (h.indexOf(q) === -1) return false; }
+    if (q) {
+      if ((r.rollId + ' ' + r.materialCode).toLowerCase().indexOf(q) !== -1) return true;
+      for (var i = 0; i < d4_materials.length; i++) {
+        if (d4_materials[i].materialCode === r.materialCode && (d4_materials[i].materialName || '').toLowerCase().indexOf(q) !== -1) {
+          return true;
+        }
+      }
+      return false;
+    }
     return true;
   });
 
@@ -251,7 +261,15 @@ function d4_buildGroups(rolls, lowFt) {
   var map = {};
   rolls.forEach(function(r) {
     var code = (r.materialCode || 'UNKNOWN').toString().trim();
-    if (!map[code]) map[code] = { materialCode: code, rolls: [], openCount: 0, unopenedCount: 0, consumedCount: 0, totalRemaining: 0 };
+    if (!map[code]) {
+      var mName = '';
+      if (typeof d4_materials !== 'undefined') {
+        for (var i = 0; i < d4_materials.length; i++) {
+          if (d4_materials[i].materialCode === code) { mName = d4_materials[i].materialName; break; }
+        }
+      }
+      map[code] = { materialCode: code, materialName: mName, rolls: [], openCount: 0, unopenedCount: 0, consumedCount: 0, totalRemaining: 0 };
+    }
     map[code].rolls.push(r);
     var st = (r.status || '').toUpperCase();
     if (st === 'OPEN')      { map[code].openCount++;     map[code].totalRemaining += parseFloat(r.remainingLength) || 0; }
@@ -278,7 +296,7 @@ function d4_renderGroups(groups, threshold, lowFt) {
     h += '<div class="d4-mat-group' + (expanded ? '' : ' collapsed') + '" id="d4g-' + safeCode + '" data-code="' + d4_esc(g.materialCode) + '">';
     h += '<div class="d4-mat-hdr' + (isWarn ? ' warn' : '') + '" onclick="d4_toggleGroup(\'' + safeCode + '\')">';
     h += '<svg class="d4-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
-    h += '<div class="d4-mat-title">' + d4_esc(g.materialCode) + '</div>';
+    
     h += '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">';
     if (g.openCount)     h += '<span class="p-badge badge-green">' + g.openCount + ' open</span>';
     if (g.unopenedCount) h += '<span class="p-badge badge-indigo">' + g.unopenedCount + ' sealed</span>';
@@ -403,3 +421,5 @@ function d4_confirmOpen() {
     .prism_openRoll(d4_pendingRoll);
 }
 </script>
+
+
