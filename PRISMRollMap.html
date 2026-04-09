@@ -21,11 +21,13 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    height: 100%;
-    overflow-y: auto;
-  }
-  
+      height: 100%;
+    }
+    
+    .rm-left-content {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
   .rm-roll-card {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 13px; border-radius: 10px; cursor: pointer;
@@ -98,31 +100,30 @@
 <div class="rm-layout">
 
   <!-- LEFT: Roll List -->
-  <div class="rm-left">
-    <div style="margin-bottom:6px;">
-      <h2 style="margin:0 0 10px;font-size:18px;font-weight:800;color:var(--p-text);">Physical Roll Maps</h2>
-      
-      <div style="position:relative;margin-bottom:12px;">
-        <span style="position:absolute;left:10px;top:9px;color:var(--p-faint);">
-          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
-        </span>
-        <input type="text" id="rm-search" class="p-input" placeholder="Search Material or Roll ID..." oninput="rm_applyFilter()" style="padding-left:32px;">
-      </div>
-      
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="rm-filters">
-        <button class="rm-filter-btn" data-f="OPEN" onclick="rm_setFilter('OPEN')">Open</button>
-        <button class="rm-filter-btn" data-f="CONSUMED" onclick="rm_setFilter('CONSUMED')">Consumed</button>
-        <button class="rm-filter-btn active" data-f="ALL" onclick="rm_setFilter('ALL')">All Used</button>
-      </div>
-      
-      <div id="rm-count" style="font-size:11px;font-weight:700;color:var(--p-muted);"></div>
-    </div>
-    
-    <div id="rm-rollList" style="display:flex;flex-direction:column;gap:10px;padding-bottom:20px;">
-      <div class="pp-empty">Loading rolls...</div>
-    </div>
-  </div>
-  
+    <div class="rm-left p-card">
+      <div class="rm-left-content">
+        <div style="margin-bottom:6px;">
+          <h2 style="margin:0 0 10px;font-size:18px;font-weight:800;color:var(--p-text);">Physical Roll Maps</h2>
+          
+          <div style="position:relative;margin-bottom:12px;">
+            <span style="position:absolute;left:10px;top:9px;color:var(--p-faint);">
+              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+            </span>
+            <input type="text" id="rm-search" class="p-input" placeholder="Search Material or Roll ID..." oninput="rm_applyFilter()" style="padding-left:32px;">
+          </div>
+          
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="rm-filters">
+            <button class="rm-filter-btn" data-f="OPEN" onclick="rm_setFilter('OPEN')">Open</button>
+            <button class="rm-filter-btn" data-f="CONSUMED" onclick="rm_setFilter('CONSUMED')">Consumed</button>
+            <button class="rm-filter-btn active" data-f="ALL" onclick="rm_setFilter('ALL')">All Used</button>
+          </div>
+          
+          <div id="rm-count" style="font-size:11px;font-weight:700;color:var(--p-muted);"></div>
+        </div>
+        
+        <div id="rm-rollList" style="display:flex;flex-direction:column;gap:10px;padding-bottom:20px;">
+          <div class="pp-empty">Loading rolls...</div>
+        </div>
           <!-- RIGHT: Map Preview -->
     <div class="rm-right p-card" style="flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 12px; padding: 20px; overflow: hidden;">
       
