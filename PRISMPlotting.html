@@ -458,23 +458,9 @@ function pp_renderJOs() {
       var jw = j.widthFt || pp_toFt(parseFloat(j.width) || 0, j.unit);
       var jh = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
       var rollW = pp_selRoll ? parseFloat(pp_selRoll.width) || 10.5 : 10.5;
-      var canRotate = jw !== jh && jh <= rollW && jw <= rollW; // both orientations fit
-      var mustRotate = jw > rollW && jh <= rollW; // only rotated fits
-      var rotState = pp_joRotation.hasOwnProperty(j.joNumber)
-        ? pp_joRotation[j.joNumber]
-        : (mustRotate ? true : pp_allowRotation);
-      var rotBtnHtml = '';
-      if (canRotate && pp_selJOs[j.rowIndex]) {
-        var rotLabel = rotState ? '↺ Portrait' : '↔ Landscape';
-        var rotBg = rotState ? 'var(--p-teal)' : 'var(--p-indigo)';
-        rotBtnHtml = '<button onmousedown="event.preventDefault();event.stopPropagation();pp_toggleJoRotation(\'' + pp_esc(j.joNumber) + '\');return false;"'
-          + ' onclick="event.preventDefault();event.stopPropagation();return false;"'
-          + ' style="padding:4px 10px;border-radius:7px;border:none;background:' + rotBg + ';'
-          + 'font-size:11px;font-weight:700;color:#fff;cursor:pointer;margin-top:6px;display:inline-block;">'
-          + rotLabel + '</button>'; 
-      } else if (mustRotate && pp_selJOs[j.rowIndex]) {
-        rotBtnHtml = '<span style="font-size:10px;color:var(--p-faint);margin-top:4px;display:block;">↺ Auto-rotated (too wide)</span>';
-      }
+      
+      var rotBtnHtml = pp_getRotBtnHtml(j, pp_selJOs[j.rowIndex]);
+      
       h += '<div class="pp-jo-item' + sel + '" onclick="pp_toggleRow(' + j.rowIndex + ')">'
         + '<input type="checkbox" ' + chk + ' onclick="event.stopPropagation();pp_toggleRow(' + j.rowIndex + ')">'
         + '<div style="flex:1;min-width:0;">'
@@ -486,7 +472,7 @@ function pp_renderJOs() {
         + (j.jobDescription ? '<div class="pp-jo-meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">' + pp_esc(j.jobDescription) + '</div>' : '')
         + hist
         + rotBtnHtml
-        + (pp_selJOs[j.rowIndex] ? '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--p-muted);">Print qty:</span><input type="number" min="1" max="' + (j.quantity||1) + '" value="' + (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : (j.quantity||1)) + '" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();" oninput="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value)" style="width:60px;padding:3px 7px;border:1.5px solid var(--p-teal-bd);border-radius:6px;font-size:12px;font-weight:700;background:var(--p-bg);color:var(--p-text);text-align:center;"><span style="font-size:11px;color:var(--p-faint);">of ' + (j.quantity||1) + '</span></div>' : '')
+          + (pp_selJOs[j.rowIndex] ? '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--p-muted);">Print qty:</span><input type="number" min="1" max="' + (j.quantity||1) + '" value="' + (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : (j.quantity||1)) + '" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();" onchange="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value);pp_renderJOs();" oninput="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value)" style="width:60px;padding:3px 7px;border:1.5px solid var(--p-teal-bd);border-radius:6px;font-size:12px;font-weight:700;background:var(--p-bg);color:var(--p-text);text-align:center;"><span style="font-size:11px;color:var(--p-faint);">of ' + (j.quantity||1) + '</span></div>' : '')
         + '</div></div>';
     } else {
       var expanded = pp_expandedGroups[joNumber] ? ' expanded' : '';
@@ -517,6 +503,9 @@ function pp_renderJOs() {
           ? j.width + ' × ' + j.height + ' ' + joUnit
             + (j.unit && j.unit.toLowerCase() !== 'ft' && j.widthFt ? ' (' + j.widthFt + ' × ' + j.heightFt + ' ft)' : '')
           : '?';
+          
+        var rotBtnHtml = pp_getRotBtnHtml(j, pp_selJOs[j.rowIndex]);
+        
         h += '<div class="pp-jo-subrow' + selSub + '" onclick="pp_toggleRow(' + j.rowIndex + ')">'
           + '<input type="checkbox" ' + chkSub + ' onclick="event.stopPropagation();pp_toggleRow(' + j.rowIndex + ')">'
           + '<div style="flex:1;min-width:0;">'
@@ -525,7 +514,8 @@ function pp_renderJOs() {
           + '<span style="font-size:11px;color:var(--p-muted);">×' + (j.quantity||1) + ' pcs</span>'
           + '</div>'
           + (j.jobDescription ? '<div class="pp-jo-meta" style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;margin-top:1px;">' + pp_esc(j.jobDescription) + '</div>' : '')
-          + (pp_selJOs[j.rowIndex] ? '<div style="margin-top:5px;display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--p-muted);">Print qty:</span><input type="number" min="1" max="' + (j.quantity||1) + '" value="' + (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : (j.quantity||1)) + '" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();" oninput="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value)" style="width:60px;padding:3px 7px;border:1.5px solid var(--p-teal-bd);border-radius:6px;font-size:12px;font-weight:700;background:var(--p-bg);color:var(--p-text);text-align:center;"><span style="font-size:11px;color:var(--p-faint);">of ' + (j.quantity||1) + '</span></div>' : '')
+          + rotBtnHtml
+          + (pp_selJOs[j.rowIndex] ? '<div style="margin-top:5px;display:flex;align-items:center;gap:6px;"><span style="font-size:11px;color:var(--p-muted);">Print qty:</span><input type="number" min="1" max="' + (j.quantity||1) + '" value="' + (pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : (j.quantity||1)) + '" onmousedown="event.stopPropagation();" onclick="event.stopPropagation();" onchange="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value);pp_renderJOs();" oninput="event.stopPropagation();pp_setSelQty(' + j.rowIndex + ',' + (j.quantity||1) + ',this.value)" style="width:60px;padding:3px 7px;border:1.5px solid var(--p-teal-bd);border-radius:6px;font-size:12px;font-weight:700;background:var(--p-bg);color:var(--p-text);text-align:center;"><span style="font-size:11px;color:var(--p-faint);">of ' + (j.quantity||1) + '</span></div>' : '')
 + '</div></div>';
       });
       h += '</div></div>';
@@ -543,11 +533,73 @@ function pp_renderJOs() {
   });
 }
 
+function pp_togglePieceRotation(rowIndex, q) {
+  var pieceKey = rowIndex + '_' + q;
+  var hasPerPiece = pp_joRotation.hasOwnProperty(pieceKey);
+  var hasPerRow = pp_joRotation.hasOwnProperty(rowIndex);
+  
+  var current = pp_allowRotation;
+  if (hasPerPiece) current = pp_joRotation[pieceKey];
+  else if (hasPerRow) current = pp_joRotation[rowIndex];
+  else {
+    // try to find joNumber for legacy fallback
+    var j = pp_allJOs.find(function(x) { return x.rowIndex === rowIndex; });
+    if (j && pp_joRotation.hasOwnProperty(j.joNumber)) current = pp_joRotation[j.joNumber];
+  }
+  
+  pp_joRotation[pieceKey] = !current;
+  pp_renderJOs();
+  if (pp_layout) pp_autoArrange();
+}
+
+function pp_getRotBtnHtml(j, sel) {
+  if (!sel) return '';
+  var sq = pp_selQty.hasOwnProperty(j.rowIndex) ? pp_selQty[j.rowIndex] : parseInt(j.quantity, 10) || 1;
+  var jw = j.widthFt || pp_toFt(parseFloat(j.width) || 0, j.unit);
+  var jh = j.heightFt || pp_toFt(parseFloat(j.height) || 0, j.unit);
+  var rollW = pp_selRoll ? parseFloat(pp_selRoll.width) || 10.5 : 10.5;
+  var canRotate = jw !== jh && jh <= rollW && jw <= rollW;
+  var mustRotate = jw > rollW && jh <= rollW;
+  var html = '';
+
+  if (canRotate) {
+    html += '<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;">';
+    for (var q = 1; q <= sq; q++) {
+      var pieceKey = j.rowIndex + '_' + q;
+      var hasPerPiece = pp_joRotation.hasOwnProperty(pieceKey);
+      var hasPerRow = pp_joRotation.hasOwnProperty(j.rowIndex);
+      var hasPerJoLegacy = pp_joRotation.hasOwnProperty(j.joNumber);
+      var rotState = pp_allowRotation;
+      if (hasPerPiece) rotState = pp_joRotation[pieceKey];
+      else if (hasPerRow) rotState = pp_joRotation[j.rowIndex];
+      else if (hasPerJoLegacy) rotState = pp_joRotation[j.joNumber];
+
+      var rotLabel = sq === 1 ? (rotState ? '↺ Portrait' : '↔ Landscape') : (rotState ? '↺ P' + q : '↔ L' + q);
+      var rotBg = rotState ? 'var(--p-teal)' : 'var(--p-indigo)';
+      
+      html += '<button onmousedown="event.preventDefault();event.stopPropagation();pp_togglePieceRotation(' + j.rowIndex + ', ' + q + ');return false;"'
+        + ' onclick="event.preventDefault();event.stopPropagation();return false;"'
+        + ' style="padding:4px ' + (sq === 1 ? '10px' : '6px') + ';border-radius:6px;border:none;background:' + rotBg + ';'
+        + 'font-size:' + (sq === 1 ? '11px' : '10px') + ';font-weight:700;color:#fff;cursor:pointer;">'
+        + rotLabel + '</button>';
+    }
+    html += '</div>';
+  } else if (mustRotate) {
+    html = '<span style="font-size:10px;color:var(--p-faint);margin-top:4px;display:block;">↺ Auto-rotated (too wide)</span>';
+  }
+  return html;
+}
+
 function pp_toggleRow(rowIndex) {
   pp_selJOs[rowIndex] = !pp_selJOs[rowIndex];
   // Clear per-JO rotation when deselected so it resets cleanly
   if (!pp_selJOs[rowIndex]) {
     var deselJo = pp_allJOs.find(function(j){ return j.rowIndex === rowIndex; });
+    Object.keys(pp_joRotation).forEach(function(k) {
+      if (k === String(rowIndex) || k.indexOf(rowIndex + '_') === 0) {
+        delete pp_joRotation[k];
+      }
+    });
     if (deselJo) delete pp_joRotation[deselJo.joNumber];
     delete pp_selQty[rowIndex];
   }
@@ -613,17 +665,7 @@ function pp_setSelQty(rowIndex, maxQty, val) {
   pp_checkArrangeBtn();
 }
 
-function pp_toggleJoRotation(joNumber) {
-  // Determine current effective state
-  var current = pp_joRotation.hasOwnProperty(joNumber)
-    ? pp_joRotation[joNumber]
-    : pp_allowRotation;
-  // Flip it and store as explicit per-JO override
-  pp_joRotation[joNumber] = !current;
-  pp_renderJOs();
-  // Re-arrange immediately if layout exists
-  if (pp_layout) pp_autoArrange();
-}
+
 
 function pp_selectAll() {
   pp_filtJOs.forEach(function(j) { pp_selJOs[j.rowIndex] = true; });
@@ -891,17 +933,24 @@ function pp_orientationsForSpace(p, rollWidth, spaceLeft) {
   var normalFits = p.origW <= rollWidth + 0.0001;
   var rotatedFits = p.origH <= rollWidth + 0.0001 && Math.abs(p.origH - p.origW) > 0.0001;
 
-  // Per-JO override takes priority over global toggle
-  var joNum = p.joNumber;
-  var hasPerJoOverride = pp_joRotation.hasOwnProperty(joNum);
-  var joRotateOn = hasPerJoOverride ? pp_joRotation[joNum] : pp_allowRotation;
+  var pieceKey = p.rowIndex + '_' + p.idx;
+  var hasPerPieceOverride = pp_joRotation.hasOwnProperty(pieceKey);
+  var hasPerRowOverride = pp_joRotation.hasOwnProperty(p.rowIndex);
+  var hasPerJoOverrideLegacy = pp_joRotation.hasOwnProperty(p.joNumber);
+
+  var hasExplicit = hasPerPieceOverride || hasPerRowOverride || hasPerJoOverrideLegacy;
+  
+  var joRotateOn = pp_allowRotation;
+  if (hasPerPieceOverride) joRotateOn = pp_joRotation[pieceKey];
+  else if (hasPerRowOverride) joRotateOn = pp_joRotation[p.rowIndex];
+  else if (hasPerJoOverrideLegacy) joRotateOn = pp_joRotation[p.joNumber];
 
   var mustRotate = !normalFits && rotatedFits; // physically can't fit without rotating
 
   if (mustRotate) {
     // Force rotated only — no choice
     if (rotatedFits) out.push({ w: p.origH, h: p.origW, rotated: true });
-  } else if (hasPerJoOverride) {
+  } else if (hasExplicit) {
     // Per-JO explicit setting: only one orientation
     if (joRotateOn && rotatedFits) {
       out.push({ w: p.origH, h: p.origW, rotated: true });
@@ -940,6 +989,7 @@ function pp_simulateRollPlan(selJOList, rollWidth, rollAvail, withColors) {
 
     for (var q = 0; q < qty; q++) {
       pieces.push({
+        rowIndex: j.rowIndex,
         joNumber: j.joNumber,
         customer: j.customer,
         idx: q + 1,
